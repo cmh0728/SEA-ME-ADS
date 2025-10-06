@@ -43,13 +43,7 @@ The demo publishes synthetic perception measurements, turns them into planning d
 - `control`: Consumes planning targets and emits `ControlCommand` messages with normalized actuator values. Swap the logic for your MPC/PID controller and integrate with vehicle hardware drivers.
 - `sea_bringup`: Launch file that brings the three stages up together. Extend with parameter files, RViz configurations, and additional nodes as the project grows.
 
-## Next Steps
-
-- Replace the mock publishers with real sensor inputs and perception algorithms.
-- Expand `sea_interfaces` with richer state descriptions (detected object lists, trajectories, diagnostics).
-- Add automated tests (e.g. `ament_cmake_gtest`) for planning/control logic.
-- Introduce parameter files to tune behaviors without recompiling.
-
 ## License
 
-Apache License 2.0
+- update later
+
