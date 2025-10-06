@@ -1,4 +1,4 @@
-# SEA-ME Autonomous Driving Stack
+# SEA:ME Autonomous Driving System
 
 SEA:ME Team 1 autonomous driving stack prototype built on ROS 2 and C++17. The stack is organized around a classic perception→decision→control pipeline to keep responsibilities clear and extensible.
 
