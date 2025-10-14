@@ -67,7 +67,9 @@ from src.data.Semaphores.Semaphores import processSemaphores
 from src.data.TrafficCommunication.processTrafficCommunication import processTrafficCommunication
 from src.utils.ipManager.IpReplacement import IPManager
 # ------ New component imports starts here ------#
-
+# from src.ADS.auto_control_example import create_auto_control_process # auto ros 제어 테스트용 
+from src.ADS.cmd_vel_bridge import create_cmd_vel_bridge_process
+from src.ADS.joy_legacy_bridge import create_joy_legacy_bridge_process
 # ------ New component imports ends here ------#
 # ======================================== SETTING UP ====================================
 # ======================================== 기본 설정 =====================================
@@ -89,6 +91,9 @@ Camera = True
 Semaphores = False
 TrafficCommunication = False
 SerialHandler = True
+# AutoControl = False # auto 모드 테스트 
+CmdVelBridge = True
+JoyLegacyBridge = True
 
 # ------ New component flags starts here ------#
  
@@ -140,7 +145,19 @@ if SerialHandler:
     allProcesses.append(processSerialHandler)
 
 # ------ New component runs starts here ------#
- 
+# auto 제어 테스트 코드 
+# if AutoControl:
+#     autoControlProcess = create_auto_control_process(queueList)
+#     allProcesses.append(autoControlProcess)
+
+# cmd_vel 브리지 프로세스
+if CmdVelBridge:
+    cmdVelBridgeProcess = create_cmd_vel_bridge_process(queueList)
+    allProcesses.append(cmdVelBridgeProcess)
+# Legacy joystick bridge
+if JoyLegacyBridge:
+    joyLegacyBridgeProcess = create_joy_legacy_bridge_process(queueList)
+    allProcesses.append(joyLegacyBridgeProcess)
 # ------ New component runs ends here ------#
 
 # ===================================== START PROCESSES ==================================
@@ -201,3 +218,6 @@ except KeyboardInterrupt:
     """
 
     print(big_text)
+# ------ New component flags starts here ------#
+AutoControl = True
+# ------ New component flags ends here ------#

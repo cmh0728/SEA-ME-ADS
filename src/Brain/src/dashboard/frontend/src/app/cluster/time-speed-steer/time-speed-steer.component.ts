@@ -37,6 +37,7 @@ import { FormsModule } from '@angular/forms';
   templateUrl: './time-speed-steer.component.html',
   styleUrl: './time-speed-steer.component.css'
 })
+// submit 버튼 클릭시 time, speed, steer 값을 flask로 전송
 export class TimeSpeedSteerComponent {
   time: number = 0;
   speed: number = 0;
