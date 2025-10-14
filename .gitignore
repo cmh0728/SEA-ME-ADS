@@ -35,6 +35,6 @@ dist/
 .idea/
 .DS_Store
 
-/Brain
-/src/Brain
+/Brain/
+/src/Brain/
 

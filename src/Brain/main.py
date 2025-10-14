@@ -224,3 +224,4 @@ AutoControl = True
 
 
 #10/14 최종 수정 버전
+#gitignore 테스트
