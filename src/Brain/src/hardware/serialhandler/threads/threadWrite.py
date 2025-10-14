@@ -38,6 +38,7 @@ from src.utils.messages.allMessages import (
     SteerMotor,
     SpeedMotor,
     Brake,
+    DrivingMode,
     ToggleBatteryLvl,
     ToggleImuData,
     ToggleInstant,
@@ -69,9 +70,15 @@ class threadWrite(ThreadWithStop):
 
         self.running = False
         self.engineEnabled = False
+        self.forceStop = False  # 대시보드 STOP 모드 여부
+        self.stopApplied = False  # 정지 명령을 한 번만 전송하기 위한 플래그
+        self.autodrivemode = False # 자동 주행 모드 여부
+        self.legacymode = False # 레거시 모드 여부(리모트 컨트롤)
         self.messageConverter = MessageConverter()
-        self.steerMotorSender = messageHandlerSender(self.queuesList, SteerMotor)
-        self.speedMotorSender = messageHandlerSender(self.queuesList, SpeedMotor)
+        self.steerMotorSender = messageHandlerSender(self.queuesList, SteerMotor) # steer
+        self.speedMotorSender = messageHandlerSender(self.queuesList, SpeedMotor) # speed
+        self.brakeSender = messageHandlerSender(self.queuesList, Brake) # brake
+        self.drivingModeSender = messageHandlerSender(self.queuesList, DrivingMode) # driving mode 
         self.configPath = "src/utils/table_state.json"
 
         self.loadConfig("init")
@@ -83,10 +90,12 @@ class threadWrite(ThreadWithStop):
             self.s = 0.0
             self.example()
 
-    def subscribe(self):
+    def subscribe(self): # 대쉬보드에서 gateway를 통해서 넘어오는 데이터 구독 
         """Subscribe function. In this function we make all the required subscribe to process gateway"""
 
+        # 대시보드에서 넘어오는 KL/주행모드/조향/속도/토글 신호를 구독 (fifo or last only 모드) --> last only는 최신값만 반영 
         self.klSubscriber = messageHandlerSubscriber(self.queuesList, Klem, "lastOnly", True)
+        self.drivingModeSubscriber = messageHandlerSubscriber(self.queuesList, DrivingMode, "lastOnly", True)
         self.controlSubscriber = messageHandlerSubscriber(self.queuesList, Control, "lastOnly", True)
         self.steerMotorSubscriber = messageHandlerSubscriber(self.queuesList, SteerMotor, "lastOnly", True)
         self.speedMotorSubscriber = messageHandlerSubscriber(self.queuesList, SpeedMotor, "lastOnly", True)
@@ -98,10 +107,10 @@ class threadWrite(ThreadWithStop):
 
     # ==================================== SENDING =======================================
 
-    def sendToSerial(self, msg):
-        command_msg = self.messageConverter.get_command(**msg)
+    def sendToSerial(self, msg): # msg는 딕셔너리 형태로 들어옴
+        command_msg = self.messageConverter.get_command(**msg) # nucleo가 이해하는 문자열 커맨드로 변환 
         if command_msg != "error":
-            self.serialCom.write(command_msg.encode("ascii"))
+            self.serialCom.write(command_msg.encode("ascii")) # 시리얼 송신하는 부분 
             self.logFile.write(command_msg)
 
     def loadConfig(self, configType):
@@ -127,22 +136,77 @@ class threadWrite(ThreadWithStop):
             return 1
         else :
             return 0
+
+    def _handleDrivingMode(self, mode): # stop일때 forceStop True로 변경
+        modeLower = mode.lower()
+        if modeLower == "stop":
+            self.forceStop = True
+            if not self.stopApplied:
+                self._applyStopCommands()
+                self.stopApplied = True
+                self.autodrivemode = False
+                self.legacymode = False
+            print("Stop mode activated!!!")
+        elif modeLower == "auto":
+            self.autodrivemode = True
+            self.forceStop = False
+            self.stopApplied = False
+            self.legacymode = False
+            print("Auto mode activated!!!")
+            '''
+            ROS 노드 안에서 messageHandlerSender(self.queuesList, SpeedMotor)와 
+            messageHandlerSender(..., SteerMotor)를 생성하고, 
+            auto 모드 제어값이 나올 때마다 send(speed)/send(steer)로 대시보드와 동일한 큐(General)에 넣으면 됨.
+            '''
+        elif modeLower == "manual":
+            self.autodrivemode = False
+            self.forceStop = False
+            self.stopApplied = False
+            self.legacymode = False
+            print("Manual mode activated!!!")
+        elif modeLower == "legacy":
+            self.autodrivemode = False
+            self.forceStop = False
+            self.stopApplied = False
+            self.legacymode = True
+            print("Legacy mode activated!!!")
+        else:
+            self.forceStop = False
+            self.stopApplied = False
+            self.autodrivemode = False
+            self.legacymode = False
+
+    def _applyStopCommands(self):
+        """Send zeroed commands to guarantee the vehicle halts."""
+        try:
+            self.sendToSerial({"action": "speed", "speed": 0})
+            self.sendToSerial({"action": "steer", "steerAngle": 0})
+            self.sendToSerial({"action": "brake", "steerAngle": 0})
+        except Exception as exc:
+            if self.debugger:
+                self.logger.error(f"Failed to apply stop commands: {exc}")
         
     # ===================================== RUN ==========================================
-    def run(self):
+    def run(self): # kl이 30일때만 engineEnabled True가 됨. 
         """In this function we check if we got the enable engine signal. After we got it we will start getting messages from raspberry PI. It will transform them into NUCLEO commands and send them."""
 
-        while self._running:
+        while self._running: # 명령 반복 송신하는 부분 
             try:
-                klRecv = self.klSubscriber.receive()
+                drivingModeRecv = self.drivingModeSubscriber.receive() # 메시지를 받는 부분 
+                if drivingModeRecv is not None:
+                    if self.debugger:
+                        self.logger.info(drivingModeRecv)
+                    self._handleDrivingMode(drivingModeRecv) #여기서 auto , maual, stop 처리
+
+                klRecv = self.klSubscriber.receive() # kl 메시지를 받는 부분
                 if klRecv is not None:
                     if self.debugger:
                         self.logger.info(klRecv)
                     if klRecv == "30":
-                        self.running = True
-                        self.engineEnabled = True
+                        self.running = True # 센서데이터(Imu)
+                        self.engineEnabled = True # 모터구동
                         command = {"action": "kl", "mode": 30}
-                        self.sendToSerial(command)
+                        self.sendToSerial(command) # NUCLEO로 KL 모드 30 전송 --> 30일때만 작동 
                         self.loadConfig("sensors")
                     elif klRecv == "15":
                         self.running = True
@@ -156,8 +220,9 @@ class threadWrite(ThreadWithStop):
                         command = {"action": "kl", "mode": 0}
                         self.sendToSerial(command)
 
-                if self.running:
-                    if self.engineEnabled:
+                # 엔진이 활성화되고 STOP 모드가 아닐 때(forceStop == False)만 주행 명령을 송신
+                if self.running and not self.forceStop:
+                    if self.engineEnabled: #kl 30일때 
                         brakeRecv = self.brakeSubscriber.receive()
                         if brakeRecv is not None:
                             if self.debugger:
@@ -165,18 +230,22 @@ class threadWrite(ThreadWithStop):
                             command = {"action": "brake", "steerAngle": int(brakeRecv)}
                             self.sendToSerial(command)
 
+                        #속도
                         speedRecv = self.speedMotorSubscriber.receive()
                         if speedRecv is not None: 
                             if self.debugger:
                                 self.logger.info(speedRecv)
+                            # print("speedRecv : ", speedRecv) # 속도값체크 0~500으로 출력됨 
                             command = {"action": "speed", "speed": int(speedRecv)}
                             self.sendToSerial(command)
 
+                        #조향
                         steerRecv = self.steerMotorSubscriber.receive()
                         if steerRecv is not None:
                             if self.debugger:
                                 self.logger.info(steerRecv) 
-                            command = {"action": "steer", "steerAngle": int(steerRecv)}
+                            # print("steerRecv : ", steerRecv) # 조향값 체크 왼쪽이 -250, 오른쪽이 +250 
+                            command = {"action": "steer", "steerAngle": int(steerRecv)} # 조향각도 NUCLEO로 전송
                             self.sendToSerial(command)
 
                         controlRecv = self.controlSubscriber.receive()

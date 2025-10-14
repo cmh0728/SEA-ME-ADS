@@ -37,7 +37,7 @@ class messageHandlerSender:
         self.queuesList = queuesList
         self.message = message
 
-    def send(self, value):
+    def send(self, value): # General queoe에 넣는 부분 
         """
         Puts a value into the queuesList
 
