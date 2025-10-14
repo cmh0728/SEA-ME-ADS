@@ -221,3 +221,6 @@ except KeyboardInterrupt:
 # ------ New component flags starts here ------#
 AutoControl = True
 # ------ New component flags ends here ------#
+
+
+#10/14 최종 수정 버전
