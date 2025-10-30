@@ -1,39 +1,55 @@
 #include "perception/perception_node.hpp"
 
-#include <chrono>
-#include <cmath>
+#include <functional>
+#include <string>
 
-using namespace std::chrono_literals;
+#include "cv_bridge/cv_bridge.h"
+#include "opencv2/highgui.hpp"
+#include "rclcpp/qos.hpp"
+#include "rclcpp/rclcpp.hpp"
+#include "sensor_msgs/image_encodings.hpp"
 
 namespace perception
 {
-// 100ms마다 가상의 장애물 거리와 차선 오프셋을 출판해 이후 단계에서 사용할 수 있게 합니다.
 PerceptionNode::PerceptionNode()
 : rclcpp::Node("perception_node")
 {
-  publisher_ = create_publisher<sea_interfaces::msg::PerceptionData>(
-    "/perception/data", rclcpp::QoS(10));
+  declare_parameter<std::string>("image_topic", "/camera/color/image_raw");
+  declare_parameter<std::string>("window_name", "PerceptionView");
 
-  timer_ = create_wall_timer(100ms, [this]() { publish_mock_measurement(); });
+  const auto image_topic = get_parameter("image_topic").as_string();
+  window_name_ = get_parameter("window_name").as_string();
 
-  RCLCPP_INFO(get_logger(), "Perception node initialized");
+  cv::namedWindow(window_name_, cv::WINDOW_AUTOSIZE);
+
+  image_subscription_ = create_subscription<sensor_msgs::msg::Image>(
+    image_topic, rclcpp::SensorDataQoS(),
+    std::bind(&PerceptionNode::on_image, this, std::placeholders::_1));
+
+  RCLCPP_INFO(get_logger(), "Perception node subscribing to %s", image_topic.c_str());
 }
 
-// 간단한 사인 곡선을 사용해 시간에 따라 변화하는 측정값을 생성합니다.
-void PerceptionNode::publish_mock_measurement()
+PerceptionNode::~PerceptionNode()
 {
-  static float phase = 0.0F;
-  phase += 0.1F;
+  if (!window_name_.empty())
+  {
+    cv::destroyWindow(window_name_);
+  }
+}
 
-  auto message = sea_interfaces::msg::PerceptionData();
-  message.stamp = now();
-  message.sensor_frame = "lidar_front";
-  message.obstacle_distance = 15.0F + 5.0F * std::sin(phase);
-  message.lane_offset = 0.2F * std::sin(phase * 0.5F);
-  message.ego_velocity = 12.0F;
-
-  publisher_->publish(message);
-  RCLCPP_DEBUG(get_logger(), "Published perception data: obstacle %.2f m", message.obstacle_distance);
+void PerceptionNode::on_image(const sensor_msgs::msg::Image::ConstSharedPtr msg)
+{
+  try
+  {
+    auto cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
+    cv::imshow(window_name_, cv_ptr->image);
+    cv::waitKey(1);  // allow OpenCV to process window events
+  }
+  catch (const cv_bridge::Exception & e)
+  {
+    RCLCPP_ERROR_THROTTLE(
+      get_logger(), *get_clock(), 2000, "cv_bridge conversion failed: %s", e.what());
+  }
 }
 }  // namespace perception
 
