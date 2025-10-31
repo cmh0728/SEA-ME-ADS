@@ -4,7 +4,7 @@
 #include <string>
 
 #include "rclcpp/rclcpp.hpp"
-#include "sensor_msgs/msg/image.hpp"
+#include "sensor_msgs/msg/compressed_image.hpp"
 
 namespace perception
 {
@@ -16,10 +16,10 @@ public:
   ~PerceptionNode() override;
 
 private:
-  void on_image(const sensor_msgs::msg::Image::ConstSharedPtr msg);
+  void on_image(const sensor_msgs::msg::CompressedImage::ConstSharedPtr msg);
 
   std::string window_name_;
-  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_subscription_;
+  rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr image_subscription_;
 };
 }  // namespace perception
 

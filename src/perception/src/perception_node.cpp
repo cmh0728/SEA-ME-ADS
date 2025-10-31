@@ -3,18 +3,17 @@
 #include <functional>
 #include <string>
 
-#include "cv_bridge/cv_bridge.h"
 #include "opencv2/highgui.hpp"
+#include "opencv2/imgcodecs.hpp"
 #include "rclcpp/qos.hpp"
 #include "rclcpp/rclcpp.hpp"
-#include "sensor_msgs/image_encodings.hpp"
 
 namespace perception
 {
 PerceptionNode::PerceptionNode()
 : rclcpp::Node("perception_node")
 {
-  declare_parameter<std::string>("image_topic", "/camera/color/image_raw");
+  declare_parameter<std::string>("image_topic", "/camera/camera/color/image_raw/compressed");
   declare_parameter<std::string>("window_name", "PerceptionView");
 
   const auto image_topic = get_parameter("image_topic").as_string();
@@ -22,7 +21,7 @@ PerceptionNode::PerceptionNode()
 
   cv::namedWindow(window_name_, cv::WINDOW_AUTOSIZE);
 
-  image_subscription_ = create_subscription<sensor_msgs::msg::Image>(
+  image_subscription_ = create_subscription<sensor_msgs::msg::CompressedImage>(
     image_topic, rclcpp::SensorDataQoS(),
     std::bind(&PerceptionNode::on_image, this, std::placeholders::_1));
 
@@ -37,18 +36,32 @@ PerceptionNode::~PerceptionNode()
   }
 }
 
-void PerceptionNode::on_image(const sensor_msgs::msg::Image::ConstSharedPtr msg)
+void PerceptionNode::on_image(const sensor_msgs::msg::CompressedImage::ConstSharedPtr msg)
 {
+  if (msg->data.empty())
+  {
+    RCLCPP_WARN_THROTTLE(
+      get_logger(), *get_clock(), 2000, "Received compressed image with empty data buffer");
+    return;
+  }
+
   try
   {
-    auto cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
-    cv::imshow(window_name_, cv_ptr->image);
+    cv::Mat decoded = cv::imdecode(msg->data, cv::IMREAD_COLOR);
+    if (decoded.empty())
+    {
+      RCLCPP_ERROR_THROTTLE(
+        get_logger(), *get_clock(), 2000, "OpenCV failed to decode compressed image");
+      return;
+    }
+
+    cv::imshow(window_name_, decoded);
     cv::waitKey(1);  // allow OpenCV to process window events
   }
-  catch (const cv_bridge::Exception & e)
+  catch (const cv::Exception & e)
   {
     RCLCPP_ERROR_THROTTLE(
-      get_logger(), *get_clock(), 2000, "cv_bridge conversion failed: %s", e.what());
+      get_logger(), *get_clock(), 2000, "OpenCV exception during decode: %s", e.what());
   }
 }
 }  // namespace perception
