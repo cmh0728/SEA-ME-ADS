@@ -114,7 +114,7 @@ def _draw_overlay(orig_bgr, binary_topdown, Hinv, left_fit, right_fit):
 
 
 class LaneDetectorNode(Node):
-    def __init__(self):
+    def __init__(self): # 노드 생성시 한번만 실행
         super().__init__('lane_detector')
 
         # 파라미터서버에 파라미터 등록 및 기본값 설정
@@ -126,6 +126,8 @@ class LaneDetectorNode(Node):
 
         # 버드아이용 호모그래피(예시 좌표: 해상도 640x480 전제)
         # 실제 카메라 및 트랙에 맞게 보정 필요 
+        # src_points : 원본 카메라 이미지에서 변환에 사용할 4개의 점 
+        # dst_points : 버드아이뷰에서 대응되는 4개의 점[x0, y0, x1, y1, x2, y2, x3, y3
         self.declare_parameter('src_points', [200.0, 300.0, 440.0, 300.0, 620.0, 470.0, 20.0, 470.0])
         self.declare_parameter('dst_points', [100.0,   0.0, 540.0,   0.0, 540.0, 480.0, 100.0, 480.0])
 
@@ -152,7 +154,7 @@ class LaneDetectorNode(Node):
         else: # raw image
             self.sub = self.create_subscription(Image, image_topic, self.image_cb_raw, qos)
 
-        # 호모그래피 미리 계산
+        # 호모그래피 미리 계산(버드아이뷰 변환에 사용할 행렬)--> 프레임 계산을 줄이기 위해 한번만 실행 
         self.H, self.Hinv = self._compute_homography()
 
         sub_type = 'CompressedImage' if self.subscribe_compressed else 'Image'
@@ -173,7 +175,7 @@ class LaneDetectorNode(Node):
         dst = get_pts('dst_points')
         H = cv2.getPerspectiveTransform(src, dst)
         Hinv = cv2.getPerspectiveTransform(dst, src)
-        return H, Hinv
+        return H, Hinv # 행렬 및 역행렬 
 
 
     def _binarize(self, bgr):
@@ -217,14 +219,16 @@ class LaneDetectorNode(Node):
             self.get_logger().warn(f'cv_bridge (compressed) error: {e}')
             return
         
-        cv2.imshow('raw compressed img', bgr)
-        print(bgr.shape[0], bgr.shape[1])  # check
+        # cv2.imshow('raw compressed img', bgr) # check image 
+        # print(bgr.shape[0], bgr.shape[1])  # default size is 720, 1280 --> 1 is wide 0 is height
         self._process_frame(bgr)
 
     def _process_frame(self, bgr: np.ndarray):
+
+        # img resize / crop
         crop_w, crop_h = self.crop_size
         cur_h, cur_w, _ = bgr.shape
-        if cur_w >= crop_w and cur_h >= crop_h:
+        if cur_w >= crop_w and cur_h >= crop_h: # if origin img is bigger than crop size
             x0 = (cur_w - crop_w) // 2
             y0 = (cur_h - crop_h) // 2
             bgr = bgr[y0:y0 + crop_h, x0:x0 + crop_w]
@@ -232,10 +236,11 @@ class LaneDetectorNode(Node):
             self.get_logger().warn(
                 f'Incoming image smaller than crop size ({cur_w}x{cur_h} < {crop_w}x{crop_h}); skipping crop.')
 
-        cv2.imshow('lane_detector_input', bgr)
+        cv2.imshow('lane_detector_input after crop ', bgr)
         cv2.waitKey(1)
 
         h, w, _ = bgr.shape
+        print(h,w)  # check img size
 
         # 전처리 → 이진 마스크
         mask = self._binarize(bgr)
