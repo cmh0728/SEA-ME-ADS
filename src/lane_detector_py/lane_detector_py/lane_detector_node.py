@@ -240,10 +240,11 @@ class LaneDetectorNode(Node):
         cv2.waitKey(1)
 
         h, w, _ = bgr.shape
-        print(h,w)  # check img size
+        # print(h,w)  # check img size 480 640
 
         # 전처리 → 이진 마스크
         mask = self._binarize(bgr)
+        cv2.imshow('lane_detector_binary_mask', mask)
 
         # 탑뷰(옵션)
         top = cv2.warpPerspective(mask, self.H, (w, h)) if self.H is not None else mask
