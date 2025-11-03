@@ -8,7 +8,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CompressedImage
 from std_msgs.msg import Float32
 from cv_bridge import CvBridge
 
@@ -117,20 +117,22 @@ class LaneDetectorNode(Node):
     def __init__(self):
         super().__init__('lane_detector')
 
-        # 파라미터
+        # 파라미터서버에 파라미터 등록 및 기본값 설정
         self.declare_parameter('image_topic', '/camera/camera/color/image_raw/compressed')
         self.declare_parameter('publish_overlay_topic', '/lane/overlay')
         self.declare_parameter('publish_offset_topic', '/lane/center_offset')
         self.declare_parameter('use_birdeye', True)
+        self.crop_size = (640, 480)
 
         # 버드아이용 호모그래피(예시 좌표: 해상도 640x480 전제)
-        # 실제 트랙 기준으로 꼭 보정하세요!
+        # 실제 카메라 및 트랙에 맞게 보정 필요 
         self.declare_parameter('src_points', [200.0, 300.0, 440.0, 300.0, 620.0, 470.0, 20.0, 470.0])
         self.declare_parameter('dst_points', [100.0,   0.0, 540.0,   0.0, 540.0, 480.0, 100.0, 480.0])
 
         image_topic = self.get_parameter('image_topic').get_parameter_value().string_value
         overlay_topic = self.get_parameter('publish_overlay_topic').get_parameter_value().string_value
         offset_topic = self.get_parameter('publish_offset_topic').get_parameter_value().string_value
+        print(image_topic) # check get param
 
         # QoS: 센서데이터는 BestEffort/Depth=1이 지연/버퍼에 유리
         qos = QoSProfile(
@@ -141,10 +143,10 @@ class LaneDetectorNode(Node):
 
         self.bridge = CvBridge()
 
-        self.pub_overlay = self.create_publisher(Image, overlay_topic, qos)
+        self.pub_overlay = self.create_publisher(CompressedImage, overlay_topic, qos)
         self.pub_offset = self.create_publisher(Float32, offset_topic, 10)
 
-        self.sub = self.create_subscription(Image, image_topic, self.image_cb, qos)
+        self.sub = self.create_subscription(CompressedImage, image_topic, self.image_cb, qos)
 
         # 호모그래피 미리 계산
         self.H, self.Hinv = self._compute_homography()
@@ -193,12 +195,25 @@ class LaneDetectorNode(Node):
         combo[(binary_gray == 255) | (sat_mask == 255) | (edges == 255)] = 255
         return combo
 
-    def image_cb(self, msg: Image):
+    def image_cb(self, msg: CompressedImage):
         try:
             bgr = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         except Exception as e:
             self.get_logger().warn(f'cv_bridge error: {e}')
             return
+
+        crop_w, crop_h = self.crop_size
+        cur_h, cur_w, _ = bgr.shape
+        if cur_w >= crop_w and cur_h >= crop_h:
+            x0 = (cur_w - crop_w) // 2
+            y0 = (cur_h - crop_h) // 2
+            bgr = bgr[y0:y0 + crop_h, x0:x0 + crop_w]
+        else:
+            self.get_logger().warn(
+                f'Incoming image smaller than crop size ({cur_w}x{cur_h} < {crop_w}x{crop_h}); skipping crop.')
+
+        cv2.imshow('lane_detector_input', bgr)
+        cv2.waitKey(1)
 
         h, w, _ = bgr.shape
 
@@ -240,6 +255,7 @@ def main():
         pass
     node.destroy_node()
     rclpy.shutdown()
+    cv2.destroyAllWindows()
 
 
 if __name__ == '__main__':
