@@ -238,14 +238,14 @@ class LaneDetectorNode(Node):
             self.get_logger().warn(
                 f'Incoming image smaller than crop size ({cur_w}x{cur_h} < {crop_w}x{crop_h}); skipping center crop.')
             
-        cv2.imshow("origin img",bgr)
+        # cv2.imshow("origin img",bgr)
 
         # crop upper third after center crop
         cur_h, cur_w, _ = bgr.shape
-        top_cut = cur_h // 3 # 상단 부분 제거 
-        if top_cut > 0:
-            bgr = bgr[top_cut:, :]
-            cur_h = bgr.shape[0]
+        # top_cut = cur_h // 3 # 상단 부분 제거 
+        # if top_cut > 0:
+        #     bgr = bgr[top_cut:, :]
+        #     cur_h = bgr.shape[0]
 
         if cur_w >= crop_w:
             x0 = (cur_w - crop_w) // 2
@@ -254,8 +254,7 @@ class LaneDetectorNode(Node):
             self.get_logger().warn(
                 f'Incoming image narrower than crop width ({cur_w} < {crop_w}); skipping horizontal crop.')
 
-        cv2.imshow('input image after crop', bgr)
-        cv2.waitKey(1)
+        cv2.imshow('input image after crop', bgr) # check cropped img
 
         h, w, _ = bgr.shape
         # print(h,w)  # check img size 480 640
@@ -289,6 +288,7 @@ class LaneDetectorNode(Node):
         self.pub_overlay.publish(self.bridge.cv2_to_imgmsg(overlay, encoding='bgr8'))
         self.pub_offset.publish(Float32(data=center_offset_px))
 
+        cv2.waitKey(1) # 1ms delay for imshow(refresh)
 
 def main():
     rclpy.init()
