@@ -223,26 +223,36 @@ class LaneDetectorNode(Node):
         # print(bgr.shape[0], bgr.shape[1])  # default size is 720, 1280 --> 1 is wide 0 is height
         self._process_frame(bgr)
 
-    def _process_frame(self, bgr: np.ndarray):
+    # image processing main function
+    def _process_frame(self, bgr: np.ndarray): # bgr np.ndarray는 cv2 이미지 행렬 순서. bgr순서 
 
         # img resize / crop
         crop_w, crop_h = self.crop_size
         cur_h, cur_w, _ = bgr.shape
 
-        top_cut = cur_h // 3
-        if top_cut > 0:
-            bgr = bgr[top_cut:, :]
-            cur_h -= top_cut
-
-        if cur_w >= crop_w and cur_h >= crop_h: # if origin img is bigger than crop size
+        if cur_w >= crop_w and cur_h >= crop_h:
             x0 = (cur_w - crop_w) // 2
             y0 = (cur_h - crop_h) // 2
             bgr = bgr[y0:y0 + crop_h, x0:x0 + crop_w]
         else:
             self.get_logger().warn(
-                f'Incoming image smaller than crop size ({cur_w}x{cur_h} < {crop_w}x{crop_h}); skipping crop.')
+                f'Incoming image smaller than crop size ({cur_w}x{cur_h} < {crop_w}x{crop_h}); skipping center crop.')
 
-        cv2.imshow('lane_detector_input', bgr)
+        # crop upper third after center crop
+        cur_h, cur_w, _ = bgr.shape
+        top_cut = cur_h // 3 # 상단 부분 제거 
+        if top_cut > 0:
+            bgr = bgr[top_cut:, :]
+            cur_h = bgr.shape[0]
+
+        if cur_w >= crop_w:
+            x0 = (cur_w - crop_w) // 2
+            bgr = bgr[:, x0:x0 + crop_w]
+        else: # if origin img is smaller than crop size
+            self.get_logger().warn(
+                f'Incoming image narrower than crop width ({cur_w} < {crop_w}); skipping horizontal crop.')
+
+        cv2.imshow('input image after crop', bgr)
         cv2.waitKey(1)
 
         h, w, _ = bgr.shape
@@ -292,3 +302,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+# to do 
+# img roi  상단부분 날리기 , 이미지 전처리 
