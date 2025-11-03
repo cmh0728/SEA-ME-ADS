@@ -8,7 +8,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
-from sensor_msgs.msg import CompressedImage
+from sensor_msgs.msg import Image, CompressedImage
 from std_msgs.msg import Float32
 from cv_bridge import CvBridge
 
@@ -130,9 +130,9 @@ class LaneDetectorNode(Node):
         self.declare_parameter('dst_points', [100.0,   0.0, 540.0,   0.0, 540.0, 480.0, 100.0, 480.0])
 
         image_topic = self.get_parameter('image_topic').get_parameter_value().string_value
+        self.subscribe_compressed = image_topic.endswith('/compressed')
         overlay_topic = self.get_parameter('publish_overlay_topic').get_parameter_value().string_value
         offset_topic = self.get_parameter('publish_offset_topic').get_parameter_value().string_value
-        print(image_topic) # check get param
 
         # QoS: 센서데이터는 BestEffort/Depth=1이 지연/버퍼에 유리
         qos = QoSProfile(
@@ -143,15 +143,19 @@ class LaneDetectorNode(Node):
 
         self.bridge = CvBridge()
 
-        self.pub_overlay = self.create_publisher(CompressedImage, overlay_topic, qos)
+        self.pub_overlay = self.create_publisher(Image, overlay_topic, qos)
         self.pub_offset = self.create_publisher(Float32, offset_topic, 10)
 
-        self.sub = self.create_subscription(CompressedImage, image_topic, self.image_cb, qos)
+        if self.subscribe_compressed:
+            self.sub = self.create_subscription(CompressedImage, image_topic, self.image_cb_compressed, qos)
+        else:
+            self.sub = self.create_subscription(Image, image_topic, self.image_cb_raw, qos)
 
         # 호모그래피 미리 계산
         self.H, self.Hinv = self._compute_homography()
 
-        self.get_logger().info(f'LaneDetector subscribing: {image_topic}')
+        sub_type = 'CompressedImage' if self.subscribe_compressed else 'Image'
+        self.get_logger().info(f'LaneDetector subscribing: {image_topic} ({sub_type})')
         self.get_logger().info(f'Publishing overlay: {overlay_topic}, center_offset: {offset_topic}')
 
     def _compute_homography(self):
@@ -195,13 +199,23 @@ class LaneDetectorNode(Node):
         combo[(binary_gray == 255) | (sat_mask == 255) | (edges == 255)] = 255
         return combo
 
-    def image_cb(self, msg: CompressedImage):
+    def image_cb_raw(self, msg: Image):
         try:
             bgr = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         except Exception as e:
             self.get_logger().warn(f'cv_bridge error: {e}')
             return
+        self._process_frame(bgr)
 
+    def image_cb_compressed(self, msg: CompressedImage):
+        try:
+            bgr = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        except Exception as e:
+            self.get_logger().warn(f'cv_bridge (compressed) error: {e}')
+            return
+        self._process_frame(bgr)
+
+    def _process_frame(self, bgr: np.ndarray):
         crop_w, crop_h = self.crop_size
         cur_h, cur_w, _ = bgr.shape
         if cur_w >= crop_w and cur_h >= crop_h:
