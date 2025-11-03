@@ -228,6 +228,12 @@ class LaneDetectorNode(Node):
         # img resize / crop
         crop_w, crop_h = self.crop_size
         cur_h, cur_w, _ = bgr.shape
+
+        top_cut = cur_h // 3
+        if top_cut > 0:
+            bgr = bgr[top_cut:, :]
+            cur_h -= top_cut
+
         if cur_w >= crop_w and cur_h >= crop_h: # if origin img is bigger than crop size
             x0 = (cur_w - crop_w) // 2
             y0 = (cur_h - crop_h) // 2
@@ -236,15 +242,15 @@ class LaneDetectorNode(Node):
             self.get_logger().warn(
                 f'Incoming image smaller than crop size ({cur_w}x{cur_h} < {crop_w}x{crop_h}); skipping crop.')
 
-        cv2.imshow('lane_detector_input after crop ', bgr)
+        cv2.imshow('lane_detector_input', bgr)
         cv2.waitKey(1)
 
         h, w, _ = bgr.shape
         # print(h,w)  # check img size 480 640
-
+        
         # 전처리 → 이진 마스크
         mask = self._binarize(bgr)
-        cv2.imshow('lane_detector_binary_mask', mask)
+        # cv2.imshow('lane_detector_binary_mask', mask)
 
         # 탑뷰(옵션)
         top = cv2.warpPerspective(mask, self.H, (w, h)) if self.H is not None else mask
