@@ -118,7 +118,7 @@ class LaneDetectorNode(Node):
         super().__init__('lane_detector')
 
         # 파라미터
-        self.declare_parameter('image_topic', '/camera/color/image_raw')
+        self.declare_parameter('image_topic', '/camera/camera/color/image_raw/compressed')
         self.declare_parameter('publish_overlay_topic', '/lane/overlay')
         self.declare_parameter('publish_offset_topic', '/lane/center_offset')
         self.declare_parameter('use_birdeye', True)
