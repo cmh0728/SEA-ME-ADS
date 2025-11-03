@@ -4,7 +4,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     return LaunchDescription([
         Node(
-            package='lane_detector',
+            package='lane_detector_py',
             executable='lane_detector_node',
             name='lane_detector',
             output='screen',

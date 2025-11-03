@@ -1,6 +1,6 @@
 from setuptools import setup
 
-package_name = 'lane_detector'
+package_name = 'lane_detector_py'
 
 setup(
     name=package_name,
