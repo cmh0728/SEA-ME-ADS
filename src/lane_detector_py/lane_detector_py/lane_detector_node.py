@@ -125,12 +125,8 @@ class LaneDetectorNode(Node):
 
         # 버드아이용 호모그래피(예시 좌표: 해상도 640x480 전제)
         # 실제 트랙 기준으로 꼭 보정하세요!
-        self.declare_parameter('src_points', [ # 이미지 상 4점 (좌상, 우상, 우하, 좌하)
-            [200.0, 300.0], [440.0, 300.0], [620.0, 470.0], [20.0, 470.0]
-        ])
-        self.declare_parameter('dst_points', [ # 탑뷰 상 4점(직사각형)
-            [100.0, 0.0], [540.0, 0.0], [540.0, 480.0], [100.0, 480.0]
-        ])
+        self.declare_parameter('src_points', [200.0, 300.0, 440.0, 300.0, 620.0, 470.0, 20.0, 470.0])
+        self.declare_parameter('dst_points', [100.0,   0.0, 540.0,   0.0, 540.0, 480.0, 100.0, 480.0])
 
         image_topic = self.get_parameter('image_topic').get_parameter_value().string_value
         overlay_topic = self.get_parameter('publish_overlay_topic').get_parameter_value().string_value
@@ -160,11 +156,18 @@ class LaneDetectorNode(Node):
         use_be = self.get_parameter('use_birdeye').get_parameter_value().bool_value
         if not use_be:
             return np.eye(3), np.eye(3)
-        src = np.array(self.get_parameter('src_points').value, dtype=np.float32)
-        dst = np.array(self.get_parameter('dst_points').value, dtype=np.float32)
+
+        def get_pts(name):
+            vals = self.get_parameter(name).value   # 길이 8의 list[float]
+            pts = np.array(vals, dtype=np.float32).reshape(4, 2)
+            return pts
+
+        src = get_pts('src_points')
+        dst = get_pts('dst_points')
         H = cv2.getPerspectiveTransform(src, dst)
         Hinv = cv2.getPerspectiveTransform(dst, src)
         return H, Hinv
+
 
     def _binarize(self, bgr):
         """HSV + Sobel 혼합 간단 임계처리"""
