@@ -131,7 +131,7 @@ class LaneDetectorNode(Node):
 
         image_topic = self.get_parameter('image_topic').get_parameter_value().string_value
         self.subscribe_compressed = image_topic.endswith('/compressed')
-        print(self.subscribe_compressed)
+        # print(self.subscribe_compressed) # check
         overlay_topic = self.get_parameter('publish_overlay_topic').get_parameter_value().string_value
         offset_topic = self.get_parameter('publish_offset_topic').get_parameter_value().string_value
 
@@ -147,9 +147,9 @@ class LaneDetectorNode(Node):
         self.pub_overlay = self.create_publisher(Image, overlay_topic, qos)
         self.pub_offset = self.create_publisher(Float32, offset_topic, 10)
 
-        if self.subscribe_compressed:
+        if self.subscribe_compressed: # compressed image
             self.sub = self.create_subscription(CompressedImage, image_topic, self.image_cb_compressed, qos)
-        else:
+        else: # raw image
             self.sub = self.create_subscription(Image, image_topic, self.image_cb_raw, qos)
 
         # 호모그래피 미리 계산
@@ -200,6 +200,7 @@ class LaneDetectorNode(Node):
         combo[(binary_gray == 255) | (sat_mask == 255) | (edges == 255)] = 255
         return combo
 
+    # cv image bridge raw
     def image_cb_raw(self, msg: Image):
         try:
             bgr = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
@@ -208,12 +209,15 @@ class LaneDetectorNode(Node):
             return
         self._process_frame(bgr)
 
+    # cv image bridge compressed 
     def image_cb_compressed(self, msg: CompressedImage):
         try:
             bgr = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding='bgr8')
         except Exception as e:
             self.get_logger().warn(f'cv_bridge (compressed) error: {e}')
             return
+        
+        cv2.imshow('raw compressed img', bgr)
         self._process_frame(bgr)
 
     def _process_frame(self, bgr: np.ndarray):
