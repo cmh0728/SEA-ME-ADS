@@ -223,6 +223,7 @@ class LaneDetectorNode(Node):
         # print(bgr.shape[0], bgr.shape[1])  # default size is 720, 1280 --> 1 is wide 0 is height
         self._process_frame(bgr)
 
+
     # image processing main function
     def _process_frame(self, bgr: np.ndarray): # bgr np.ndarray는 cv2 이미지 행렬 순서. bgr순서 
 
@@ -254,7 +255,15 @@ class LaneDetectorNode(Node):
             self.get_logger().warn(
                 f'Incoming image narrower than crop width ({cur_w} < {crop_w}); skipping horizontal crop.')
 
-        cv2.imshow('input image after crop', bgr) # check cropped img
+        cv2.imshow('input image after resizing', bgr) # check cropped img
+
+
+        def _on_mouse(event, x, y, flags, param):
+            if event == cv2.EVENT_MOUSEMOVE:
+                print(f'mouse: ({x}, {y})')
+                
+        cv2.namedWindow('lane_detector_input')
+        cv2.setMouseCallback('lane_detector_input', _on_mouse)
 
         h, w, _ = bgr.shape
         # print(h,w)  # check img size 480 640
