@@ -218,6 +218,7 @@ class LaneDetectorNode(Node):
             return
         
         cv2.imshow('raw compressed img', bgr)
+        print(bgr.shape[0], bgr.shape[1])  # check
         self._process_frame(bgr)
 
     def _process_frame(self, bgr: np.ndarray):
