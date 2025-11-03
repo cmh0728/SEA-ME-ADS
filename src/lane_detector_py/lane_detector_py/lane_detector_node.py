@@ -131,6 +131,7 @@ class LaneDetectorNode(Node):
 
         image_topic = self.get_parameter('image_topic').get_parameter_value().string_value
         self.subscribe_compressed = image_topic.endswith('/compressed')
+        print(self.subscribe_compressed)
         overlay_topic = self.get_parameter('publish_overlay_topic').get_parameter_value().string_value
         offset_topic = self.get_parameter('publish_offset_topic').get_parameter_value().string_value
 
@@ -141,7 +142,7 @@ class LaneDetectorNode(Node):
             depth=1
         )
 
-        self.bridge = CvBridge()
+        self.bridge = CvBridge() # change ros imgmsg <-> cv2
 
         self.pub_overlay = self.create_publisher(Image, overlay_topic, qos)
         self.pub_offset = self.create_publisher(Float32, offset_topic, 10)
