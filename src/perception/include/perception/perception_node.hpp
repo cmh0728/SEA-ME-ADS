@@ -1,22 +1,25 @@
 #ifndef PERCEPTION__PERCEPTION_NODE_HPP_
 #define PERCEPTION__PERCEPTION_NODE_HPP_
 
+#include <string>
+
 #include "rclcpp/rclcpp.hpp"
-#include "sea_interfaces/msg/perception_data.hpp"
+#include "sensor_msgs/msg/compressed_image.hpp"
 
 namespace perception
 {
-// 모의 센서 데이터를 발행해 파이프라인의 입력을 제공하는 노드입니다.
+// RealSense 이미지 토픽을 구독해 OpenCV 창으로 출력하는 간단한 지각 노드입니다.
 class PerceptionNode : public rclcpp::Node
 {
 public:
   PerceptionNode();
+  ~PerceptionNode() override;
 
 private:
-  void publish_mock_measurement();
+  void on_image(const sensor_msgs::msg::CompressedImage::ConstSharedPtr msg);
 
-  rclcpp::Publisher<sea_interfaces::msg::PerceptionData>::SharedPtr publisher_;
-  rclcpp::TimerBase::SharedPtr timer_;
+  std::string window_name_;
+  rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr image_subscription_;
 };
 }  // namespace perception
 
