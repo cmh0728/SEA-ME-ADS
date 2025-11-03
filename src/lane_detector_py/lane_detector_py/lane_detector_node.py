@@ -237,6 +237,8 @@ class LaneDetectorNode(Node):
         else:
             self.get_logger().warn(
                 f'Incoming image smaller than crop size ({cur_w}x{cur_h} < {crop_w}x{crop_h}); skipping center crop.')
+            
+        cv2.imshow("origin img",bgr)
 
         # crop upper third after center crop
         cur_h, cur_w, _ = bgr.shape
