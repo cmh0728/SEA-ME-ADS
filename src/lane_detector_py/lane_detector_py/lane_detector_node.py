@@ -268,12 +268,6 @@ class LaneDetectorNode(Node):
 
         combo = np.zeros_like(gray_blur)
         combo[(binary_gray == 255) | (sat_mask == 255) | (edges == 255)] = 255
-
-        # 형태학 연산으로 작은 노이즈 제거 및 끊어진 부분 보완
-        kernel = np.ones((5, 5), np.uint8)
-        combo = cv2.morphologyEx(combo, cv2.MORPH_OPEN, kernel, iterations=1)
-        combo = cv2.morphologyEx(combo, cv2.MORPH_CLOSE, kernel, iterations=1)
-
         return combo
 
     # cv image bridge raw
