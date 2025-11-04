@@ -9,8 +9,8 @@ namespace
 constexpr double kDefaultKp = 0.004;     // 픽셀 에러를 각속도로 변환하는 기본 비례 이득
 constexpr double kDefaultKi = 0.0;
 constexpr double kDefaultKd = 0.001;
-constexpr double kDefaultLinearSpeed = 0.6;
-constexpr double kDefaultMaxAngular = 1.2;
+constexpr double kDefaultLinearSpeed = 15.0;  // 차량 프로토콜 기준 +15가 적정 주행 속도
+constexpr double kDefaultMaxAngular = 1.0;
 constexpr double kDefaultMaxIntegral = 1.0;
 constexpr double kDefaultPixelToMeter = 1.0 / 100.0;  // user tunable scale
 constexpr double kDefaultWatchdogSec = 0.5;
@@ -76,7 +76,7 @@ void ControlNode::on_offset(const std_msgs::msg::Float32::SharedPtr msg)
 
   // 최종 Twist 메시지 구성 후 퍼블리시
   geometry_msgs::msg::Twist cmd;
-  cmd.linear.x = linear_speed_;
+  cmd.linear.x = std::clamp(linear_speed_, -50.0, 50.0);  // 차량 규격 범위 [-50, 50]
   cmd.angular.z = angular_z;
   cmd_pub_->publish(cmd);
 
