@@ -238,12 +238,10 @@ class LaneDetectorNode(Node):
 
 
     # image processing main function
-    def _process_frame(self, bgr: np.ndarray): # bgr np.ndarray는 cv2 이미지 행렬 순서. bgr순서 
-
-        # img resize / crop
+    def _process_frame(self, bgr: np.ndarray):
+        # 1) 중앙 크롭: 640x480 기준으로 중앙 영역만 사용
         crop_w, crop_h = self.crop_size
         cur_h, cur_w, _ = bgr.shape
-
         if cur_w >= crop_w and cur_h >= crop_h:
             x0 = (cur_w - crop_w) // 2
             y0 = (cur_h - crop_h) // 2
@@ -251,34 +249,36 @@ class LaneDetectorNode(Node):
         else:
             self.get_logger().warn(
                 f'Incoming image smaller than crop size ({cur_w}x{cur_h} < {crop_w}x{crop_h}); skipping center crop.')
-            
-        # cv2.imshow("origin img",bgr)
 
-        # crop upper third after center crop
-        cur_h, cur_w, _ = bgr.shape
-        # top_cut = cur_h // 3 # 상단 부분 제거 
+        # 2) 상단 1/3 제거하여 하단 2/3만 사용
+        # cur_h, cur_w, _ = bgr.shape
+        # top_cut = cur_h // 3
         # if top_cut > 0:
         #     bgr = bgr[top_cut:, :]
-        #     cur_h = bgr.shape[0]
 
-        if cur_w >= crop_w:
+        # 3) 가로가 넓을 경우 다시 중앙 정렬
+        cur_h, cur_w, _ = bgr.shape
+        if cur_w > crop_w:
             x0 = (cur_w - crop_w) // 2
             bgr = bgr[:, x0:x0 + crop_w]
-        else: # if origin img is smaller than crop size
+        elif cur_w < crop_w:
             self.get_logger().warn(
                 f'Incoming image narrower than crop width ({cur_w} < {crop_w}); skipping horizontal crop.')
 
-        cv2.imshow(self.window_name, bgr)  # show cropped frame
+        cv2.imshow(self.window_name, bgr)
 
         h, w, _ = bgr.shape
-        # print(h,w)  # check img size 480 640
 
-        # 버드아이뷰
-        top = cv2.warpPerspective(bgr, self.H, (w, h)) 
+        # 4) 전처리 → 이진 마스크
+        mask = self._binarize(bgr)
+        if mask.ndim == 3:
+            mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
+
+        # 5) 버드아이뷰 변환 (이진 마스크 기준)
+        top = cv2.warpPerspective(mask, self.H, (w, h)) if self.H is not None else mask
+        if top.ndim == 3:
+            top = cv2.cvtColor(top, cv2.COLOR_BGR2GRAY)
         cv2.imshow('wrapped img',top)
-        # 전처리 → 이진 마스크
-        mask = self._binarize(top)
-        # cv2.imshow('lane_detector_binary_mask', mask)
 
         # 슬라이딩 윈도우 → 피팅
         (lx, ly), (rx, ry) = _sliding_window(top)
@@ -293,7 +293,7 @@ class LaneDetectorNode(Node):
             x_right = right_fit[0]*y_eval*y_eval + right_fit[1]*y_eval + right_fit[2]
             lane_center = (x_left + x_right) / 2.0
             img_center = w / 2.0
-            center_offset_px = float(img_center - lane_center)  # +면 우측, -면 좌측으로 해석 가능
+            center_offset_px = float(img_center - lane_center)
 
         # 오버레이 이미지
         overlay = _draw_overlay(bgr, top, self.Hinv, left_fit, right_fit)
@@ -302,7 +302,8 @@ class LaneDetectorNode(Node):
         self.pub_overlay.publish(self.bridge.cv2_to_imgmsg(overlay, encoding='bgr8'))
         self.pub_offset.publish(Float32(data=center_offset_px))
 
-        cv2.waitKey(1) # 1ms delay for imshow(refresh)
+        cv2.waitKey(1)
+
 
     def _on_mouse(self, event, x, y, flags, param):
         if event == cv2.EVENT_LBUTTONDOWN:
