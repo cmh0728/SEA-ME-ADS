@@ -130,7 +130,7 @@ class LaneDetectorNode(Node):
         # 실제 카메라 및 트랙에 맞게 보정 필요 
         # src_points : 원본 카메라 이미지에서 변환에 사용할 4개의 점 
         # dst_points : 버드아이뷰에서 대응되는 4개의 점[x0, y0, x1, y1, x2, y2, x3, y3
-        self.declare_parameter('src_points', [54.0, 480.0, 250.0, 300.0, 510.0, 300.0, 590.0, 480.0])
+        self.declare_parameter('src_points', [54.0, 480.0, 219.0, 300.0, 456.0, 300.0, 633.0, 480.0])
         self.declare_parameter('dst_points', [0.0,  480.0, 0.0,   0.0, 640.0, 0.0, 640.0, 480.0])
 
         image_topic = self.get_parameter('image_topic').get_parameter_value().string_value
@@ -268,6 +268,12 @@ class LaneDetectorNode(Node):
 
         combo = np.zeros_like(gray_blur)
         combo[(binary_gray == 255) | (sat_mask == 255) | (edges == 255)] = 255
+
+        # 형태학 연산으로 작은 노이즈 제거 및 끊어진 부분 보완
+        kernel = np.ones((5, 5), np.uint8)
+        combo = cv2.morphologyEx(combo, cv2.MORPH_OPEN, kernel, iterations=1)
+        combo = cv2.morphologyEx(combo, cv2.MORPH_CLOSE, kernel, iterations=1)
+
         return combo
 
     # cv image bridge raw
@@ -324,13 +330,13 @@ class LaneDetectorNode(Node):
 
         h, w, _ = bgr.shape
         self.last_frame_shape = (w, h)
-        self._ensure_homography_ui()
+        # self._ensure_homography_ui() # homography ui track bar 생성
 
         # 4) 전처리 → 이진 마스크
         mask = self._binarize(bgr)
         if mask.ndim == 3:
             mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
-        cv2.imshow('binary mask',mask)
+        # cv2.imshow('binary mask',mask)
 
         # 5) 버드아이뷰 변환 (이진 마스크 기준)
         top = cv2.warpPerspective(mask, self.H, (w, h)) if self.H is not None else mask
@@ -355,6 +361,7 @@ class LaneDetectorNode(Node):
 
         # 오버레이 이미지
         overlay = _draw_overlay(bgr, top, self.Hinv, left_fit, right_fit)
+        cv2.imshow('lane overlay', overlay)
 
         # 퍼블리시
         self.pub_overlay.publish(self.bridge.cv2_to_imgmsg(overlay, encoding='bgr8'))
