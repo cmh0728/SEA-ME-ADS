@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import math
 import time
+from functools import partial
 import cv2
 import numpy as np
 
@@ -123,6 +124,7 @@ class LaneDetectorNode(Node):
         self.declare_parameter('publish_offset_topic', '/lane/center_offset')
         self.declare_parameter('use_birdeye', True)
         self.crop_size = (640, 480)
+        self.last_frame_shape = None
 
         # 버드아이용 호모그래피(예시 좌표: 해상도 640x480 전제)
         # 실제 카메라 및 트랙에 맞게 보정 필요 
@@ -144,6 +146,10 @@ class LaneDetectorNode(Node):
         # print(self.subscribe_compressed) # check
         overlay_topic = self.get_parameter('publish_overlay_topic').get_parameter_value().string_value
         offset_topic = self.get_parameter('publish_offset_topic').get_parameter_value().string_value
+        self.use_birdeye = self.get_parameter('use_birdeye').get_parameter_value().bool_value
+
+        self.src_pts = np.array(self.get_parameter('src_points').value, dtype=np.float32).reshape(4, 2)
+        self.dst_pts = np.array(self.get_parameter('dst_points').value, dtype=np.float32).reshape(4, 2)
 
         # QoS: 센서데이터는 BestEffort/Depth=1이 지연/버퍼에 유리
         qos = QoSProfile(
@@ -169,27 +175,50 @@ class LaneDetectorNode(Node):
         self.window_name = 'lane_detector_input'
         cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
         cv2.setMouseCallback(self.window_name, self._on_mouse)
+        if self.use_birdeye:
+            self._init_homography_ui()
 
         sub_type = 'CompressedImage' if self.subscribe_compressed else 'Image'
         self.get_logger().info(f'LaneDetector subscribing: {image_topic} ({sub_type})')
         self.get_logger().info(f'Publishing overlay: {overlay_topic}, center_offset: {offset_topic}')
 
     def _compute_homography(self):
-        use_be = self.get_parameter('use_birdeye').get_parameter_value().bool_value
-        if not use_be:
+        if not self.use_birdeye:
             return np.eye(3), np.eye(3)
 
-        def get_pts(name):
-            vals = self.get_parameter(name).value   # 길이 8의 list[float]
-            pts = np.array(vals, dtype=np.float32).reshape(4, 2)
-            return pts
-
-        src = get_pts('src_points')
-        dst = get_pts('dst_points')
+        src = self.src_pts.astype(np.float32)
+        dst = self.dst_pts.astype(np.float32)
         H = cv2.getPerspectiveTransform(src, dst)
         Hinv = cv2.getPerspectiveTransform(dst, src)
         return H, Hinv # 행렬 및 역행렬 
 
+    def _init_homography_ui(self):
+        max_x = max(1, self.crop_size[0] - 1)
+        max_y = max(1, self.crop_size[1] - 1)
+        for idx in range(4):
+            cv2.createTrackbar(
+                f'src_x{idx}', self.window_name, int(self.src_pts[idx, 0]), max_x,
+                partial(self._on_homography_trackbar, 'src', idx, 0))
+            cv2.createTrackbar(
+                f'src_y{idx}', self.window_name, int(self.src_pts[idx, 1]), max_y,
+                partial(self._on_homography_trackbar, 'src', idx, 1))
+            cv2.createTrackbar(
+                f'dst_x{idx}', self.window_name, int(self.dst_pts[idx, 0]), max_x,
+                partial(self._on_homography_trackbar, 'dst', idx, 0))
+            cv2.createTrackbar(
+                f'dst_y{idx}', self.window_name, int(self.dst_pts[idx, 1]), max_y,
+                partial(self._on_homography_trackbar, 'dst', idx, 1))
+
+    def _on_homography_trackbar(self, point_type: str, idx: int, axis: int, value: int):
+        arr = self.src_pts if point_type == 'src' else self.dst_pts
+        if self.last_frame_shape:
+            ref_w, ref_h = self.last_frame_shape
+        else:
+            ref_w, ref_h = self.crop_size
+        max_val = (ref_w - 1) if axis == 0 else (ref_h - 1)
+        value = float(np.clip(value, 0, max_val))
+        arr[idx, axis] = value
+        self.H, self.Hinv = self._compute_homography()
 
     def _binarize(self, bgr):
         """HSV + Sobel 혼합 간단 임계처리"""
@@ -203,15 +232,19 @@ class LaneDetectorNode(Node):
         bgr2 = cv2.cvtColor(hsv2, cv2.COLOR_HSV2BGR)
 
         gray = cv2.cvtColor(bgr2, cv2.COLOR_BGR2GRAY)
-        sobelx = cv2.Sobel(gray, cv2.CV_16S, 1, 0, ksize=3)
+
+        # 가우시안 블러로 노이즈 완화 후 엣지/임계값 계산
+        gray_blur = cv2.GaussianBlur(gray, (5, 5), 0)
+
+        sobelx = cv2.Sobel(gray_blur, cv2.CV_16S, 1, 0, ksize=3)
         sobelx = cv2.convertScaleAbs(sobelx)
 
         # 색 기반(흰/노란) + 엣지 기반을 OR
-        _, binary_gray = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)  # 밝은 선
+        _, binary_gray = cv2.threshold(gray_blur, 200, 255, cv2.THRESH_BINARY)  # 밝은 선
         _, sat_mask = cv2.threshold(s, 60, 255, cv2.THRESH_BINARY)         # 채도 약간
-        edges = cv2.Canny(gray, 80, 160)
+        edges = cv2.Canny(gray_blur, 80, 160)
 
-        combo = np.zeros_like(gray)
+        combo = np.zeros_like(gray_blur)
         combo[(binary_gray == 255) | (sat_mask == 255) | (edges == 255)] = 255
         return combo
 
@@ -251,10 +284,10 @@ class LaneDetectorNode(Node):
                 f'Incoming image smaller than crop size ({cur_w}x{cur_h} < {crop_w}x{crop_h}); skipping center crop.')
 
         # 2) 상단 1/3 제거하여 하단 2/3만 사용
-        # cur_h, cur_w, _ = bgr.shape
-        # top_cut = cur_h // 3
-        # if top_cut > 0:
-        #     bgr = bgr[top_cut:, :]
+        cur_h, cur_w, _ = bgr.shape
+        top_cut = cur_h // 3
+        if top_cut > 0:
+            bgr = bgr[top_cut:, :]
 
         # 3) 가로가 넓을 경우 다시 중앙 정렬
         cur_h, cur_w, _ = bgr.shape
@@ -268,11 +301,13 @@ class LaneDetectorNode(Node):
         cv2.imshow(self.window_name, bgr)
 
         h, w, _ = bgr.shape
+        self.last_frame_shape = (w, h)
 
         # 4) 전처리 → 이진 마스크
         mask = self._binarize(bgr)
         if mask.ndim == 3:
             mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
+        cv2.imshow('binary mask',mask)
 
         # 5) 버드아이뷰 변환 (이진 마스크 기준)
         top = cv2.warpPerspective(mask, self.H, (w, h)) if self.H is not None else mask
