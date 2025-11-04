@@ -128,8 +128,16 @@ class LaneDetectorNode(Node):
         # 실제 카메라 및 트랙에 맞게 보정 필요 
         # src_points : 원본 카메라 이미지에서 변환에 사용할 4개의 점 
         # dst_points : 버드아이뷰에서 대응되는 4개의 점[x0, y0, x1, y1, x2, y2, x3, y3
-        self.declare_parameter('src_points', [200.0, 300.0, 440.0, 300.0, 620.0, 470.0, 20.0, 470.0])
-        self.declare_parameter('dst_points', [100.0,   0.0, 540.0,   0.0, 540.0, 480.0, 100.0, 480.0])
+        self.declare_parameter('src_points', [54.0, 480.0, 250.0, 300.0, 510.0, 300.0, 590.0, 480.0])
+        self.declare_parameter('dst_points', [0.0,  480.0, 0.0,   0.0, 640.0, 0.0, 640.0, 480.0])
+
+        '''
+        좌하 좌상 우상 우하
+        [INFO] [1762251875.599137617] [lane_detector]: Mouse click at (54, 479)
+        [INFO] [1762251911.316409597] [lane_detector]: Mouse click at (250, 300)
+        [INFO] [1762251917.453382737] [lane_detector]: Mouse click at (509, 307)
+        [INFO] [1762251919.558033665] [lane_detector]: Mouse click at (591, 469)
+        '''
 
         image_topic = self.get_parameter('image_topic').get_parameter_value().string_value
         self.subscribe_compressed = image_topic.endswith('/compressed')
@@ -264,13 +272,13 @@ class LaneDetectorNode(Node):
 
         h, w, _ = bgr.shape
         # print(h,w)  # check img size 480 640
-        
-        # 전처리 → 이진 마스크
-        mask = self._binarize(bgr)
-        # cv2.imshow('lane_detector_binary_mask', mask)
 
-        # 탑뷰(옵션)
-        top = cv2.warpPerspective(mask, self.H, (w, h)) if self.H is not None else mask
+        # 버드아이뷰
+        top = cv2.warpPerspective(bgr, self.H, (w, h)) 
+        cv2.imshow('wrapped img',top)
+        # 전처리 → 이진 마스크
+        mask = self._binarize(top)
+        # cv2.imshow('lane_detector_binary_mask', mask)
 
         # 슬라이딩 윈도우 → 피팅
         (lx, ly), (rx, ry) = _sliding_window(top)
@@ -317,4 +325,5 @@ if __name__ == '__main__':
 
 
 # to do 
-# img roi  상단부분 날리기 , 이미지 전처리 
+# 버드아이뷰 마우스 포인터로 좌표 따기 
+# 이미지 전처리 및 차선 검출 튜닝 
