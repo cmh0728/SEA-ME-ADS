@@ -461,7 +461,7 @@ class LaneDetectorNode(Node):
         cv2.imshow(self.overlay_window, overlay)
 
         # 퍼블리시
-        self.pub_overlay.publish(self.bridge.cv2_to_imgmsg(overlay, encoding='bgr8'))
+        # self.pub_overlay.publish(self.bridge.cv2_to_imgmsg(overlay, encoding='bgr8'))
         self.pub_offset.publish(Float32(data=center_offset_px))
 
         cv2.waitKey(1)
@@ -486,7 +486,3 @@ def main():
 if __name__ == '__main__':
     main()
 
-
-# to do 
-# 버드아이뷰 마우스 포인터로 좌표 따기 
-# 이미지 전처리 및 차선 검출 튜닝 
