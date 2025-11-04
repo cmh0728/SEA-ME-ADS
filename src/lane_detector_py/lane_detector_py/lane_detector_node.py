@@ -2,6 +2,7 @@
 import math
 import time
 from functools import partial
+import inspect
 import cv2
 import numpy as np
 
@@ -439,7 +440,13 @@ class LaneDetectorNode(Node):
 
         # 오버레이 이미지
         fill_overlay = left_detected and right_detected
-        overlay = _draw_overlay(bgr, top, self.Hinv, left_fit, right_fit, fill=fill_overlay)
+        draw_kwargs = {}
+        try:
+            if 'fill' in inspect.signature(_draw_overlay).parameters:
+                draw_kwargs['fill'] = fill_overlay
+        except (ValueError, TypeError):
+            pass
+        overlay = _draw_overlay(bgr, top, self.Hinv, left_fit, right_fit, **draw_kwargs)
         cv2.imshow(self.overlay_window, overlay)
 
         # 퍼블리시
