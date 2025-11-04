@@ -40,6 +40,7 @@ def _sliding_window(binary_topdown, nwindows=9, window_width=80, minpix=50):
     window_height = h // nwindows
     left_lane_inds = []
     right_lane_inds = []
+    window_records = {'left': [], 'right': []}
 
     for window in range(nwindows):
         win_y_low = h - (window + 1) * window_height
@@ -61,19 +62,23 @@ def _sliding_window(binary_topdown, nwindows=9, window_width=80, minpix=50):
             lx0, lx1, ly0, ly1, good, leftx_current = _gather(leftx_current)
             if good.size:
                 left_lane_inds.append(good)
+            if lx0 is not None and lx1 is not None:
+                window_records['left'].append((lx0, lx1, ly0, ly1))
 
         # right
         if rightx_current is not None:
             rx0, rx1, ry0, ry1, good, rightx_current = _gather(rightx_current)
             if good.size:
                 right_lane_inds.append(good)
+            if rx0 is not None and rx1 is not None:
+                window_records['right'].append((rx0, rx1, ry0, ry1))
 
     left_inds = np.concatenate(left_lane_inds) if len(left_lane_inds) else np.array([], dtype=int)
     right_inds = np.concatenate(right_lane_inds) if len(right_lane_inds) else np.array([], dtype=int)
 
     leftx, lefty = nonzerox[left_inds], nonzeroy[left_inds]
     rightx, righty = nonzerox[right_inds], nonzeroy[right_inds]
-    return (leftx, lefty), (rightx, righty)
+    return (leftx, lefty), (rightx, righty), window_records
 
 
 def _fit_poly(points):
@@ -172,8 +177,11 @@ class LaneDetectorNode(Node):
         cv2.setMouseCallback(self.window_name, self._on_mouse)
         self.control_window = 'homography_controls'
         self.birdeye_window = 'wrapped_img'
+        self.overlay_window = 'lane_overlay'
         self.homography_ui_ready = False
         self._trackbar_lock = False
+
+        cv2.namedWindow(self.overlay_window, cv2.WINDOW_NORMAL)
         if self.use_birdeye:
             cv2.namedWindow(self.birdeye_window, cv2.WINDOW_NORMAL)
 
@@ -244,6 +252,30 @@ class LaneDetectorNode(Node):
 
         arr[idx, axis] = clipped
         self.H, self.Hinv = self._compute_homography()
+
+    def _render_sliding_window_debug(self, binary_topdown, windows, left_points, right_points):
+        if binary_topdown.ndim == 2:
+            vis = cv2.cvtColor(binary_topdown, cv2.COLOR_GRAY2BGR)
+        else:
+            vis = binary_topdown.copy()
+
+        for x0, x1, y0, y1 in windows.get('left', []):
+            cv2.rectangle(vis, (int(x0), int(y0)), (int(x1), int(y1)), (255, 0, 0), 1)
+        for x0, x1, y0, y1 in windows.get('right', []):
+            cv2.rectangle(vis, (int(x0), int(y0)), (int(x1), int(y1)), (0, 0, 255), 1)
+
+        lx, ly = left_points
+        if lx.size:
+            lx_clip = np.clip(lx.astype(int), 0, vis.shape[1]-1)
+            ly_clip = np.clip(ly.astype(int), 0, vis.shape[0]-1)
+            vis[ly_clip, lx_clip] = (0, 255, 255)
+        rx, ry = right_points
+        if rx.size:
+            rx_clip = np.clip(rx.astype(int), 0, vis.shape[1]-1)
+            ry_clip = np.clip(ry.astype(int), 0, vis.shape[0]-1)
+            vis[ry_clip, rx_clip] = (0, 255, 255)
+
+        return vis
 
     def _binarize(self, bgr):
         """HSV + Sobel 혼합 간단 임계처리"""
@@ -339,35 +371,50 @@ class LaneDetectorNode(Node):
         top = cv2.warpPerspective(mask, self.H, (w, h)) if self.H is not None else mask
         if top.ndim == 3:
             top = cv2.cvtColor(top, cv2.COLOR_BGR2GRAY)
-        cv2.imshow(self.birdeye_window, top)
 
         # 슬라이딩 윈도우 → 피팅
-        (lx, ly), (rx, ry) = _sliding_window(top)
+        (lx, ly), (rx, ry), window_records = _sliding_window(top)
         left_fit_raw = _fit_poly((lx, ly))
         right_fit_raw = _fit_poly((rx, ry))
+        left_detected = left_fit_raw is not None
+        right_detected = right_fit_raw is not None
 
-        left_fit = left_fit_raw.copy() if left_fit_raw is not None else None
-        right_fit = right_fit_raw.copy() if right_fit_raw is not None else None
+        alpha = self.fit_smoothing_alpha
 
-        if left_fit_raw is not None:
-            self.prev_left_fit = left_fit_raw.copy()
-        if right_fit_raw is not None:
-            self.prev_right_fit = right_fit_raw.copy()
+        def _smooth(prev, new):
+            if prev is None:
+                return new.copy()
+            return (1.0 - alpha) * prev + alpha * new
 
-        if left_fit is None and self.prev_left_fit is not None:
+        left_fit = None
+        if left_detected:
+            raw = np.array(left_fit_raw, dtype=float)
+            left_fit = _smooth(self.prev_left_fit, raw)
+            self.prev_left_fit = left_fit.copy()
+        elif self.prev_left_fit is not None:
             left_fit = self.prev_left_fit.copy()
-        if right_fit is None and self.prev_right_fit is not None:
+
+        right_fit = None
+        if right_detected:
+            raw = np.array(right_fit_raw, dtype=float)
+            right_fit = _smooth(self.prev_right_fit, raw)
+            self.prev_right_fit = right_fit.copy()
+        elif self.prev_right_fit is not None:
             right_fit = self.prev_right_fit.copy()
 
-        if left_fit_raw is not None and right_fit_raw is not None:
+        if left_detected and right_detected:
             y_eval_width = h - 1
             x_left_raw = (left_fit_raw[0]*y_eval_width*y_eval_width +
                           left_fit_raw[1]*y_eval_width + left_fit_raw[2])
             x_right_raw = (right_fit_raw[0]*y_eval_width*y_eval_width +
                            right_fit_raw[1]*y_eval_width + right_fit_raw[2])
             width_px = float(x_right_raw - x_left_raw)
-            if width_px > 0.0 and self.lane_width_px is None:
-                self.lane_width_px = width_px
+            if width_px > 0.0:
+                if self.lane_width_px is None:
+                    self.lane_width_px = width_px
+                else:
+                    beta = self.lane_width_alpha
+                    self.lane_width_px = (1.0 - beta) * self.lane_width_px + beta * width_px
         else:
             if self.lane_width_px is not None:
                 if left_fit is not None and right_fit is None:
@@ -387,9 +434,13 @@ class LaneDetectorNode(Node):
             img_center = w / 2.0
             center_offset_px = float(img_center - lane_center)
 
+        debug_view = self._render_sliding_window_debug(top, window_records, (lx, ly), (rx, ry))
+        cv2.imshow(self.birdeye_window, debug_view)
+
         # 오버레이 이미지
-        overlay = _draw_overlay(bgr, top, self.Hinv, left_fit, right_fit)
-        cv2.imshow('lane overlay', overlay)
+        fill_overlay = left_detected and right_detected
+        overlay = _draw_overlay(bgr, top, self.Hinv, left_fit, right_fit, fill=fill_overlay)
+        cv2.imshow(self.overlay_window, overlay)
 
         # 퍼블리시
         self.pub_overlay.publish(self.bridge.cv2_to_imgmsg(overlay, encoding='bgr8'))
