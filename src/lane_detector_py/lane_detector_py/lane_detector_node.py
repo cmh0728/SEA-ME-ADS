@@ -182,17 +182,17 @@ class LaneDetectorNode(Node):
 
         # 디버깅용 이미지 표시 창과 마우스 콜백 설정
         self.window_name = 'lane_detector_input'
-        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
-        cv2.setMouseCallback(self.window_name, self._on_mouse)
+        #cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+        #cv2.setMouseCallback(self.window_name, self._on_mouse)
         self.control_window = 'homography_controls'
         self.birdeye_window = 'wrapped_img'
         self.overlay_window = 'lane_overlay'
         self.homography_ui_ready = False
         self._trackbar_lock = False
 
-        cv2.namedWindow(self.overlay_window, cv2.WINDOW_NORMAL)
-        if self.use_birdeye:
-            cv2.namedWindow(self.birdeye_window, cv2.WINDOW_NORMAL)
+        #cv2.namedWindow(self.overlay_window, cv2.WINDOW_NORMAL)
+        # if self.use_birdeye:
+        #     cv2.namedWindow(self.birdeye_window, cv2.WINDOW_NORMAL)
 
         sub_type = 'CompressedImage' if self.subscribe_compressed else 'Image'
         self.get_logger().info(f'LaneDetector subscribing: {image_topic} ({sub_type})')
