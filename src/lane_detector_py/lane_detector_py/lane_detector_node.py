@@ -167,8 +167,12 @@ class LaneDetectorNode(Node):
         self.window_name = 'lane_detector_input'
         cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
         cv2.setMouseCallback(self.window_name, self._on_mouse)
+        self.control_window = 'homography_controls'
+        self.birdeye_window = 'wrapped_img'
+        self.homography_ui_ready = False
+        self._trackbar_lock = False
         if self.use_birdeye:
-            self._init_homography_ui()
+            cv2.namedWindow(self.birdeye_window, cv2.WINDOW_NORMAL)
 
         sub_type = 'CompressedImage' if self.subscribe_compressed else 'Image'
         self.get_logger().info(f'LaneDetector subscribing: {image_topic} ({sub_type})')
@@ -184,32 +188,58 @@ class LaneDetectorNode(Node):
         Hinv = cv2.getPerspectiveTransform(dst, src)
         return H, Hinv # 행렬 및 역행렬 
 
-    def _init_homography_ui(self):
-        max_x = max(1, self.crop_size[0] - 1)
-        max_y = max(1, self.crop_size[1] - 1)
-        for idx in range(4):
-            cv2.createTrackbar(
-                f'src_x{idx}', "wrapped trackbar", int(self.src_pts[idx, 0]), max_x,
-                partial(self._on_homography_trackbar, 'src', idx, 0))
-            cv2.createTrackbar(
-                f'src_y{idx}', "wrapped trackbar", int(self.src_pts[idx, 1]), max_y,
-                partial(self._on_homography_trackbar, 'src', idx, 1))
-            cv2.createTrackbar(
-                f'dst_x{idx}', "wrapped trackbar", int(self.dst_pts[idx, 0]), max_x,
-                partial(self._on_homography_trackbar, 'dst', idx, 0))
-            cv2.createTrackbar(
-                f'dst_y{idx}', "wrapped trackbar", int(self.dst_pts[idx, 1]), max_y,
-                partial(self._on_homography_trackbar, 'dst', idx, 1))
+    def _ensure_homography_ui(self):
+        if not self.use_birdeye or self.homography_ui_ready or self.last_frame_shape is None:
+            return
 
-    def _on_homography_trackbar(self, point_type: str, idx: int, axis: int, value: int):
+        ref_w, ref_h = self.last_frame_shape
+        ref_w = max(1, ref_w)
+        ref_h = max(1, ref_h)
+
+        cv2.namedWindow(self.control_window, cv2.WINDOW_AUTOSIZE)
+
+        for idx in range(4):
+            self._create_homography_trackbar('src', idx, 0, ref_w)
+            self._create_homography_trackbar('src', idx, 1, ref_h)
+            self._create_homography_trackbar('dst', idx, 0, ref_w)
+            self._create_homography_trackbar('dst', idx, 1, ref_h)
+
+        self.homography_ui_ready = True
+
+    def _create_homography_trackbar(self, point_type: str, idx: int, axis: int, max_val: int):
+        arr = self.src_pts if point_type == 'src' else self.dst_pts
+        track_name = f'{point_type}_{"x" if axis == 0 else "y"}{idx}'
+        max_slider = max(1, max_val - 1)
+        initial = int(np.clip(arr[idx, axis], 0, max_slider))
+        arr[idx, axis] = float(initial)
+        cv2.createTrackbar(
+            track_name,
+            self.control_window,
+            initial,
+            max_slider,
+            partial(self._on_homography_trackbar, point_type, idx, axis, track_name)
+        )
+
+    def _on_homography_trackbar(self, point_type: str, idx: int, axis: int, track_name: str, value: int):
+        if self._trackbar_lock:
+            return
+
         arr = self.src_pts if point_type == 'src' else self.dst_pts
         if self.last_frame_shape:
             ref_w, ref_h = self.last_frame_shape
         else:
             ref_w, ref_h = self.crop_size
         max_val = (ref_w - 1) if axis == 0 else (ref_h - 1)
-        value = float(np.clip(value, 0, max_val))
-        arr[idx, axis] = value
+        clipped = float(np.clip(value, 0, max_val))
+
+        if clipped != value:
+            try:
+                self._trackbar_lock = True
+                cv2.setTrackbarPos(track_name, self.control_window, int(clipped))
+            finally:
+                self._trackbar_lock = False
+
+        arr[idx, axis] = clipped
         self.H, self.Hinv = self._compute_homography()
 
     def _binarize(self, bgr):
@@ -294,6 +324,7 @@ class LaneDetectorNode(Node):
 
         h, w, _ = bgr.shape
         self.last_frame_shape = (w, h)
+        self._ensure_homography_ui()
 
         # 4) 전처리 → 이진 마스크
         mask = self._binarize(bgr)
@@ -305,7 +336,7 @@ class LaneDetectorNode(Node):
         top = cv2.warpPerspective(mask, self.H, (w, h)) if self.H is not None else mask
         if top.ndim == 3:
             top = cv2.cvtColor(top, cv2.COLOR_BGR2GRAY)
-        cv2.imshow('wrapped img',top)
+        cv2.imshow(self.birdeye_window, top)
 
         # 슬라이딩 윈도우 → 피팅
         (lx, ly), (rx, ry) = _sliding_window(top)
