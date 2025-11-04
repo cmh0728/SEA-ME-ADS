@@ -133,14 +133,6 @@ class LaneDetectorNode(Node):
         self.declare_parameter('src_points', [54.0, 480.0, 250.0, 300.0, 510.0, 300.0, 590.0, 480.0])
         self.declare_parameter('dst_points', [0.0,  480.0, 0.0,   0.0, 640.0, 0.0, 640.0, 480.0])
 
-        '''
-        좌하 좌상 우상 우하
-        [INFO] [1762251875.599137617] [lane_detector]: Mouse click at (54, 479)
-        [INFO] [1762251911.316409597] [lane_detector]: Mouse click at (250, 300)
-        [INFO] [1762251917.453382737] [lane_detector]: Mouse click at (509, 307)
-        [INFO] [1762251919.558033665] [lane_detector]: Mouse click at (591, 469)
-        '''
-
         image_topic = self.get_parameter('image_topic').get_parameter_value().string_value
         self.subscribe_compressed = image_topic.endswith('/compressed')
         # print(self.subscribe_compressed) # check
@@ -197,16 +189,16 @@ class LaneDetectorNode(Node):
         max_y = max(1, self.crop_size[1] - 1)
         for idx in range(4):
             cv2.createTrackbar(
-                f'src_x{idx}', self.window_name, int(self.src_pts[idx, 0]), max_x,
+                f'src_x{idx}', "wrapped trackbar", int(self.src_pts[idx, 0]), max_x,
                 partial(self._on_homography_trackbar, 'src', idx, 0))
             cv2.createTrackbar(
-                f'src_y{idx}', self.window_name, int(self.src_pts[idx, 1]), max_y,
+                f'src_y{idx}', "wrapped trackbar", int(self.src_pts[idx, 1]), max_y,
                 partial(self._on_homography_trackbar, 'src', idx, 1))
             cv2.createTrackbar(
-                f'dst_x{idx}', self.window_name, int(self.dst_pts[idx, 0]), max_x,
+                f'dst_x{idx}', "wrapped trackbar", int(self.dst_pts[idx, 0]), max_x,
                 partial(self._on_homography_trackbar, 'dst', idx, 0))
             cv2.createTrackbar(
-                f'dst_y{idx}', self.window_name, int(self.dst_pts[idx, 1]), max_y,
+                f'dst_y{idx}', "wrapped trackbar", int(self.dst_pts[idx, 1]), max_y,
                 partial(self._on_homography_trackbar, 'dst', idx, 1))
 
     def _on_homography_trackbar(self, point_type: str, idx: int, axis: int, value: int):
@@ -283,11 +275,11 @@ class LaneDetectorNode(Node):
             self.get_logger().warn(
                 f'Incoming image smaller than crop size ({cur_w}x{cur_h} < {crop_w}x{crop_h}); skipping center crop.')
 
-        # 2) 상단 1/3 제거하여 하단 2/3만 사용
-        cur_h, cur_w, _ = bgr.shape
-        top_cut = cur_h // 3
-        if top_cut > 0:
-            bgr = bgr[top_cut:, :]
+        # # 2) 상단 1/3 제거하여 하단 2/3만 사용
+        # cur_h, cur_w, _ = bgr.shape
+        # top_cut = cur_h // 3
+        # if top_cut > 0:
+        #     bgr = bgr[top_cut:, :]
 
         # 3) 가로가 넓을 경우 다시 중앙 정렬
         cur_h, cur_w, _ = bgr.shape
