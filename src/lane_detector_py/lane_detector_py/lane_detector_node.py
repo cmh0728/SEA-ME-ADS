@@ -125,6 +125,9 @@ class LaneDetectorNode(Node):
         self.declare_parameter('use_birdeye', True)
         self.crop_size = (640, 480)
         self.last_frame_shape = None
+        self.prev_left_fit = None
+        self.prev_right_fit = None
+        self.lane_width_px = None
 
         # 버드아이용 호모그래피(예시 좌표: 해상도 640x480 전제)
         # 실제 카메라 및 트랙에 맞게 보정 필요 
@@ -324,7 +327,7 @@ class LaneDetectorNode(Node):
 
         h, w, _ = bgr.shape
         self.last_frame_shape = (w, h)
-        # self._ensure_homography_ui() # homography ui track bar 생성
+        self._ensure_homography_ui()
 
         # 4) 전처리 → 이진 마스크
         mask = self._binarize(bgr)
@@ -340,8 +343,39 @@ class LaneDetectorNode(Node):
 
         # 슬라이딩 윈도우 → 피팅
         (lx, ly), (rx, ry) = _sliding_window(top)
-        left_fit = _fit_poly((lx, ly))
-        right_fit = _fit_poly((rx, ry))
+        left_fit_raw = _fit_poly((lx, ly))
+        right_fit_raw = _fit_poly((rx, ry))
+
+        left_fit = left_fit_raw.copy() if left_fit_raw is not None else None
+        right_fit = right_fit_raw.copy() if right_fit_raw is not None else None
+
+        if left_fit_raw is not None:
+            self.prev_left_fit = left_fit_raw.copy()
+        if right_fit_raw is not None:
+            self.prev_right_fit = right_fit_raw.copy()
+
+        if left_fit is None and self.prev_left_fit is not None:
+            left_fit = self.prev_left_fit.copy()
+        if right_fit is None and self.prev_right_fit is not None:
+            right_fit = self.prev_right_fit.copy()
+
+        if left_fit_raw is not None and right_fit_raw is not None:
+            y_eval_width = h - 1
+            x_left_raw = (left_fit_raw[0]*y_eval_width*y_eval_width +
+                          left_fit_raw[1]*y_eval_width + left_fit_raw[2])
+            x_right_raw = (right_fit_raw[0]*y_eval_width*y_eval_width +
+                           right_fit_raw[1]*y_eval_width + right_fit_raw[2])
+            width_px = float(x_right_raw - x_left_raw)
+            if width_px > 0.0 and self.lane_width_px is None:
+                self.lane_width_px = width_px
+        else:
+            if self.lane_width_px is not None:
+                if left_fit is not None and right_fit is None:
+                    right_fit = left_fit.copy()
+                    right_fit[2] += self.lane_width_px
+                elif right_fit is not None and left_fit is None:
+                    left_fit = right_fit.copy()
+                    left_fit[2] -= self.lane_width_px
 
         # 차 폭/센터 오프셋 계산 (픽셀 기준 → 미터 변환은 사용자 설정)
         center_offset_px = 0.0
