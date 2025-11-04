@@ -20,7 +20,8 @@ ControlNode::ControlNode()
 : rclcpp::Node("lane_follow_control"),
   integral_error_(0.0),
   prev_error_(0.0),
-  last_stamp_(this->now())
+  last_stamp_(this->now()),
+  watchdog_timeout_(rclcpp::Duration::from_seconds(kDefaultWatchdogSec))
 {
   // PID 및 차량 주행 관련 기본 파라미터 선언 (launch나 CLI에서 override 가능)
   kp_ = declare_parameter("kp", kDefaultKp);
