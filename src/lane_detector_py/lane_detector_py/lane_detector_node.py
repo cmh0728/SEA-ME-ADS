@@ -29,7 +29,15 @@ def _hist_peaks(binary_topdown, margin_bottom=0.4):
 
 
 def _sliding_window(binary_topdown, nwindows=9, window_width=80, minpix=50):
-    """슬라이딩 윈도우로 좌/우 차선 픽셀 인덱스 수집"""
+    """
+    슬라이딩 윈도우로 좌/우 차선 픽셀 인덱스 수집.
+
+    tunable parameters:
+        nwindows     : 전체 윈도우 개수 (세로 방향 분할 수)
+        window_width : 각 윈도우의 가로 폭(픽셀 단위)
+        minpix       : 윈도우 안에 최소 몇 개의 유효 픽셀이 있어야
+                       윈도우 중앙을 갱신할지 결정하는 기준
+    """
     h, w = binary_topdown.shape
     nonzero = binary_topdown.nonzero()
     nonzeroy = np.array(nonzero[0])
@@ -297,13 +305,16 @@ class LaneDetectorNode(Node):
         sobelx = cv2.Sobel(gray_blur, cv2.CV_16S, 1, 0, ksize=3)
         sobelx = cv2.convertScaleAbs(sobelx)
 
-        # 색 기반(흰/노란) + 엣지 기반을 OR
-        _, binary_gray = cv2.threshold(gray_blur, 200, 255, cv2.THRESH_BINARY)  # 밝은 선
+        # 색 기반(흰/노란) + 엣지 기반 + 흰색 구간 강화(HSV)
+        _, binary_gray = cv2.threshold(gray_blur, 210, 255, cv2.THRESH_BINARY)  # 밝은 선
         _, sat_mask = cv2.threshold(s, 60, 255, cv2.THRESH_BINARY)         # 채도 약간
         edges = cv2.Canny(gray_blur, 80, 160)
 
+        # 흰색(고밝기 + 낮은 채도) 픽셀 강조
+        white_mask = cv2.inRange(hsv2, np.array([0, 0, 180]), np.array([180, 80, 255]))
+
         combo = np.zeros_like(gray_blur)
-        combo[(binary_gray == 255) | (sat_mask == 255) | (edges == 255)] = 255
+        combo[(binary_gray == 255) | (sat_mask == 255) | (edges == 255) | (white_mask == 255)] = 255
         return combo
 
     # cv image bridge raw
@@ -356,11 +367,11 @@ class LaneDetectorNode(Node):
             self.get_logger().warn(
                 f'Incoming image narrower than crop width ({cur_w} < {crop_w}); skipping horizontal crop.')
 
-        cv2.imshow(self.window_name, bgr)
+        # cv2.imshow(self.window_name, bgr) # input image
 
         h, w, _ = bgr.shape
         self.last_frame_shape = (w, h)
-        self._ensure_homography_ui()
+        # self._ensure_homography_ui()
 
         # 4) 전처리 → 이진 마스크
         mask = self._binarize(bgr)
@@ -436,7 +447,7 @@ class LaneDetectorNode(Node):
             center_offset_px = float(img_center - lane_center)
 
         debug_view = self._render_sliding_window_debug(top, window_records, (lx, ly), (rx, ry))
-        cv2.imshow(self.birdeye_window, debug_view)
+        # cv2.imshow(self.birdeye_window, debug_view)
 
         # 오버레이 이미지
         fill_overlay = left_detected and right_detected
