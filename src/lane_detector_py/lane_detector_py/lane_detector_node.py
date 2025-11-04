@@ -157,6 +157,11 @@ class LaneDetectorNode(Node):
         # 호모그래피 미리 계산(버드아이뷰 변환에 사용할 행렬)--> 프레임 계산을 줄이기 위해 한번만 실행 
         self.H, self.Hinv = self._compute_homography()
 
+        # 디버깅용 이미지 표시 창과 마우스 콜백 설정
+        self.window_name = 'lane_detector_input'
+        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+        cv2.setMouseCallback(self.window_name, self._on_mouse)
+
         sub_type = 'CompressedImage' if self.subscribe_compressed else 'Image'
         self.get_logger().info(f'LaneDetector subscribing: {image_topic} ({sub_type})')
         self.get_logger().info(f'Publishing overlay: {overlay_topic}, center_offset: {offset_topic}')
@@ -255,15 +260,7 @@ class LaneDetectorNode(Node):
             self.get_logger().warn(
                 f'Incoming image narrower than crop width ({cur_w} < {crop_w}); skipping horizontal crop.')
 
-        cv2.imshow('input image after resizing', bgr) # check cropped img
-
-
-        def _on_mouse(event, x, y, flags, param):
-            if event == cv2.EVENT_MOUSEMOVE:
-                print(f'mouse: ({x}, {y})')
-                
-        cv2.namedWindow('lane_detector_input')
-        cv2.setMouseCallback('lane_detector_input', _on_mouse)
+        cv2.imshow(self.window_name, bgr)  # show cropped frame
 
         h, w, _ = bgr.shape
         # print(h,w)  # check img size 480 640
@@ -298,6 +295,10 @@ class LaneDetectorNode(Node):
         self.pub_offset.publish(Float32(data=center_offset_px))
 
         cv2.waitKey(1) # 1ms delay for imshow(refresh)
+
+    def _on_mouse(self, event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            self.get_logger().info(f'Mouse click at ({x}, {y})')
 
 def main():
     rclpy.init()
