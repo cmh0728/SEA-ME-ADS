@@ -379,7 +379,7 @@ class LaneDetectorNode(Node):
         left_detected = left_fit_raw is not None
         right_detected = right_fit_raw is not None
 
-        alpha = self.fit_smoothing_alpha
+        alpha = getattr(self, 'fit_smoothing_alpha', 0.2)
 
         def _smooth(prev, new):
             if prev is None:
@@ -413,7 +413,7 @@ class LaneDetectorNode(Node):
                 if self.lane_width_px is None:
                     self.lane_width_px = width_px
                 else:
-                    beta = self.lane_width_alpha
+                    beta = getattr(self, 'lane_width_alpha', 0.2)
                     self.lane_width_px = (1.0 - beta) * self.lane_width_px + beta * width_px
         else:
             if self.lane_width_px is not None:
