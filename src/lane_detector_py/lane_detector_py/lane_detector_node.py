@@ -367,7 +367,7 @@ class LaneDetectorNode(Node):
             self.get_logger().warn(
                 f'Incoming image narrower than crop width ({cur_w} < {crop_w}); skipping horizontal crop.')
 
-        cv2.imshow(self.window_name, bgr) # input image
+        # cv2.imshow(self.window_name, bgr) # input image
 
         h, w, _ = bgr.shape
         self.last_frame_shape = (w, h)
@@ -377,13 +377,13 @@ class LaneDetectorNode(Node):
         mask = self._binarize(bgr)
         if mask.ndim == 3:
             mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
-        cv2.imshow('binary mask',mask)
+        # cv2.imshow('binary mask',mask)
 
         # 5) 버드아이뷰 변환 (이진 마스크 기준)
         top = cv2.warpPerspective(mask, self.H, (w, h)) if self.H is not None else mask
         if top.ndim == 3:
             top = cv2.cvtColor(top, cv2.COLOR_BGR2GRAY)
-        cv2.imshow("top view", top )
+        # cv2.imshow("top view", top )
         # 슬라이딩 윈도우 → 피팅
         (lx, ly), (rx, ry), window_records = _sliding_window(top)
         left_fit_raw = _fit_poly((lx, ly))
@@ -460,14 +460,14 @@ class LaneDetectorNode(Node):
         overlay = _draw_overlay(bgr, top, self.Hinv, left_fit, right_fit, **draw_kwargs)
         
         
-        cv2.imshow(self.overlay_window, overlay)
+        # cv2.imshow(self.overlay_window, overlay)
          
 
         # 퍼블리시
         # self.pub_overlay.publish(self.bridge.cv2_to_imgmsg(overlay, encoding='bgr8'))
         self.pub_offset.publish(Float32(data=center_offset_px))
 
-        cv2.waitKey(1)
+        # cv2.waitKey(1)
 
 
     def _on_mouse(self, event, x, y, flags, param):
