@@ -458,8 +458,12 @@ class LaneDetectorNode(Node):
         except (ValueError, TypeError):
             pass
         overlay = _draw_overlay(bgr, top, self.Hinv, left_fit, right_fit, **draw_kwargs)
-        cv2.imshow(self.overlay_window, overlay)
-
+        
+        try:
+            cv2.imshow(self.overlay_window, overlay)
+        except:
+            pass 
+        
         # 퍼블리시
         # self.pub_overlay.publish(self.bridge.cv2_to_imgmsg(overlay, encoding='bgr8'))
         self.pub_offset.publish(Float32(data=center_offset_px))
