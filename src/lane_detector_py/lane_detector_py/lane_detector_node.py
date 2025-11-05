@@ -459,16 +459,15 @@ class LaneDetectorNode(Node):
             pass
         overlay = _draw_overlay(bgr, top, self.Hinv, left_fit, right_fit, **draw_kwargs)
         
-        try:
-            cv2.imshow(self.overlay_window, overlay)
-        except:
-            pass 
         
+        # cv2.imshow(self.overlay_window, overlay)
+         
+
         # 퍼블리시
         # self.pub_overlay.publish(self.bridge.cv2_to_imgmsg(overlay, encoding='bgr8'))
         self.pub_offset.publish(Float32(data=center_offset_px))
 
-        cv2.waitKey(1)
+        #cv2.waitKey(1)
 
 
     def _on_mouse(self, event, x, y, flags, param):
