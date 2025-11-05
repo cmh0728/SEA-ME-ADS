@@ -383,7 +383,7 @@ class LaneDetectorNode(Node):
         top = cv2.warpPerspective(mask, self.H, (w, h)) if self.H is not None else mask
         if top.ndim == 3:
             top = cv2.cvtColor(top, cv2.COLOR_BGR2GRAY)
-
+        cv2.imshow("top view", top )
         # 슬라이딩 윈도우 → 피팅
         (lx, ly), (rx, ry), window_records = _sliding_window(top)
         left_fit_raw = _fit_poly((lx, ly))
