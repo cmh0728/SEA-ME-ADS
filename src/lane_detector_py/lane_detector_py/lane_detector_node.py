@@ -407,6 +407,7 @@ class LaneDetectorNode(Node):
         if viz_enabled:
             cv2.imshow(self.window_name, bgr)
             debug_view = render_sliding_window_debug(top, window_records, (lx, ly), (rx, ry))
+            cv2.imshow("mask",mask)
             cv2.imshow(self.birdeye_window, debug_view)
 
             fill_overlay = left_detected and right_detected
