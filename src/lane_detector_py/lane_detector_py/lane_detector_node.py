@@ -37,7 +37,7 @@ class LaneDetectorNode(Node):
         self.declare_parameter('publish_overlay_topic', '/lane/overlay')
         self.declare_parameter('publish_offset_topic', '/lane/center_offset')
         self.declare_parameter('use_birdeye', True)
-        self.declare_parameter('enable_visualization', True) # 디버깅용 시각화 여부 파라미터 
+        self.declare_parameter('enable_visualization', True) # 디버깅용 시각화 여부 파라미터 , 기본값 False
         self.crop_size = (640, 480)
         self.last_frame_shape = None
         self.prev_left_fit = None
@@ -48,7 +48,7 @@ class LaneDetectorNode(Node):
         # 실제 카메라 및 트랙에 맞게 보정 필요 
         # src_points : 원본 카메라 이미지에서 변환에 사용할 4개의 점 
         # dst_points : 버드아이뷰에서 대응되는 4개의 점[x0, y0, x1, y1, x2, y2, x3, y3
-        self.declare_parameter('src_points', [54.0, 480.0, 219.0, 300.0, 456.0, 300.0, 633.0, 480.0])
+        self.declare_parameter('src_points', [55.0, 480.0, 235.0, 300.0, 477.0, 300.0, 633.0, 480.0]) # 06.11 수정된 기본값, 카메라 위치 바꿔서 다시 체크 
         self.declare_parameter('dst_points', [0.0,  480.0, 0.0,   0.0, 640.0, 0.0, 640.0, 480.0])
 
         image_topic = self.get_parameter('image_topic').get_parameter_value().string_value
@@ -87,7 +87,9 @@ class LaneDetectorNode(Node):
         self.control_window = 'homography_controls'
         self.birdeye_window = 'wrapped_img'
         self.overlay_window = 'lane_overlay'
-        self.homography_ui_ready = False
+
+        # trackbar param
+        self.homography_ui_ready = False # 트랙바 한번만 생성
         self._trackbar_lock = False
 
 
@@ -95,9 +97,12 @@ class LaneDetectorNode(Node):
         self.get_logger().info(f'LaneDetector subscribing: {image_topic} ({sub_type})')
         # self.get_logger().info(f'Publishing overlay: {overlay_topic}, center_offset: {offset_topic}')
 
+
+    #####################################  homography  ####################################################################
+
     def _compute_homography(self):
         return compute_homography(self.src_pts, self.dst_pts, self.use_birdeye)
-
+    
     def _ensure_homography_ui(self):
         if not self.use_birdeye or self.homography_ui_ready or self.last_frame_shape is None:
             return
@@ -152,6 +157,8 @@ class LaneDetectorNode(Node):
         arr[idx, axis] = clipped
         self.H, self.Hinv = self._compute_homography()
 
+    ####################################  image change cv <--> ROS ############################################################
+
     # cv image bridge raw
     def image_cb_raw(self, msg: Image):
         try:
@@ -173,8 +180,8 @@ class LaneDetectorNode(Node):
         # print(bgr.shape[0], bgr.shape[1])  # default size is 720, 1280 --> 1 is wide 0 is height
         self._process_frame(bgr)
 
+    ################################   image processing main function ########################################################
 
-    # image processing main function
     def _process_frame(self, bgr: np.ndarray, *, visualize: bool = None):
         viz_enabled = self.visualize if visualize is None else visualize
 
@@ -206,7 +213,7 @@ class LaneDetectorNode(Node):
 
         h, w, _ = bgr.shape
         self.last_frame_shape = (w, h)
-        self._ensure_homography_ui()
+        # self._ensure_homography_ui()
 
         # 4) 전처리 → 이진 마스크
         mask = create_lane_mask(bgr)
