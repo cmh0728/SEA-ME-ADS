@@ -38,7 +38,7 @@ class LaneDetectorNode(Node):
         self.declare_parameter('publish_offset_topic', '/lane/center_offset')
         self.declare_parameter('use_birdeye', True)
         self.declare_parameter('enable_visualization', True) # 디버깅용 시각화 여부 파라미터 , 기본값 False
-        self.crop_size = (1080, 480)
+        self.crop_size = (860, 480)
         self.last_frame_shape = None
         self.prev_left_fit = None
         self.prev_right_fit = None
