@@ -213,7 +213,7 @@ class LaneDetectorNode(Node):
 
         h, w, _ = bgr.shape
         self.last_frame_shape = (w, h)
-        # self._ensure_homography_ui()
+        self._ensure_homography_ui()
 
         # 4) 전처리 → 이진 마스크
         mask = create_lane_mask(bgr)
