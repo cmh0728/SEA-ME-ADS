@@ -84,7 +84,8 @@ class LaneDetectorNode(Node):
 
         # 디버깅용 이미지 표시 창과 마우스 콜백 설정
         self.window_name = 'lane_detector_input'
-        self.control_window = 'homography_controls'
+        self.control_window_src = 'homography_controls_src'
+        self.control_window_dst = 'homography_controls_dst'
         self.birdeye_window = 'wrapped_img'
         self.overlay_window = 'lane_overlay'
 
@@ -111,7 +112,8 @@ class LaneDetectorNode(Node):
         ref_w = max(1, ref_w)
         ref_h = max(1, ref_h)
 
-        cv2.namedWindow(self.control_window, cv2.WINDOW_AUTOSIZE)
+        cv2.namedWindow(self.control_window_src, cv2.WINDOW_AUTOSIZE)
+        cv2.namedWindow(self.control_window_dst, cv2.WINDOW_AUTOSIZE)
 
         for idx in range(4):
             self._create_homography_trackbar('src', idx, 0, ref_w)
@@ -127,15 +129,24 @@ class LaneDetectorNode(Node):
         max_slider = max(1, max_val - 1)
         initial = int(np.clip(arr[idx, axis], 0, max_slider))
         arr[idx, axis] = float(initial)
+        window_name = self.control_window_src if point_type == 'src' else self.control_window_dst
         cv2.createTrackbar(
             track_name,
-            self.control_window,
+            window_name,
             initial,
             max_slider,
-            partial(self._on_homography_trackbar, point_type, idx, axis, track_name)
+            partial(self._on_homography_trackbar, point_type, idx, axis, track_name, window_name)
         )
 
-    def _on_homography_trackbar(self, point_type: str, idx: int, axis: int, track_name: str, value: int):
+    def _on_homography_trackbar(
+        self,
+        point_type: str,
+        idx: int,
+        axis: int,
+        track_name: str,
+        window_name: str,
+        value: int,
+    ):
         if self._trackbar_lock:
             return
 
@@ -150,7 +161,7 @@ class LaneDetectorNode(Node):
         if clipped != value:
             try:
                 self._trackbar_lock = True
-                cv2.setTrackbarPos(track_name, self.control_window, int(clipped))
+                cv2.setTrackbarPos(track_name, window_name, int(clipped))
             finally:
                 self._trackbar_lock = False
 
