@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-import math
-import time
 from functools import partial
-import inspect
 import cv2
 import numpy as np
 
@@ -15,117 +12,19 @@ from std_msgs.msg import Float32
 from cv_bridge import CvBridge
 
 
-def _hist_peaks(binary_topdown, margin_bottom=0.4):
-    """하단부 히스토그램 피크(좌/우 베이스 위치) 찾기"""
-    h, w = binary_topdown.shape
-    y0 = int(h * (1.0 - margin_bottom))
-    region = binary_topdown[y0:, :]
-    histogram = np.sum(region // 255, axis=0)
-
-    mid = w // 2
-    leftx_base = np.argmax(histogram[:mid]) if histogram[:mid].any() else None
-    rightx_base = np.argmax(histogram[mid:]) + mid if histogram[mid:].any() else None
-    return leftx_base, rightx_base
-
-
-def _sliding_window(binary_topdown, nwindows=9, window_width=80, minpix=50):
-    """
-    슬라이딩 윈도우로 좌/우 차선 픽셀 인덱스 수집.
-
-    tunable parameters:
-        nwindows     : 전체 윈도우 개수 (세로 방향 분할 수)
-        window_width : 각 윈도우의 가로 폭(픽셀 단위)
-        minpix       : 윈도우 안에 최소 몇 개의 유효 픽셀이 있어야
-                       윈도우 중앙을 갱신할지 결정하는 기준
-    """
-    h, w = binary_topdown.shape
-    nonzero = binary_topdown.nonzero()
-    nonzeroy = np.array(nonzero[0])
-    nonzerox = np.array(nonzero[1])
-
-    leftx_base, rightx_base = _hist_peaks(binary_topdown)
-    leftx_current, rightx_current = leftx_base, rightx_base
-
-    window_height = h // nwindows
-    left_lane_inds = []
-    right_lane_inds = []
-    window_records = {'left': [], 'right': []}
-
-    for window in range(nwindows):
-        win_y_low = h - (window + 1) * window_height
-        win_y_high = h - window * window_height
-
-        def _gather(x_center):
-            if x_center is None:
-                return None, None, None, None, np.array([], dtype=int)
-            win_x_low = max(0, x_center - window_width // 2)
-            win_x_high = min(w, x_center + window_width // 2)
-            good_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) &
-                         (nonzerox >= win_x_low) & (nonzerox < win_x_high)).nonzero()[0]
-            if len(good_inds) > minpix:
-                x_center = int(np.mean(nonzerox[good_inds]))
-            return win_x_low, win_x_high, win_y_low, win_y_high, good_inds, x_center
-
-        # left
-        if leftx_current is not None:
-            lx0, lx1, ly0, ly1, good, leftx_current = _gather(leftx_current)
-            if good.size:
-                left_lane_inds.append(good)
-            if lx0 is not None and lx1 is not None:
-                window_records['left'].append((lx0, lx1, ly0, ly1))
-
-        # right
-        if rightx_current is not None:
-            rx0, rx1, ry0, ry1, good, rightx_current = _gather(rightx_current)
-            if good.size:
-                right_lane_inds.append(good)
-            if rx0 is not None and rx1 is not None:
-                window_records['right'].append((rx0, rx1, ry0, ry1))
-
-    left_inds = np.concatenate(left_lane_inds) if len(left_lane_inds) else np.array([], dtype=int)
-    right_inds = np.concatenate(right_lane_inds) if len(right_lane_inds) else np.array([], dtype=int)
-
-    leftx, lefty = nonzerox[left_inds], nonzeroy[left_inds]
-    rightx, righty = nonzerox[right_inds], nonzeroy[right_inds]
-    return (leftx, lefty), (rightx, righty), window_records
-
-
-def _fit_poly(points):
-    """y기준 x(y) = ay^2 + by + c 2차 피팅"""
-    x, y = points
-    if len(x) < 50:
-        return None
-    return np.polyfit(y, x, 2)  # [a, b, c]
-
-
-def _draw_overlay(orig_bgr, binary_topdown, Hinv, left_fit, right_fit):
-    h, w = binary_topdown.shape
-    overlay = np.zeros((h, w, 3), dtype=np.uint8)
-
-    ploty = np.arange(h)
-    if left_fit is not None:
-        leftx = (left_fit[0] * ploty**2 + left_fit[1] * ploty + left_fit[2]).astype(np.int32)
-        pts_left = np.stack([leftx, ploty], axis=1)
-    else:
-        pts_left = None
-
-    if right_fit is not None:
-        rightx = (right_fit[0] * ploty**2 + right_fit[1] * ploty + right_fit[2]).astype(np.int32)
-        pts_right = np.stack([rightx, ploty], axis=1)
-    else:
-        pts_right = None
-
-    if pts_left is not None and pts_right is not None:
-        pts = np.vstack([pts_left, pts_right[::-1]])
-        cv2.fillPoly(overlay, [pts], (0, 255, 0))
-    elif pts_left is not None:
-        cv2.polylines(overlay, [pts_left], False, (255, 0, 0), 5)
-    elif pts_right is not None:
-        cv2.polylines(overlay, [pts_right], False, (0, 0, 255), 5)
-
-    overlay_warped = cv2.warpPerspective(overlay, Hinv, (orig_bgr.shape[1], orig_bgr.shape[0]))
-    out = cv2.addWeighted(orig_bgr, 1.0, overlay_warped, 0.4, 0)
-    return out
+try:
+    from lane_detector_py.binary import create_lane_mask
+    from lane_detector_py.birdseye import compute_homography, warp_to_top_view
+    from lane_detector_py.sliding_window import fit_polynomial, sliding_window_search
+    from lane_detector_py.visualization import (
+        draw_lane_overlay,
+        render_sliding_window_debug,
+    )
+except ImportError:  # pragma: no cover
+    from .binary import create_lane_mask
+    from .birdseye import compute_homography, warp_to_top_view
+    from .sliding_window import fit_polynomial, sliding_window_search
+    from .visualization import draw_lane_overlay, render_sliding_window_debug
 
 
 class LaneDetectorNode(Node):
@@ -137,6 +36,7 @@ class LaneDetectorNode(Node):
         self.declare_parameter('publish_overlay_topic', '/lane/overlay')
         self.declare_parameter('publish_offset_topic', '/lane/center_offset')
         self.declare_parameter('use_birdeye', True)
+        self.declare_parameter('enable_visualization', True) # 디버깅용 시각화 여부 파라미터 
         self.crop_size = (640, 480)
         self.last_frame_shape = None
         self.prev_left_fit = None
@@ -156,6 +56,7 @@ class LaneDetectorNode(Node):
         overlay_topic = self.get_parameter('publish_overlay_topic').get_parameter_value().string_value
         offset_topic = self.get_parameter('publish_offset_topic').get_parameter_value().string_value
         self.use_birdeye = self.get_parameter('use_birdeye').get_parameter_value().bool_value
+        self.visualize = self.get_parameter('enable_visualization').get_parameter_value().bool_value
 
         self.src_pts = np.array(self.get_parameter('src_points').value, dtype=np.float32).reshape(4, 2)
         self.dst_pts = np.array(self.get_parameter('dst_points').value, dtype=np.float32).reshape(4, 2)
@@ -199,14 +100,7 @@ class LaneDetectorNode(Node):
         self.get_logger().info(f'Publishing overlay: {overlay_topic}, center_offset: {offset_topic}')
 
     def _compute_homography(self):
-        if not self.use_birdeye:
-            return np.eye(3), np.eye(3)
-
-        src = self.src_pts.astype(np.float32)
-        dst = self.dst_pts.astype(np.float32)
-        H = cv2.getPerspectiveTransform(src, dst)
-        Hinv = cv2.getPerspectiveTransform(dst, src)
-        return H, Hinv # 행렬 및 역행렬 
+        return compute_homography(self.src_pts, self.dst_pts, self.use_birdeye)
 
     def _ensure_homography_ui(self):
         if not self.use_birdeye or self.homography_ui_ready or self.last_frame_shape is None:
@@ -262,61 +156,6 @@ class LaneDetectorNode(Node):
         arr[idx, axis] = clipped
         self.H, self.Hinv = self._compute_homography()
 
-    def _render_sliding_window_debug(self, binary_topdown, windows, left_points, right_points):
-        if binary_topdown.ndim == 2:
-            vis = cv2.cvtColor(binary_topdown, cv2.COLOR_GRAY2BGR)
-        else:
-            vis = binary_topdown.copy()
-
-        for x0, x1, y0, y1 in windows.get('left', []):
-            cv2.rectangle(vis, (int(x0), int(y0)), (int(x1), int(y1)), (255, 0, 0), 1)
-        for x0, x1, y0, y1 in windows.get('right', []):
-            cv2.rectangle(vis, (int(x0), int(y0)), (int(x1), int(y1)), (0, 0, 255), 1)
-
-        lx, ly = left_points
-        if lx.size:
-            lx_clip = np.clip(lx.astype(int), 0, vis.shape[1]-1)
-            ly_clip = np.clip(ly.astype(int), 0, vis.shape[0]-1)
-            vis[ly_clip, lx_clip] = (0, 255, 255)
-        rx, ry = right_points
-        if rx.size:
-            rx_clip = np.clip(rx.astype(int), 0, vis.shape[1]-1)
-            ry_clip = np.clip(ry.astype(int), 0, vis.shape[0]-1)
-            vis[ry_clip, rx_clip] = (0, 255, 255)
-
-        return vis
-
-    def _binarize(self, bgr):
-        """HSV + Sobel 혼합 간단 임계처리"""
-        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
-        h, s, v = cv2.split(hsv)
-
-        # 조명 보정(가벼운 CLAHE)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-        v2 = clahe.apply(v)
-        hsv2 = cv2.merge([h, s, v2])
-        bgr2 = cv2.cvtColor(hsv2, cv2.COLOR_HSV2BGR)
-
-        gray = cv2.cvtColor(bgr2, cv2.COLOR_BGR2GRAY)
-
-        # 가우시안 블러로 노이즈 완화 후 엣지/임계값 계산
-        gray_blur = cv2.GaussianBlur(gray, (5, 5), 0)
-
-        sobelx = cv2.Sobel(gray_blur, cv2.CV_16S, 1, 0, ksize=3)
-        sobelx = cv2.convertScaleAbs(sobelx)
-
-        # 색 기반(흰/노란) + 엣지 기반 + 흰색 구간 강화(HSV)
-        _, binary_gray = cv2.threshold(gray_blur, 210, 255, cv2.THRESH_BINARY)  # 밝은 선
-        _, sat_mask = cv2.threshold(s, 60, 255, cv2.THRESH_BINARY)         # 채도 약간
-        edges = cv2.Canny(gray_blur, 80, 160)
-
-        # 흰색(고밝기 + 낮은 채도) 픽셀 강조
-        white_mask = cv2.inRange(hsv2, np.array([0, 0, 180]), np.array([180, 80, 255]))
-
-        combo = np.zeros_like(gray_blur)
-        combo[(binary_gray == 255) | (sat_mask == 255) | (edges == 255) | (white_mask == 255)] = 255
-        return combo
-
     # cv image bridge raw
     def image_cb_raw(self, msg: Image):
         try:
@@ -340,7 +179,9 @@ class LaneDetectorNode(Node):
 
 
     # image processing main function
-    def _process_frame(self, bgr: np.ndarray):
+    def _process_frame(self, bgr: np.ndarray, *, visualize: bool = None):
+        viz_enabled = self.visualize if visualize is None else visualize
+
         # 1) 중앙 크롭: 640x480 기준으로 중앙 영역만 사용
         crop_w, crop_h = self.crop_size
         cur_h, cur_w, _ = bgr.shape
@@ -374,20 +215,20 @@ class LaneDetectorNode(Node):
         # self._ensure_homography_ui()
 
         # 4) 전처리 → 이진 마스크
-        mask = self._binarize(bgr)
+        mask = create_lane_mask(bgr)
         if mask.ndim == 3:
             mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
         # cv2.imshow('binary mask',mask)
 
         # 5) 버드아이뷰 변환 (이진 마스크 기준)
-        top = cv2.warpPerspective(mask, self.H, (w, h)) if self.H is not None else mask
+        top = warp_to_top_view(mask, self.H) if self.H is not None else mask
         if top.ndim == 3:
             top = cv2.cvtColor(top, cv2.COLOR_BGR2GRAY)
         # cv2.imshow("top view", top )
         # 슬라이딩 윈도우 → 피팅
-        (lx, ly), (rx, ry), window_records = _sliding_window(top)
-        left_fit_raw = _fit_poly((lx, ly))
-        right_fit_raw = _fit_poly((rx, ry))
+        (lx, ly), (rx, ry), window_records = sliding_window_search(top)
+        left_fit_raw = fit_polynomial((lx, ly))
+        right_fit_raw = fit_polynomial((rx, ry))
         left_detected = left_fit_raw is not None
         right_detected = right_fit_raw is not None
 
@@ -446,25 +287,18 @@ class LaneDetectorNode(Node):
             img_center = w / 2.0
             center_offset_px = float(img_center - lane_center)
 
-        debug_view = self._render_sliding_window_debug(top, window_records, (lx, ly), (rx, ry))
-        # cv2.imshow(self.birdeye_window, debug_view)
+        if viz_enabled:
+            debug_view = render_sliding_window_debug(top, window_records, (lx, ly), (rx, ry))
+            # cv2.imshow(self.birdeye_window, debug_view)
 
-        # 오버레이 이미지
-        fill_overlay = left_detected and right_detected
-        draw_kwargs = {}
-        try:
-            if 'fill' in inspect.signature(_draw_overlay).parameters:
-                draw_kwargs['fill'] = fill_overlay
-        except (ValueError, TypeError):
-            pass
-        overlay = _draw_overlay(bgr, top, self.Hinv, left_fit, right_fit, **draw_kwargs)
-        
-        
-        # cv2.imshow(self.overlay_window, overlay)
-         
+            fill_overlay = left_detected and right_detected
+            overlay = draw_lane_overlay(bgr, top, self.Hinv, left_fit, right_fit, fill=fill_overlay)
+            # cv2.imshow(self.overlay_window, overlay)
+
+            # if you want to publish overlay image, uncomment below
+            # self.pub_overlay.publish(self.bridge.cv2_to_imgmsg(overlay, encoding='bgr8'))
 
         # 퍼블리시
-        # self.pub_overlay.publish(self.bridge.cv2_to_imgmsg(overlay, encoding='bgr8'))
         self.pub_offset.publish(Float32(data=center_offset_px))
 
         # cv2.waitKey(1)
@@ -488,4 +322,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
