@@ -13,7 +13,7 @@ from cv_bridge import CvBridge
 
 # Import lane detector modules
 try:
-    from lane_detector_py.binary import create_lane_mask
+    from lane_detector_py.binary import DEFAULT_PARAMS, create_lane_mask
     from lane_detector_py.birdseye import compute_homography, warp_to_top_view
     from lane_detector_py.sliding_window import fit_polynomial, sliding_window_search
     from lane_detector_py.visualization import (
@@ -21,7 +21,7 @@ try:
         render_sliding_window_debug,
     )
 except ImportError:  # pragma: no cover
-    from .binary import create_lane_mask
+    from .binary import DEFAULT_PARAMS, create_lane_mask
     from .birdseye import compute_homography, warp_to_top_view
     from .sliding_window import fit_polynomial, sliding_window_search
     from .visualization import draw_lane_overlay, render_sliding_window_debug
@@ -88,10 +88,25 @@ class LaneDetectorNode(Node):
         self.control_window_dst = 'homography_controls_dst'
         self.birdeye_window = 'wrapped_img'
         self.overlay_window = 'lane_overlay'
+        self.binary_control_window = 'binary_controls'
 
         # trackbar param
         self.homography_ui_ready = False # 트랙바 한번만 생성
+        self.binary_ui_ready = False
         self._trackbar_lock = False
+
+        self.binary_params = dict(DEFAULT_PARAMS)
+        self._binary_trackbar_names = {
+            'clip_limit': 'clip_limit_x10',
+            'tile_grid': 'tile_grid',
+            'blur_kernel': 'blur_kernel',
+            'gray_thresh': 'gray_thresh',
+            'sat_thresh': 'sat_thresh',
+            'canny_low': 'canny_low',
+            'canny_high': 'canny_high',
+            'white_v_min': 'white_v_min',
+            'white_s_max': 'white_s_max',
+        }
 
 
         sub_type = 'CompressedImage' if self.subscribe_compressed else 'Image'
@@ -122,6 +137,35 @@ class LaneDetectorNode(Node):
             self._create_homography_trackbar('dst', idx, 1, ref_h)
 
         self.homography_ui_ready = True
+
+    def _ensure_binary_ui(self):
+        if not self.visualize or self.binary_ui_ready:
+            return
+
+        cv2.namedWindow(self.binary_control_window, cv2.WINDOW_AUTOSIZE)
+
+        def _create(name: str, value: int, max_val: int, key: str):
+            value = int(np.clip(value, 0, max_val))
+            cv2.createTrackbar(
+                name,
+                self.binary_control_window,
+                value,
+                max_val,
+                partial(self._on_binary_trackbar, key)
+            )
+            self._on_binary_trackbar(key, value)
+
+        _create(self._binary_trackbar_names['clip_limit'], int(round(self.binary_params['clip_limit'] * 10)), 100, 'clip_limit')
+        _create(self._binary_trackbar_names['tile_grid'], int(self.binary_params['tile_grid']), 40, 'tile_grid')
+        _create(self._binary_trackbar_names['blur_kernel'], int(self.binary_params['blur_kernel']), 31, 'blur_kernel')
+        _create(self._binary_trackbar_names['gray_thresh'], int(self.binary_params['gray_thresh']), 255, 'gray_thresh')
+        _create(self._binary_trackbar_names['sat_thresh'], int(self.binary_params['sat_thresh']), 255, 'sat_thresh')
+        _create(self._binary_trackbar_names['canny_low'], int(self.binary_params['canny_low']), 255, 'canny_low')
+        _create(self._binary_trackbar_names['canny_high'], int(self.binary_params['canny_high']), 255, 'canny_high')
+        _create(self._binary_trackbar_names['white_v_min'], int(self.binary_params['white_v_min']), 255, 'white_v_min')
+        _create(self._binary_trackbar_names['white_s_max'], int(self.binary_params['white_s_max']), 255, 'white_s_max')
+
+        self.binary_ui_ready = True
 
     def _create_homography_trackbar(self, point_type: str, idx: int, axis: int, max_val: int):
         arr = self.src_pts if point_type == 'src' else self.dst_pts
@@ -167,6 +211,64 @@ class LaneDetectorNode(Node):
 
         arr[idx, axis] = clipped
         self.H, self.Hinv = self._compute_homography()
+
+    def _set_binary_trackbar(self, key: str, value: int):
+        name = self._binary_trackbar_names[key]
+        try:
+            self._trackbar_lock = True
+            cv2.setTrackbarPos(name, self.binary_control_window, int(value))
+        finally:
+            self._trackbar_lock = False
+
+    def _on_binary_trackbar(self, key: str, value: int):
+        if self._trackbar_lock:
+            return
+
+        if key == 'clip_limit':
+            value = max(1, value)
+            if value != int(round(self.binary_params['clip_limit'] * 10)):
+                self.binary_params['clip_limit'] = value / 10.0
+            if value != cv2.getTrackbarPos(self._binary_trackbar_names[key], self.binary_control_window):
+                self._set_binary_trackbar(key, value)
+            return
+
+        if key == 'tile_grid':
+            value = max(2, value)
+            self.binary_params['tile_grid'] = value
+            if value != cv2.getTrackbarPos(self._binary_trackbar_names[key], self.binary_control_window):
+                self._set_binary_trackbar(key, value)
+            return
+
+        if key == 'blur_kernel':
+            value = max(1, value)
+            if value % 2 == 0:
+                value = value + 1 if value < 31 else value - 1
+            self.binary_params['blur_kernel'] = value
+            if value != cv2.getTrackbarPos(self._binary_trackbar_names[key], self.binary_control_window):
+                self._set_binary_trackbar(key, value)
+            return
+
+        if key in ('gray_thresh', 'sat_thresh', 'white_v_min', 'white_s_max'):
+            self.binary_params[key] = int(np.clip(value, 0, 255))
+            return
+
+        if key == 'canny_low':
+            value = int(np.clip(value, 0, 254))
+            self.binary_params['canny_low'] = value
+            high = int(self.binary_params['canny_high'])
+            if high <= value:
+                high = min(255, value + 1)
+                self.binary_params['canny_high'] = high
+                self._set_binary_trackbar('canny_high', high)
+            return
+
+        if key == 'canny_high':
+            low = int(self.binary_params['canny_low'])
+            value = int(np.clip(value, low + 1, 255))
+            self.binary_params['canny_high'] = value
+            if value != cv2.getTrackbarPos(self._binary_trackbar_names[key], self.binary_control_window):
+                self._set_binary_trackbar(key, value)
+            return
 
     ####################################  image change cv <--> ROS ############################################################
 
@@ -224,10 +326,12 @@ class LaneDetectorNode(Node):
 
         h, w, _ = bgr.shape
         self.last_frame_shape = (w, h)
-        # self._ensure_homography_ui()
+        if viz_enabled:
+            # self._ensure_homography_ui()
+            self._ensure_binary_ui()
 
         # 4) 전처리 → 이진 마스크
-        mask = create_lane_mask(bgr)
+        mask = create_lane_mask(bgr, self.binary_params)
         if mask.ndim == 3:
             mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
         
