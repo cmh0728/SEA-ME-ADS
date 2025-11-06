@@ -208,8 +208,6 @@ class LaneDetectorNode(Node):
             self.get_logger().warn(
                 f'Incoming image narrower than crop width ({cur_w} < {crop_w}); skipping horizontal crop.')
 
-        # cv2.imshow(self.window_name, bgr) # input image
-
         h, w, _ = bgr.shape
         self.last_frame_shape = (w, h)
         # self._ensure_homography_ui()
@@ -288,20 +286,20 @@ class LaneDetectorNode(Node):
             center_offset_px = float(img_center - lane_center)
 
         if viz_enabled:
+            cv2.imshow(self.window_name, bgr)
             debug_view = render_sliding_window_debug(top, window_records, (lx, ly), (rx, ry))
-            # cv2.imshow(self.birdeye_window, debug_view)
+            cv2.imshow(self.birdeye_window, debug_view)
 
             fill_overlay = left_detected and right_detected
             overlay = draw_lane_overlay(bgr, top, self.Hinv, left_fit, right_fit, fill=fill_overlay)
-            # cv2.imshow(self.overlay_window, overlay)
+            cv2.imshow(self.overlay_window, overlay)
 
             # if you want to publish overlay image, uncomment below
             # self.pub_overlay.publish(self.bridge.cv2_to_imgmsg(overlay, encoding='bgr8'))
+            cv2.waitKey(1)
 
         # 퍼블리시
         self.pub_offset.publish(Float32(data=center_offset_px))
-
-        # cv2.waitKey(1)
 
 
     def _on_mouse(self, event, x, y, flags, param):
