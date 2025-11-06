@@ -11,7 +11,7 @@ from sensor_msgs.msg import Image, CompressedImage
 from std_msgs.msg import Float32
 from cv_bridge import CvBridge
 
-
+# Import lane detector modules
 try:
     from lane_detector_py.binary import create_lane_mask
     from lane_detector_py.birdseye import compute_homography, warp_to_top_view
@@ -27,6 +27,7 @@ except ImportError:  # pragma: no cover
     from .visualization import draw_lane_overlay, render_sliding_window_debug
 
 
+# Lane Detector Node Class
 class LaneDetectorNode(Node):
     def __init__(self): # 노드 생성시 한번만 실행
         super().__init__('lane_detector')
@@ -53,7 +54,7 @@ class LaneDetectorNode(Node):
         image_topic = self.get_parameter('image_topic').get_parameter_value().string_value
         self.subscribe_compressed = image_topic.endswith('/compressed')
         # print(self.subscribe_compressed) # check
-        overlay_topic = self.get_parameter('publish_overlay_topic').get_parameter_value().string_value
+        # overlay_topic = self.get_parameter('publish_overlay_topic').get_parameter_value().string_value
         offset_topic = self.get_parameter('publish_offset_topic').get_parameter_value().string_value
         self.use_birdeye = self.get_parameter('use_birdeye').get_parameter_value().bool_value
         self.visualize = self.get_parameter('enable_visualization').get_parameter_value().bool_value
@@ -70,10 +71,10 @@ class LaneDetectorNode(Node):
 
         self.bridge = CvBridge() # change ros imgmsg <-> cv2
 
-        self.pub_overlay = self.create_publisher(Image, overlay_topic, qos)
+        # self.pub_overlay = self.create_publisher(Image, overlay_topic, qos) # 차선 오버레이 이미지 퍼블리셔 --> 필요없어
         self.pub_offset = self.create_publisher(Float32, offset_topic, 10)
 
-        if self.subscribe_compressed: # compressed image
+        if self.subscribe_compressed: # compressed image --> 실제 실행되는 부분
             self.sub = self.create_subscription(CompressedImage, image_topic, self.image_cb_compressed, qos)
         else: # raw image
             self.sub = self.create_subscription(Image, image_topic, self.image_cb_raw, qos)
@@ -83,21 +84,16 @@ class LaneDetectorNode(Node):
 
         # 디버깅용 이미지 표시 창과 마우스 콜백 설정
         self.window_name = 'lane_detector_input'
-        #cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
-        #cv2.setMouseCallback(self.window_name, self._on_mouse)
         self.control_window = 'homography_controls'
         self.birdeye_window = 'wrapped_img'
         self.overlay_window = 'lane_overlay'
         self.homography_ui_ready = False
         self._trackbar_lock = False
 
-        #cv2.namedWindow(self.overlay_window, cv2.WINDOW_NORMAL)
-        # if self.use_birdeye:
-        #     cv2.namedWindow(self.birdeye_window, cv2.WINDOW_NORMAL)
 
         sub_type = 'CompressedImage' if self.subscribe_compressed else 'Image'
         self.get_logger().info(f'LaneDetector subscribing: {image_topic} ({sub_type})')
-        self.get_logger().info(f'Publishing overlay: {overlay_topic}, center_offset: {offset_topic}')
+        # self.get_logger().info(f'Publishing overlay: {overlay_topic}, center_offset: {offset_topic}')
 
     def _compute_homography(self):
         return compute_homography(self.src_pts, self.dst_pts, self.use_birdeye)
@@ -210,19 +206,20 @@ class LaneDetectorNode(Node):
 
         h, w, _ = bgr.shape
         self.last_frame_shape = (w, h)
-        # self._ensure_homography_ui()
+        self._ensure_homography_ui()
 
         # 4) 전처리 → 이진 마스크
         mask = create_lane_mask(bgr)
         if mask.ndim == 3:
             mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
-        # cv2.imshow('binary mask',mask)
+        
 
         # 5) 버드아이뷰 변환 (이진 마스크 기준)
         top = warp_to_top_view(mask, self.H) if self.H is not None else mask
         if top.ndim == 3:
             top = cv2.cvtColor(top, cv2.COLOR_BGR2GRAY)
-        # cv2.imshow("top view", top )
+        
+        # 6) 차선 검출 부분 
         # 슬라이딩 윈도우 → 피팅
         (lx, ly), (rx, ry), window_records = sliding_window_search(top)
         left_fit_raw = fit_polynomial((lx, ly))
@@ -320,3 +317,6 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+# 실제 차폭 --> 픽셀 차폭 계산필요 
+# 실제 차폭 : 35cm 정도 
