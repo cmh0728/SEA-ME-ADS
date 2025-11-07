@@ -4,14 +4,14 @@ from typing import Dict, Optional
 
 
 DEFAULT_PARAMS: Dict[str, float] = {
-    "clip_limit": 2.0,
-    "tile_grid": 8,
-    "blur_kernel": 5,
-    "gray_thresh": 210,
-    "sat_thresh": 60,
-    "canny_low": 80,
-    "canny_high": 160,
-    "white_v_min": 180,
+    "clip_limit": 6.0,
+    "tile_grid": 7,
+    "blur_kernel": 15,
+    "gray_thresh": 190,
+    "sat_thresh": 200,
+    "canny_low": 90,
+    "canny_high": 255,
+    "white_v_min": 190,
     "white_s_max": 80,
 }
 
