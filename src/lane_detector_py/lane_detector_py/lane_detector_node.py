@@ -328,10 +328,8 @@ class LaneDetectorNode(Node):
         self.last_frame_shape = (w, h)
 
         # track bar options
-        if viz_enabled:
-            # self._ensure_homography_ui()
-            #self._ensure_binary_ui()
-            pass
+        # self._ensure_homography_ui()
+        self._ensure_binary_ui()
 
         # 4) 전처리 → 이진 마스크
         mask = create_lane_mask(bgr, self.binary_params)
