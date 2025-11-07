@@ -38,12 +38,15 @@ class LaneDetectorNode(Node):
         self.declare_parameter('publish_offset_topic', '/lane/center_offset')
         self.declare_parameter('use_birdeye', True)
         self.declare_parameter('enable_visualization', True) # 디버깅용 시각화 여부 파라미터 , 기본값 False
+        self.declare_parameter('lane_width_px', 650.0) # 차폭 650px 기본 설정 
         self.crop_size = (860, 480)
         self.last_frame_shape = None
         self.prev_left_fit = None
         self.prev_right_fit = None
-        self.lane_width_px = None
-        self._last_logged_lane_width = None
+        self.lane_width_px = float(self.get_parameter('lane_width_px').get_parameter_value().double_value)
+        self.lane_width_cm = 35.0  # 실제 차폭 (cm)
+        self._last_logged_lane_width = None # 픽셀 차폭계산용 
+        self._log_lane_width_if_needed(self.lane_width_px)
 
         # 버드아이용 호모그래피(예시 좌표: 해상도 640x480 전제)
         # 실제 카메라 및 트랙에 맞게 보정 필요 
@@ -120,6 +123,7 @@ class LaneDetectorNode(Node):
     def _compute_homography(self):
         return compute_homography(self.src_pts, self.dst_pts, self.use_birdeye)
 
+    # 차폭 계산 로직 
     def _log_lane_width_if_needed(self, width: float):
         if width is None: # 양쪽 둘중 하나라도 차선못잡았을때 제외 
             return
@@ -306,7 +310,7 @@ class LaneDetectorNode(Node):
     def _process_frame(self, bgr: np.ndarray, *, visualize: bool = None):
         viz_enabled = self.visualize if visualize is None else visualize
 
-        # 1) 중앙 크롭: 640x480 기준으로 중앙 영역만 사용
+        # 1) 중앙 크롭: 860x480 기준으로 중앙 영역만 사용
         crop_w, crop_h = self.crop_size
         cur_h, cur_w, _ = bgr.shape
         if cur_w >= crop_w and cur_h >= crop_h:
@@ -383,28 +387,13 @@ class LaneDetectorNode(Node):
         elif self.prev_right_fit is not None:
             right_fit = self.prev_right_fit.copy()
 
-        if left_detected and right_detected:
-            y_eval_width = h - 1
-            x_left_raw = (left_fit_raw[0]*y_eval_width*y_eval_width +
-                          left_fit_raw[1]*y_eval_width + left_fit_raw[2])
-            x_right_raw = (right_fit_raw[0]*y_eval_width*y_eval_width +
-                           right_fit_raw[1]*y_eval_width + right_fit_raw[2])
-            width_px = float(x_right_raw - x_left_raw)
-            if width_px > 0.0:
-                if self.lane_width_px is None:
-                    self.lane_width_px = width_px
-                else:
-                    beta = getattr(self, 'lane_width_alpha', 0.2)
-                    self.lane_width_px = (1.0 - beta) * self.lane_width_px + beta * width_px
-                self._log_lane_width_if_needed(self.lane_width_px)
-        else:
-            if self.lane_width_px is not None:
-                if left_fit is not None and right_fit is None:
-                    right_fit = left_fit.copy()
-                    right_fit[2] += self.lane_width_px
-                elif right_fit is not None and left_fit is None:
-                    left_fit = right_fit.copy()
-                    left_fit[2] -= self.lane_width_px
+        if self.lane_width_px is not None:
+            if left_fit is not None and right_fit is None:
+                right_fit = left_fit.copy()
+                right_fit[2] += self.lane_width_px
+            elif right_fit is not None and left_fit is None:
+                left_fit = right_fit.copy()
+                left_fit[2] -= self.lane_width_px
 
         # 차 폭/센터 오프셋 계산 (픽셀 기준 → 미터 변환은 사용자 설정)
         center_offset_px = 0.0
@@ -417,9 +406,9 @@ class LaneDetectorNode(Node):
             center_offset_px = float(img_center - lane_center)
 
         if viz_enabled:
-            cv2.imshow(self.window_name, bgr)
+            # cv2.imshow(self.window_name, bgr)
             debug_view = render_sliding_window_debug(top, window_records, (lx, ly), (rx, ry))
-            cv2.imshow("mask",mask)
+            # cv2.imshow("mask",mask)
             cv2.imshow(self.birdeye_window, debug_view)
 
             fill_overlay = left_detected and right_detected

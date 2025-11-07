@@ -22,9 +22,9 @@ def _hist_peaks(binary_topdown: np.ndarray, margin_bottom: float = 0.4):
 def sliding_window_search(
     binary_topdown: np.ndarray,
     nwindows: int = 9,
-    window_width: int = 80,
-    minpix: int = 50,
-) -> Tuple[LanePoints, LanePoints, WindowRecords]:
+    window_width: int = 100, # 윈도우 가로폭 픽셀값
+    minpix: int = 80, # 윈도우 내 유효 픽셀 수 최솟값ㄴ
+    ) -> Tuple[LanePoints, LanePoints, WindowRecords]:
     """Collect left/right lane pixels with a histogram-guided sliding-window search."""
     h, w = binary_topdown.shape
     nonzero = binary_topdown.nonzero()
