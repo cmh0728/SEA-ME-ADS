@@ -4,7 +4,7 @@ from typing import Dict, Optional
 
 
 DEFAULT_PARAMS: Dict[str, float] = {
-    "clip_limit": 6.0,
+    "clip_limit": 6,
     "tile_grid": 7,
     "blur_kernel": 15,
     "gray_thresh": 190,
