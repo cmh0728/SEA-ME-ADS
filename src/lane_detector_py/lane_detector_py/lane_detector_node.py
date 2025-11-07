@@ -52,7 +52,7 @@ class LaneDetectorNode(Node):
         # 실제 카메라 및 트랙에 맞게 보정 필요 
         # src_points : 원본 카메라 이미지에서 변환에 사용할 4개의 점 
         # dst_points : 버드아이뷰에서 대응되는 4개의 점[x0, y0, x1, y1, x2, y2, x3, y3
-        self.declare_parameter('src_points', [58.0, 400.0, 241.0, 165.0, 578.0, 165.0, 769.0, 400.0]) # 06.11 수정된 기본값 최종(카메라 꺾어서)
+        self.declare_parameter('src_points', [0.0, 400.0, 212.0, 165.0, 618.0, 165.0, 860.0, 400.0]) # 11.07 수정된 기본값 최종(카메라 꺾어서)
         self.declare_parameter('dst_points', [0.0,  480.0, 0.0,   0.0, 860.0, 0.0, 860.0, 480.0])
 
         image_topic = self.get_parameter('image_topic').get_parameter_value().string_value
@@ -340,7 +340,7 @@ class LaneDetectorNode(Node):
         self.last_frame_shape = (w, h)
 
         # track bar options
-        self._ensure_homography_ui()
+        # self._ensure_homography_ui()
         # self._ensure_binary_ui()
 
         # 4) 전처리 → 이진 마스크
