@@ -329,11 +329,13 @@ class LaneDetectorNode(Node):
 
         # track bar options
         # self._ensure_homography_ui()
-        self._ensure_binary_ui()
+        # self._ensure_binary_ui()
 
         # 4) 전처리 → 이진 마스크
         mask = create_lane_mask(bgr, self.binary_params)
+        print(mask.shape)  # check mask shape
         if mask.ndim == 3:
+            
             mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
         
 
