@@ -43,6 +43,7 @@ class LaneDetectorNode(Node):
         self.prev_left_fit = None
         self.prev_right_fit = None
         self.lane_width_px = None
+        self._last_logged_lane_width = None
 
         # 버드아이용 호모그래피(예시 좌표: 해상도 640x480 전제)
         # 실제 카메라 및 트랙에 맞게 보정 필요 
@@ -118,6 +119,13 @@ class LaneDetectorNode(Node):
 
     def _compute_homography(self):
         return compute_homography(self.src_pts, self.dst_pts, self.use_birdeye)
+
+    def _log_lane_width_if_needed(self, width: float):
+        if width is None: # 양쪽 둘중 하나라도 차선못잡았을때 제외 
+            return
+        if self._last_logged_lane_width is None or abs(width - self._last_logged_lane_width) >= 1.0:
+            self._last_logged_lane_width = width
+            self.get_logger().info(f'Estimated lane width (px): {width:.2f}')
     
     def _ensure_homography_ui(self):
         if not self.use_birdeye or self.homography_ui_ready or self.last_frame_shape is None:
@@ -333,9 +341,8 @@ class LaneDetectorNode(Node):
 
         # 4) 전처리 → 이진 마스크
         mask = create_lane_mask(bgr, self.binary_params)
-        print(mask.shape)  # check mask shape
-        if mask.ndim == 3:
-            
+        # print(mask.shape)  # check mask shape(2)
+        if mask.ndim == 3: # if numpy array is 3 channels, convert to gray
             mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
         
 
@@ -343,6 +350,7 @@ class LaneDetectorNode(Node):
         top = warp_to_top_view(mask, self.H) if self.H is not None else mask
         if top.ndim == 3:
             top = cv2.cvtColor(top, cv2.COLOR_BGR2GRAY)
+        
         
         # 6) 차선 검출 부분 
         # 슬라이딩 윈도우 → 피팅
@@ -388,6 +396,7 @@ class LaneDetectorNode(Node):
                 else:
                     beta = getattr(self, 'lane_width_alpha', 0.2)
                     self.lane_width_px = (1.0 - beta) * self.lane_width_px + beta * width_px
+                self._log_lane_width_if_needed(self.lane_width_px)
         else:
             if self.lane_width_px is not None:
                 if left_fit is not None and right_fit is None:
