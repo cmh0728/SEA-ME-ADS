@@ -41,9 +41,9 @@ def _hist_peaks(
 
 def sliding_window_search(
     binary_topdown: np.ndarray,
-    nwindows: int = 12,
-    window_width: int = 80,  # 윈도우 가로폭 픽셀값
-    minpix: int = 40,  # 윈도우 내 유효 픽셀 수 최솟값
+    nwindows: int = 15,
+    window_width: int = 50,  # 윈도우 가로폭 픽셀값
+    minpix: int = 30,  # 윈도우 내 유효 픽셀 수 최솟값
     min_peak_value: int = 50,  # 히스토그램 피크 최소 픽셀 수
     center_guard_px: int = 150,  # 중앙 기준 좌/우 윈도우 침범 방지 여유폭
     ) -> Tuple[LanePoints, LanePoints, WindowRecords]:
