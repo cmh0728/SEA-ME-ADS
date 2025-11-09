@@ -9,7 +9,7 @@ LanePoints = Tuple[np.ndarray, np.ndarray]
 def _hist_peaks(
     binary_topdown: np.ndarray,
     margin_bottom: float = 0.4,  # 하단 0.4영역에서 피크를 찾음
-    min_peak_value: int = 0,  # 최소 픽셀 수 조건
+    min_peak_value: int = 50,  # 최소 픽셀 수 조건
 ):
     """Find histogram peaks (base positions) near the bottom of the binary image."""
     # 바닥 영역 히스토그램을 통해 왼쪽/오른쪽 차선의 시작 x좌표를 추정
@@ -45,7 +45,7 @@ def sliding_window_search(
     nwindows: int = 9,
     window_width: int = 100,  # 윈도우 가로폭 픽셀값
     minpix: int = 80,  # 윈도우 내 유효 픽셀 수 최솟값
-    min_peak_value: int = 0,  # 히스토그램 피크 최소 픽셀 수
+    min_peak_value: int = 50,  # 히스토그램 피크 최소 픽셀 수
     ) -> Tuple[LanePoints, LanePoints, WindowRecords]:
     """Collect left/right lane pixels with a histogram-guided sliding-window search."""
     # 바이너리 버드뷰 이미지 좌표를 준비
