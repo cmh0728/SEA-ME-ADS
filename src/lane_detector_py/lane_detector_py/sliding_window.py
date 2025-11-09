@@ -41,9 +41,9 @@ def _hist_peaks(
 
 def sliding_window_search(
     binary_topdown: np.ndarray,
-    nwindows: int = 9,
-    window_width: int = 100,  # 윈도우 가로폭 픽셀값
-    minpix: int = 80,  # 윈도우 내 유효 픽셀 수 최솟값
+    nwindows: int = 12,
+    window_width: int = 80,  # 윈도우 가로폭 픽셀값
+    minpix: int = 40,  # 윈도우 내 유효 픽셀 수 최솟값
     min_peak_value: int = 50,  # 히스토그램 피크 최소 픽셀 수
     center_guard_px: int = 150,  # 중앙 기준 좌/우 윈도우 침범 방지 여유폭
     ) -> Tuple[LanePoints, LanePoints, WindowRecords]:
@@ -99,11 +99,12 @@ def sliding_window_search(
                 new_center = int(np.clip(new_center, allow_min, allow_max - 1))
             return win_x_low, win_x_high, win_y_low, win_y_high, good_inds, new_center
 
+        guard_active = guard and window < 4
+
         if leftx_current is not None:
             # 왼쪽 차선 윈도우 추적
-            lx0, lx1, ly0, ly1, good, leftx_current = _gather(
-                leftx_current, (0, left_x_max)
-            )
+            left_range = (0, left_x_max) if guard_active else (0, w)
+            lx0, lx1, ly0, ly1, good, leftx_current = _gather(leftx_current, left_range)
             if good.size:
                 left_lane_inds.append(good)
             if lx0 is not None and lx1 is not None:
@@ -111,9 +112,8 @@ def sliding_window_search(
 
         if rightx_current is not None:
             # 오른쪽 차선 윈도우 추적
-            rx0, rx1, ry0, ry1, good, rightx_current = _gather(
-                rightx_current, (right_x_min, w)
-            )
+            right_range = (right_x_min, w) if guard_active else (0, w)
+            rx0, rx1, ry0, ry1, good, rightx_current = _gather(rightx_current, right_range)
             if good.size:
                 right_lane_inds.append(good)
             if rx0 is not None and rx1 is not None:
