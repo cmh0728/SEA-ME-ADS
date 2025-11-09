@@ -6,7 +6,11 @@ WindowRecords = Dict[str, List[Tuple[int, int, int, int]]]
 LanePoints = Tuple[np.ndarray, np.ndarray]
 
 # histogram 피크찾기
-def _hist_peaks(binary_topdown: np.ndarray, margin_bottom: float = 0.4):
+def _hist_peaks(
+    binary_topdown: np.ndarray,
+    margin_bottom: float = 0.4,  # 하단 0.4영역에서 피크를 찾음
+    min_peak_value: int = 0,  # 최소 픽셀 수 조건
+):
     """Find histogram peaks (base positions) near the bottom of the binary image."""
     # 바닥 영역 히스토그램을 통해 왼쪽/오른쪽 차선의 시작 x좌표를 추정
     h, w = binary_topdown.shape
@@ -14,9 +18,25 @@ def _hist_peaks(binary_topdown: np.ndarray, margin_bottom: float = 0.4):
     region = binary_topdown[y0:, :]
     histogram = np.sum(region // 255, axis=0)
 
-    mid = w // 2
-    leftx_base = np.argmax(histogram[:mid]) if histogram[:mid].any() else None
-    rightx_base = np.argmax(histogram[mid:]) + mid if histogram[mid:].any() else None
+    mid = w // 2  # 이미지 중심 픽셀값
+
+    left_hist = histogram[:mid]
+    right_hist = histogram[mid:]
+    leftx_base = np.argmax(left_hist) if left_hist.any() else None  # 흰색 픽셀이 하나도 없으면 None 반환
+    rightx_base = np.argmax(right_hist) + mid if right_hist.any() else None
+
+    left_peak_value = int(left_hist[leftx_base]) if leftx_base is not None else 0
+    right_peak_value = int(right_hist[rightx_base - mid]) if rightx_base is not None else 0
+
+    print(
+        f"[sliding_window] left peak: {left_peak_value}, right peak: {right_peak_value}",
+        flush=True,
+    )
+
+    if leftx_base is not None and left_peak_value < min_peak_value:
+        leftx_base = None
+    if rightx_base is not None and right_peak_value < min_peak_value:
+        rightx_base = None
     return leftx_base, rightx_base
 
 
@@ -25,6 +45,7 @@ def sliding_window_search(
     nwindows: int = 9,
     window_width: int = 100,  # 윈도우 가로폭 픽셀값
     minpix: int = 80,  # 윈도우 내 유효 픽셀 수 최솟값
+    min_peak_value: int = 0,  # 히스토그램 피크 최소 픽셀 수
     ) -> Tuple[LanePoints, LanePoints, WindowRecords]:
     """Collect left/right lane pixels with a histogram-guided sliding-window search."""
     # 바이너리 버드뷰 이미지 좌표를 준비
@@ -34,8 +55,11 @@ def sliding_window_search(
     nonzerox = np.array(nonzero[1])
 
     # 히스토그램으로 첫 윈도우의 중앙 좌표를 잡음
-    leftx_base, rightx_base = _hist_peaks(binary_topdown)
-    print(f"Left base: {leftx_base}, Right base: {rightx_base}")
+    leftx_base, rightx_base = _hist_peaks(
+        binary_topdown, margin_bottom=0.4, min_peak_value=min_peak_value
+    )
+    # print(f"Left base: {leftx_base}, Right base: {rightx_base}") # Left base: 146, Right base: 688 , 차이는 542픽셀
+
     leftx_current, rightx_current = leftx_base, rightx_base
 
     # 슬라이딩 윈도우 높이 및 결과 저장 리스트 초기화
@@ -100,3 +124,9 @@ def fit_polynomial(points: LanePoints):
     if len(x) < 50:
         return None
     return np.polyfit(y, x, 2)
+
+# 문제점 
+# 1. 히스토그램 피크가 잘못 잡히는 경우 (노이즈로 인한 피크들이 잘못 잡히는 경우 )-- > 베이스 포인트로 잡는 기준을 정해둘까? 
+# 2. 곡선 구간에서 곡률을 차선으로 인식하지 못하는 경우 
+# 3. 곡선 구간에서 차선이 하나만 보이는 경우 or 직선구간에서도 차선이 하나만 있는 경우 
+# 4. 한쪽만 차선이 잡히는 경우, 곡선구간에서 하나의 차선을 두개로 잡는 경우가 생김. --> 이미지 하단에서만 제대로 작동하는거면 이럴 일 없음 
