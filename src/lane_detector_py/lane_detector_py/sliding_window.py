@@ -28,11 +28,10 @@ def _hist_peaks(
     left_peak_value = int(left_hist[leftx_base]) if leftx_base is not None else 0
     right_peak_value = int(right_hist[rightx_base - mid]) if rightx_base is not None else 0
 
-    print(
-        f"[sliding_window] left peak: {left_peak_value}, right peak: {right_peak_value}",
-        flush=True,
-    )
+    # 최소픽셀값 디버깅 
+    # print(f"[sliding_window] left peak: {left_peak_value}, right peak: {right_peak_value}",flush=True,)
 
+    # 최소픽셀조건보다 작으면 none 처리 
     if leftx_base is not None and left_peak_value < min_peak_value:
         leftx_base = None
     if rightx_base is not None and right_peak_value < min_peak_value:
@@ -46,6 +45,7 @@ def sliding_window_search(
     window_width: int = 100,  # 윈도우 가로폭 픽셀값
     minpix: int = 80,  # 윈도우 내 유효 픽셀 수 최솟값
     min_peak_value: int = 50,  # 히스토그램 피크 최소 픽셀 수
+    center_guard_px: int = 150,  # 중앙 기준 좌/우 윈도우 침범 방지 여유폭
     ) -> Tuple[LanePoints, LanePoints, WindowRecords]:
     """Collect left/right lane pixels with a histogram-guided sliding-window search."""
     # 바이너리 버드뷰 이미지 좌표를 준비
@@ -64,6 +64,10 @@ def sliding_window_search(
 
     # 슬라이딩 윈도우 높이 및 결과 저장 리스트 초기화
     window_height = h // nwindows if nwindows else h
+    mid = w // 2
+    guard = max(0, int(center_guard_px))
+    left_x_max = max(1, mid - guard)
+    right_x_min = min(w - 1, mid + guard)
     left_lane_inds = []
     right_lane_inds = []
     window_records: WindowRecords = {"left": [], "right": []}
@@ -72,12 +76,17 @@ def sliding_window_search(
         win_y_low = h - (window + 1) * window_height
         win_y_high = h - window * window_height
 
-        def _gather(x_center: int):
+        def _gather(x_center: int, allowed_range: Tuple[int, int]):
             # 현재 윈도우 중심을 기준으로 유효한 픽셀을 모으고 중심을 새로 계산
             if x_center is None:
                 return None, None, None, None, np.array([], dtype=int), None
-            win_x_low = max(0, x_center - window_width // 2)
-            win_x_high = min(w, x_center + window_width // 2)
+            allow_min, allow_max = allowed_range
+            if allow_max - allow_min <= 1:
+                return None, None, None, None, np.array([], dtype=int), None
+            win_x_low = max(allow_min, x_center - window_width // 2)
+            win_x_high = min(allow_max, x_center + window_width // 2)
+            if win_x_low >= win_x_high:
+                return None, None, None, None, np.array([], dtype=int), None
             good_inds = (
                 (nonzeroy >= win_y_low)
                 & (nonzeroy < win_y_high)
@@ -87,11 +96,14 @@ def sliding_window_search(
             new_center = x_center
             if len(good_inds) > minpix:
                 new_center = int(np.mean(nonzerox[good_inds]))
+                new_center = int(np.clip(new_center, allow_min, allow_max - 1))
             return win_x_low, win_x_high, win_y_low, win_y_high, good_inds, new_center
 
         if leftx_current is not None:
             # 왼쪽 차선 윈도우 추적
-            lx0, lx1, ly0, ly1, good, leftx_current = _gather(leftx_current)
+            lx0, lx1, ly0, ly1, good, leftx_current = _gather(
+                leftx_current, (0, left_x_max)
+            )
             if good.size:
                 left_lane_inds.append(good)
             if lx0 is not None and lx1 is not None:
@@ -99,7 +111,9 @@ def sliding_window_search(
 
         if rightx_current is not None:
             # 오른쪽 차선 윈도우 추적
-            rx0, rx1, ry0, ry1, good, rightx_current = _gather(rightx_current)
+            rx0, rx1, ry0, ry1, good, rightx_current = _gather(
+                rightx_current, (right_x_min, w)
+            )
             if good.size:
                 right_lane_inds.append(good)
             if rx0 is not None and rx1 is not None:
@@ -129,4 +143,5 @@ def fit_polynomial(points: LanePoints):
 # 1. 히스토그램 피크가 잘못 잡히는 경우 (노이즈로 인한 피크들이 잘못 잡히는 경우 )-- > 베이스 포인트로 잡는 기준을 정해둘까? 
 # 2. 곡선 구간에서 곡률을 차선으로 인식하지 못하는 경우 
 # 3. 곡선 구간에서 차선이 하나만 보이는 경우 or 직선구간에서도 차선이 하나만 있는 경우 
-# 4. 한쪽만 차선이 잡히는 경우, 곡선구간에서 하나의 차선을 두개로 잡는 경우가 생김. --> 이미지 하단에서만 제대로 작동하는거면 이럴 일 없음 
+# 4. 한쪽만 차선이 잡히는 경우, 곡선구간에서 하나의 차선을 두개로 잡는 경우가 생김. --> 이미지 하단에서만 제대로 작동하는거면 이럴 일 없음 --> 해결 
+# 5. 왼쪽 차선의 윈도우가 자꾸 오른쪽 차선에 잡히는 경우가 생김 --> center_guard_px 옵션추가 --> 해결 
