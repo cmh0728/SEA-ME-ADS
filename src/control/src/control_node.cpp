@@ -86,9 +86,9 @@ void ControlNode::on_offset(const std_msgs::msg::Float32::SharedPtr msg)
     cmd.linear.x = std::clamp(linear_speed_, -50.0, 50.0);
     cmd.angular.z = angular_z;
     cmd_pub_->publish(cmd);
-    RCLCPP_WARN_THROTTLE(
-      get_logger(), *this->get_clock(), 2000,
-      "Lane offset unavailable; reusing last steering (%.3f)", angular_z);
+    // RCLCPP_WARN_THROTTLE(
+    //   get_logger(), *this->get_clock(), 2000,
+    //   "Lane offset unavailable; reusing last steering (%.3f)", angular_z);
     return;
   }
 
