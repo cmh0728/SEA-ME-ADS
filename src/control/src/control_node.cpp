@@ -6,13 +6,13 @@ namespace control
 {
 namespace
 {
-constexpr double kDefaultKp = 0.004;     // 픽셀 에러를 각속도로 변환하는 기본 비례 이득
-constexpr double kDefaultKi = 0.0;
-constexpr double kDefaultKd = 0.001;
-constexpr double kDefaultLinearSpeed = 15.0;  // 차량 프로토콜 기준 +15가 적정 주행 속도
-constexpr double kDefaultMaxAngular = 1.0;
+constexpr double kDefaultKp = 0.1;     // 픽셀 에러를 각속도로 변환하는 기본 비례 이득
+constexpr double kDefaultKi = 0.01;
+constexpr double kDefaultKd = 0.005;
+constexpr double kDefaultLinearSpeed = 15.0;  // 차량 프로토콜 기준 +15가 기본 주행속도 --> 차후에 곡률에 따라 속도 조절 기능 추가 
+constexpr double kDefaultMaxAngular = 1.0; //조향 최댓값
 constexpr double kDefaultMaxIntegral = 1.0;
-constexpr double kDefaultPixelToMeter = 1.0 / 100.0;  // user tunable scale
+constexpr double kDefaultPixelToMeter = 0.35 / 542 ;  // user tunable scale
 constexpr double kDefaultWatchdogSec = 0.5;
 }  // namespace
 
@@ -23,7 +23,7 @@ ControlNode::ControlNode()
   last_stamp_(this->now()),
   watchdog_timeout_(rclcpp::Duration::from_seconds(kDefaultWatchdogSec))
 {
-  // PID 및 차량 주행 관련 기본 파라미터 선언 (launch나 CLI에서 override 가능)
+  // PID 및 차량 주행 관련 기본 파라미터 선언 
   kp_ = declare_parameter("kp", kDefaultKp);
   ki_ = declare_parameter("ki", kDefaultKi);
   kd_ = declare_parameter("kd", kDefaultKd);
@@ -61,7 +61,7 @@ void ControlNode::on_offset(const std_msgs::msg::Float32::SharedPtr msg)
   const double dt = std::max(1e-3, (now - last_stamp_).seconds());
   last_stamp_ = now;
 
-  // 오프셋이 양수면 차량이 차선 중앙보다 오른쪽에 있음 (픽셀 → 미터 변환)
+  // 오프셋이 양수면 차량이 차선 중앙보다 오른쪽에 있음 (픽셀 → 미터 변환)--> - 조향 필요 
   const double error_px = static_cast<double>(msg->data);
   const double error_m = error_px * pixel_to_meter_;
 
