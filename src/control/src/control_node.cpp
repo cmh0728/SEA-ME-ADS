@@ -8,12 +8,12 @@ namespace
 {
 constexpr double kDefaultKp = 10;     // 픽셀 에러를 각속도로 변환하는 기본 비례 이득
 constexpr double kDefaultKi = 0.01;
-constexpr double kDefaultKd = 0.8;
+constexpr double kDefaultKd = 0.6;
 constexpr double kDefaultLinearSpeed = 15.0;  // 차량 프로토콜 기준 +15가 기본 주행속도 --> 차후에 곡률에 따라 속도 조절 기능 추가 
 constexpr double kDefaultMaxAngular = 1.0; //조향 최댓값
 constexpr double kDefaultMaxIntegral = 1.0;
 constexpr double kDefaultPixelToMeter = 0.35 / 542 ;  // user tunable scale
-constexpr double kDefaultHeadingWeight = 0.3;
+constexpr double kDefaultHeadingWeight = 0.2;  // 차선 각도 오프셋 가중치
 constexpr double kDefaultWatchdogSec = 0.5;
 }  // namespace
 
