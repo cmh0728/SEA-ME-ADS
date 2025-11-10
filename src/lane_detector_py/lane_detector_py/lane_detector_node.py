@@ -134,7 +134,7 @@ class LaneDetectorNode(Node):
             return
         if self._last_logged_lane_width is None or abs(width - self._last_logged_lane_width) >= 1.0:
             self._last_logged_lane_width = width
-            self.get_logger().info(f'Estimated lane width (px): {width:.2f}')
+            # self.get_logger().info(f'Estimated lane width (px): {width:.2f}')
     
     def _ensure_homography_ui(self):
         if not self.use_birdeye or self.homography_ui_ready or self.last_frame_shape is None:
