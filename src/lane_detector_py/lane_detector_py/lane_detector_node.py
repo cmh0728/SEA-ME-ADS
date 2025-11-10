@@ -46,6 +46,7 @@ class LaneDetectorNode(Node):
         self.lane_width_px = float(self.get_parameter('lane_width_px').get_parameter_value().double_value)
         self.lane_width_cm = 35.0  # 실제 차폭 (cm)
         self._last_logged_lane_width = None # 픽셀 차폭계산용 
+        self._measured_lane_width_px = self.lane_width_px
         self._log_lane_width_if_needed(self.lane_width_px)
 
         # 버드아이용 호모그래피(예시 좌표: 해상도 640x480 전제)
@@ -414,8 +415,10 @@ class LaneDetectorNode(Node):
             x_right = _eval_fit(right_fit)
             if x_left is not None and x_right is not None:
                 lane_center = (x_left + x_right) / 2.0
-        elif self.lane_width_px is not None:
-            half_width = self.lane_width_px / 2.0
+                self._measured_lane_width_px = float(x_right - x_left)
+                self._log_lane_width_if_needed(self._measured_lane_width_px)
+        elif self._measured_lane_width_px is not None:
+            half_width = self._measured_lane_width_px / 2.0
             if have_left:
                 x_left = _eval_fit(left_fit)
                 if x_left is not None:
