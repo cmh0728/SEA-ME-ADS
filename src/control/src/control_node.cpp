@@ -72,7 +72,7 @@ void ControlNode::on_offset(const std_msgs::msg::Float32::SharedPtr msg)
 
   // PID 합산 후 각속도 제한
   double angular_z = kp_ * error_m + ki_ * integral_error_ + kd_ * derivative;
-  angular_z = std::clamp(angular_z, -max_angular_z_, max_angular_z_);
+  angular_z = std::clamp(angular_z*-1, -max_angular_z_, max_angular_z_);
 
   // 최종 Twist 메시지 구성 후 퍼블리시
   geometry_msgs::msg::Twist cmd;
