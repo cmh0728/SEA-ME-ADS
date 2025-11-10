@@ -13,6 +13,7 @@ constexpr double kDefaultLinearSpeed = 15.0;  // 차량 프로토콜 기준 +15�
 constexpr double kDefaultMaxAngular = 1.0; //조향 최댓값
 constexpr double kDefaultMaxIntegral = 1.0;
 constexpr double kDefaultPixelToMeter = 0.35 / 542 ;  // user tunable scale
+constexpr double kDefaultHeadingWeight = 0.3;
 constexpr double kDefaultWatchdogSec = 0.5;
 }  // namespace
 
@@ -20,6 +21,7 @@ ControlNode::ControlNode()
 : rclcpp::Node("lane_follow_control"),
   integral_error_(0.0),
   prev_error_(0.0),
+  heading_error_(0.0),
   last_stamp_(this->now()),
   watchdog_timeout_(rclcpp::Duration::from_seconds(kDefaultWatchdogSec))
 {
@@ -31,27 +33,37 @@ ControlNode::ControlNode()
   max_angular_z_ = declare_parameter("max_angular_z", kDefaultMaxAngular);
   max_integral_ = declare_parameter("max_integral", kDefaultMaxIntegral);
   pixel_to_meter_ = declare_parameter("pixel_to_meter", kDefaultPixelToMeter);
-  const double watchdog = declare_parameter("watchdog_timeout", kDefaultWatchdogSec);
+  heading_weight_ = declare_parameter("heading_weight", kDefaultHeadingWeight);
+  const double watchdog = declare_parameter("watchdog_timeout", kDefaultWatchdogSec); //일정시간 업데이트없으면 초기화 
   watchdog_timeout_ = rclcpp::Duration::from_seconds(watchdog);
 
-  // /cmd_vel 퍼블리셔와 차선 오프셋 구독 설정
+  // /cmd_vel pub
   cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", rclcpp::QoS(10));
+  
+  //lane offset sub
   offset_sub_ = create_subscription<std_msgs::msg::Float32>(
     "/lane/center_offset", rclcpp::QoS(10),
     std::bind(&ControlNode::on_offset, this, std::placeholders::_1));
+  heading_sub_ = create_subscription<std_msgs::msg::Float32>(
+    "/lane/heading_offset", rclcpp::QoS(10),
+    std::bind(&ControlNode::on_heading, this, std::placeholders::_1));
 
   RCLCPP_INFO(get_logger(), "PID controller initialized (kp=%.4f ki=%.4f kd=%.4f)", kp_, ki_, kd_);
 }
 
+// watchdog reset function
 void ControlNode::reset_if_timeout(const rclcpp::Time & now)
 {
   // 일정 시간 이상 갱신이 없으면 적분/미분 항을 초기화해 급격한 제어를 방지
   if ((now - last_stamp_) > watchdog_timeout_) {
     integral_error_ = 0.0;
-   prev_error_ = 0.0;
+    prev_error_ = 0.0;
+    heading_error_ = 0.0;
   }
 }
 
+
+// steer control callback
 void ControlNode::on_offset(const std_msgs::msg::Float32::SharedPtr msg)
 {
   const rclcpp::Time now = this->now();
@@ -64,14 +76,15 @@ void ControlNode::on_offset(const std_msgs::msg::Float32::SharedPtr msg)
   // 오프셋이 양수면 차량이 차선 중앙보다 오른쪽에 있음 (픽셀 → 미터 변환)--> - 조향 필요 
   const double error_px = static_cast<double>(msg->data);
   const double error_m = error_px * pixel_to_meter_;
+  const double combined_error = error_m + heading_weight_ * heading_error_;
 
   // PID 적분/미분 항 계산 및 클램프
-  integral_error_ = std::clamp(integral_error_ + error_m * dt, -max_integral_, max_integral_);
-  const double derivative = (error_m - prev_error_) / dt;
-  prev_error_ = error_m;
+  integral_error_ = std::clamp(integral_error_ + combined_error * dt, -max_integral_, max_integral_);
+  const double derivative = (combined_error - prev_error_) / dt;
+  prev_error_ = combined_error;
 
   // PID 합산 후 각속도 제한
-  double angular_z = kp_ * error_m + ki_ * integral_error_ + kd_ * derivative;
+  double angular_z = kp_ * combined_error + ki_ * integral_error_ + kd_ * derivative;
   angular_z = std::clamp(angular_z*-1, -max_angular_z_, max_angular_z_);
 
   // 최종 Twist 메시지 구성 후 퍼블리시
@@ -81,8 +94,13 @@ void ControlNode::on_offset(const std_msgs::msg::Float32::SharedPtr msg)
   cmd_pub_->publish(cmd);
 
   RCLCPP_DEBUG(get_logger(),
-    "PID cmd: err_px=%.2f err_m=%.3f ang=%.3f integ=%.3f deriv=%.3f",
-    error_px, error_m, angular_z, integral_error_, derivative);
+    "PID cmd: err_px=%.2f err_m=%.3f heading=%.3f combined=%.3f ang=%.3f integ=%.3f deriv=%.3f",
+    error_px, error_m, heading_error_, combined_error, angular_z, integral_error_, derivative);
+}
+
+void ControlNode::on_heading(const std_msgs::msg::Float32::SharedPtr msg)
+{
+  heading_error_ = static_cast<double>(msg->data);
 }
 }  // namespace control
 

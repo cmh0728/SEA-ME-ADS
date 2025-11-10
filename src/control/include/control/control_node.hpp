@@ -15,9 +15,11 @@ public:
 
 private:
   void on_offset(const std_msgs::msg::Float32::SharedPtr msg);
+  void on_heading(const std_msgs::msg::Float32::SharedPtr msg);
   void reset_if_timeout(const rclcpp::Time & now);
 
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr offset_sub_;
+  rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr heading_sub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_pub_;
 
   double kp_;
@@ -29,6 +31,8 @@ private:
   double pixel_to_meter_;
   double integral_error_;
   double prev_error_;
+  double heading_error_;
+  double heading_weight_;
   rclcpp::Time last_stamp_;
   rclcpp::Duration watchdog_timeout_;
 };

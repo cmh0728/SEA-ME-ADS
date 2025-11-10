@@ -36,6 +36,7 @@ class LaneDetectorNode(Node):
         self.declare_parameter('image_topic', '/camera/camera/color/image_raw/compressed')
         self.declare_parameter('publish_overlay_topic', '/lane/overlay')
         self.declare_parameter('publish_offset_topic', '/lane/center_offset')
+        self.declare_parameter('publish_heading_topic', '/lane/heading_offset')
         self.declare_parameter('use_birdeye', True)
         self.declare_parameter('enable_visualization', False) # 디버깅용 시각화 여부 파라미터 , 기본값 False
         self.declare_parameter('lane_width_px', 650.0) # 차폭 650px 기본 설정 
@@ -82,6 +83,8 @@ class LaneDetectorNode(Node):
 
         # self.pub_overlay = self.create_publisher(Image, overlay_topic, qos) # 차선 오버레이 이미지 퍼블리셔 --> 필요없어
         self.pub_offset = self.create_publisher(Float32, offset_topic, 10)
+        heading_topic = self.get_parameter('publish_heading_topic').get_parameter_value().string_value
+        self.pub_heading = self.create_publisher(Float32, heading_topic, 10)
 
         if self.subscribe_compressed: # compressed image --> 실제 실행되는 부분
             self.sub = self.create_subscription(CompressedImage, image_topic, self.image_cb_compressed, qos)
@@ -414,6 +417,11 @@ class LaneDetectorNode(Node):
         have_left = left_detected and left_fit is not None
         have_right = right_detected and right_fit is not None
 
+        def _eval_slope(fit):
+            if fit is None:
+                return None
+            return float(2.0 * fit[0] * y_eval + fit[1])
+
         if have_left and have_right:
             x_left = _eval_fit(left_fit)
             x_right = _eval_fit(right_fit)
@@ -436,6 +444,15 @@ class LaneDetectorNode(Node):
 
         if lane_center is not None:
             center_offset_px = float(img_center - lane_center)
+
+        lane_slope = None
+        left_slope = _eval_slope(left_fit) if have_left else None
+        right_slope = _eval_slope(right_fit) if have_right else None
+        if left_slope is not None and right_slope is not None:
+            lane_slope = 0.5 * (left_slope + right_slope)
+        else:
+            lane_slope = left_slope if left_slope is not None else right_slope
+        heading_offset_rad = float(np.arctan(lane_slope)) if lane_slope is not None else 0.0
 
         if viz_enabled:
             # cv2.imshow(self.window_name, bgr)
@@ -464,6 +481,7 @@ class LaneDetectorNode(Node):
 
         # 퍼블리시
         self.pub_offset.publish(Float32(data=center_offset_px))
+        self.pub_heading.publish(Float32(data=heading_offset_rad))
 
 
     def _on_mouse(self, event, x, y, flags, param):
