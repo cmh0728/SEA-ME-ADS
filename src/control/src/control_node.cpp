@@ -1,6 +1,7 @@
 #include "control/control_node.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 namespace control
 {
@@ -22,6 +23,7 @@ ControlNode::ControlNode()
   integral_error_(0.0),
   prev_error_(0.0),
   heading_error_(0.0),
+  last_angular_cmd_(0.0),
   last_stamp_(this->now()),
   watchdog_timeout_(rclcpp::Duration::from_seconds(kDefaultWatchdogSec))
 {
@@ -74,9 +76,26 @@ void ControlNode::on_offset(const std_msgs::msg::Float32::SharedPtr msg)
   last_stamp_ = now;
 
   // 오프셋이 양수면 차량이 차선 중앙보다 오른쪽에 있음 (픽셀 → 미터 변환)--> - 조향 필요 
-  const double error_px = static_cast<double>(msg->data);
+  const double raw_offset = static_cast<double>(msg->data);
+  if (!std::isfinite(raw_offset)) {
+    last_stamp_ = now;
+    double angular_z = std::clamp(last_angular_cmd_ * 1.1, -max_angular_z_, max_angular_z_);
+    last_angular_cmd_ = angular_z;
+
+    geometry_msgs::msg::Twist cmd;
+    cmd.linear.x = std::clamp(linear_speed_, -50.0, 50.0);
+    cmd.angular.z = angular_z;
+    cmd_pub_->publish(cmd);
+    RCLCPP_WARN_THROTTLE(
+      get_logger(), *this->get_clock(), 2000,
+      "Lane offset unavailable; reusing last steering (%.3f)", angular_z);
+    return;
+  }
+
+  const double error_px = raw_offset;
   const double error_m = error_px * pixel_to_meter_;
-  const double combined_error = error_m + heading_weight_ * heading_error_;
+  const double heading_term = std::isfinite(heading_error_) ? heading_error_ : 0.0;
+  const double combined_error = error_m + heading_weight_ * heading_term;
 
   // PID 적분/미분 항 계산 및 클램프
   integral_error_ = std::clamp(integral_error_ + combined_error * dt, -max_integral_, max_integral_);
@@ -92,6 +111,7 @@ void ControlNode::on_offset(const std_msgs::msg::Float32::SharedPtr msg)
   cmd.linear.x = std::clamp(linear_speed_, -50.0, 50.0);  // 차량 규격 범위 [-50, 50]
   cmd.angular.z = angular_z;
   cmd_pub_->publish(cmd);
+  last_angular_cmd_ = angular_z;
 
   RCLCPP_DEBUG(get_logger(),
     "PID cmd: err_px=%.2f err_m=%.3f heading=%.3f combined=%.3f ang=%.3f integ=%.3f deriv=%.3f",
@@ -100,7 +120,8 @@ void ControlNode::on_offset(const std_msgs::msg::Float32::SharedPtr msg)
 
 void ControlNode::on_heading(const std_msgs::msg::Float32::SharedPtr msg)
 {
-  heading_error_ = static_cast<double>(msg->data);
+  const double raw = static_cast<double>(msg->data);
+  heading_error_ = std::isfinite(raw) ? raw : 0.0;
 }
 }  // namespace control
 

@@ -33,6 +33,7 @@ private:
   double prev_error_;
   double heading_error_;
   double heading_weight_;
+  double last_angular_cmd_;
   rclcpp::Time last_stamp_;
   rclcpp::Duration watchdog_timeout_;
 };

@@ -404,7 +404,7 @@ class LaneDetectorNode(Node):
                 left_fit[2] -= self.lane_width_px
 
         # 차 폭/센터 오프셋 계산 (픽셀 기준 → 미터 변환은 사용자 설정)
-        center_offset_px = 0.0
+        center_offset_px = float("nan")
         y_eval = h - 1
 
         def _eval_fit(fit):
@@ -452,7 +452,7 @@ class LaneDetectorNode(Node):
             lane_slope = 0.5 * (left_slope + right_slope)
         else:
             lane_slope = left_slope if left_slope is not None else right_slope
-        heading_offset_rad = float(np.arctan(lane_slope)) if lane_slope is not None else 0.0
+        heading_offset_rad = float(np.arctan(lane_slope)) if lane_slope is not None else float("nan")
 
         if viz_enabled:
             # cv2.imshow(self.window_name, bgr)
