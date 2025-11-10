@@ -6,7 +6,7 @@ namespace control
 {
 namespace
 {
-constexpr double kDefaultKp = 100;     // 픽셀 에러를 각속도로 변환하는 기본 비례 이득
+constexpr double kDefaultKp = 10;     // 픽셀 에러를 각속도로 변환하는 기본 비례 이득
 constexpr double kDefaultKi = 0.01;
 constexpr double kDefaultKd = 0.5;
 constexpr double kDefaultLinearSpeed = 15.0;  // 차량 프로토콜 기준 +15가 기본 주행속도 --> 차후에 곡률에 따라 속도 조절 기능 추가 
