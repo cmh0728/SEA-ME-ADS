@@ -56,6 +56,7 @@ def draw_lane_overlay(
     fill: bool = True,
     show_vehicle_center: bool = True,
     lane_center_point: Optional[Tuple[float, float]] = None,
+    vehicle_center_px: Optional[float] = None,
 ) -> np.ndarray:
     """Project fitted lane curves onto the original image."""
     h, w = binary_topdown.shape[:2]
@@ -92,7 +93,8 @@ def draw_lane_overlay(
 
     if show_vehicle_center:
         img_h, img_w = orig_bgr.shape[:2]
-        center_pt = (img_w // 2, img_h - 1)
+        cx = vehicle_center_px if vehicle_center_px is not None else img_w / 2.0
+        center_pt = (int(round(np.clip(cx, 0, img_w - 1))), img_h - 1)
         cv2.drawMarker(out, center_pt, (0, 0, 255), markerType=cv2.MARKER_CROSS, markerSize=20, thickness=2)
         cv2.circle(out, center_pt, 5, (0, 0, 255), -1)
 

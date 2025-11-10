@@ -39,6 +39,7 @@ class LaneDetectorNode(Node):
         self.declare_parameter('use_birdeye', True)
         self.declare_parameter('enable_visualization', True) # 디버깅용 시각화 여부 파라미터 , 기본값 False
         self.declare_parameter('lane_width_px', 650.0) # 차폭 650px 기본 설정 
+        self.declare_parameter('vehicle_center_bias_px', 15.0)  # 이미지 중심 대비 차량 중심 보정값
         self.crop_size = (860, 480)
         self.last_frame_shape = None
         self.prev_left_fit = None
@@ -47,6 +48,9 @@ class LaneDetectorNode(Node):
         self.lane_width_cm = 35.0  # 실제 차폭 (cm)
         self._last_logged_lane_width = None # 픽셀 차폭계산용 
         self._measured_lane_width_px = self.lane_width_px
+        self.vehicle_center_bias_px = float(
+            self.get_parameter('vehicle_center_bias_px').get_parameter_value().double_value
+        )
         self._log_lane_width_if_needed(self.lane_width_px)
 
         # 버드아이용 호모그래피(예시 좌표: 해상도 640x480 전제)
@@ -406,7 +410,7 @@ class LaneDetectorNode(Node):
             return float(fit[0]*y_eval*y_eval + fit[1]*y_eval + fit[2])
 
         lane_center = None
-        img_center = w / 2.0
+        img_center = w / 2.0 + self.vehicle_center_bias_px
         have_left = left_detected and left_fit is not None
         have_right = right_detected and right_fit is not None
 
@@ -450,6 +454,7 @@ class LaneDetectorNode(Node):
                 right_fit,
                 fill=fill_overlay,
                 lane_center_point=lane_center_point_top,
+                vehicle_center_px=img_center,
             )
             cv2.imshow(self.overlay_window, overlay)
 
