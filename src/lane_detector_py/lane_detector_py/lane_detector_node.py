@@ -397,22 +397,57 @@ class LaneDetectorNode(Node):
 
         # 차 폭/센터 오프셋 계산 (픽셀 기준 → 미터 변환은 사용자 설정)
         center_offset_px = 0.0
-        if left_fit is not None and right_fit is not None:
-            y_eval = h - 1
-            x_left = left_fit[0]*y_eval*y_eval + left_fit[1]*y_eval + left_fit[2]
-            x_right = right_fit[0]*y_eval*y_eval + right_fit[1]*y_eval + right_fit[2]
-            lane_center = (x_left + x_right) / 2.0
-            img_center = w / 2.0
+        y_eval = h - 1
+
+        def _eval_fit(fit):
+            if fit is None:
+                return None
+            return float(fit[0]*y_eval*y_eval + fit[1]*y_eval + fit[2])
+
+        lane_center = None
+        img_center = w / 2.0
+        have_left = left_detected and left_fit is not None
+        have_right = right_detected and right_fit is not None
+
+        if have_left and have_right:
+            x_left = _eval_fit(left_fit)
+            x_right = _eval_fit(right_fit)
+            if x_left is not None and x_right is not None:
+                lane_center = (x_left + x_right) / 2.0
+        elif self.lane_width_px is not None:
+            half_width = self.lane_width_px / 2.0
+            if have_left:
+                x_left = _eval_fit(left_fit)
+                if x_left is not None:
+                    lane_center = x_left + half_width
+            elif have_right:
+                x_right = _eval_fit(right_fit)
+                if x_right is not None:
+                    lane_center = x_right - half_width
+
+        lane_center_point_top = (lane_center, y_eval) if lane_center is not None else None
+
+        if lane_center is not None:
             center_offset_px = float(img_center - lane_center)
 
         if viz_enabled:
             # cv2.imshow(self.window_name, bgr)
-            debug_view = render_sliding_window_debug(top, window_records, (lx, ly), (rx, ry))
+            debug_view = render_sliding_window_debug(
+                top, window_records, (lx, ly), (rx, ry), lane_center_point=lane_center_point_top
+            )
             # cv2.imshow("mask",mask)
             cv2.imshow(self.birdeye_window, debug_view)
 
             fill_overlay = left_detected and right_detected
-            overlay = draw_lane_overlay(bgr, top, self.Hinv, left_fit, right_fit, fill=fill_overlay)
+            overlay = draw_lane_overlay(
+                bgr,
+                top,
+                self.Hinv,
+                left_fit,
+                right_fit,
+                fill=fill_overlay,
+                lane_center_point=lane_center_point_top,
+            )
             cv2.imshow(self.overlay_window, overlay)
 
             # if you want to publish overlay image, uncomment below

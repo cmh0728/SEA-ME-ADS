@@ -1,4 +1,4 @@
-from typing import Dict, Iterable, Tuple
+from typing import Dict, Iterable, Tuple, Optional
 
 import cv2
 import numpy as np
@@ -12,6 +12,7 @@ def render_sliding_window_debug(
     windows: WindowRecords,
     left_points: LanePoints,
     right_points: LanePoints,
+    lane_center_point: Optional[Tuple[float, float]] = None,
 ) -> np.ndarray:
     """Return a visualization of the sliding-window search."""
     if binary_topdown.ndim == 2:
@@ -36,6 +37,12 @@ def render_sliding_window_debug(
         ry_clip = np.clip(ry.astype(int), 0, vis.shape[0] - 1)
         vis[ry_clip, rx_clip] = (0, 255, 255)
 
+    if lane_center_point is not None:
+        cx = int(np.clip(round(lane_center_point[0]), 0, vis.shape[1] - 1))
+        cy = int(np.clip(round(lane_center_point[1]), 0, vis.shape[0] - 1))
+        cv2.drawMarker(vis, (cx, cy), (0, 0, 255), markerType=cv2.MARKER_TILTED_CROSS, markerSize=16, thickness=2)
+        cv2.circle(vis, (cx, cy), 4, (0, 0, 255), -1)
+
     return vis
 
 
@@ -47,6 +54,8 @@ def draw_lane_overlay(
     right_fit,
     *,
     fill: bool = True,
+    show_vehicle_center: bool = True,
+    lane_center_point: Optional[Tuple[float, float]] = None,
 ) -> np.ndarray:
     """Project fitted lane curves onto the original image."""
     h, w = binary_topdown.shape[:2]
@@ -72,7 +81,19 @@ def draw_lane_overlay(
         if pts_right is not None:
             cv2.polylines(overlay, [pts_right], False, (0, 0, 255), 5)
 
+    if lane_center_point is not None:
+        cx = int(np.clip(round(lane_center_point[0]), 0, w - 1))
+        cy = int(np.clip(round(lane_center_point[1]), 0, h - 1))
+        cv2.drawMarker(overlay, (cx, cy), (0, 255, 255), markerType=cv2.MARKER_STAR, markerSize=18, thickness=2)
+        cv2.circle(overlay, (cx, cy), 4, (0, 255, 255), -1)
+
     overlay_warped = cv2.warpPerspective(overlay, Hinv, (orig_bgr.shape[1], orig_bgr.shape[0]))
     out = cv2.addWeighted(orig_bgr, 1.0, overlay_warped, 0.4, 0)
-    return out
 
+    if show_vehicle_center:
+        img_h, img_w = orig_bgr.shape[:2]
+        center_pt = (img_w // 2, img_h - 1)
+        cv2.drawMarker(out, center_pt, (0, 0, 255), markerType=cv2.MARKER_CROSS, markerSize=20, thickness=2)
+        cv2.circle(out, center_pt, 5, (0, 0, 255), -1)
+
+    return out
