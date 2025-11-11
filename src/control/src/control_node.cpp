@@ -9,7 +9,7 @@ namespace
 {
 constexpr double kDefaultKp = 10;     // 픽셀 에러를 각속도로 변환하는 기본 비례 이득
 constexpr double kDefaultKi = 0.01;
-constexpr double kDefaultKd = 0.6;
+constexpr double kDefaultKd = 0.65;
 constexpr double kDefaultLinearSpeed = 15.0;  // 차량 프로토콜 기준 +15가 기본 주행속도 --> 차후에 곡률에 따라 속도 조절 기능 추가 
 constexpr double kDefaultMaxAngular = 1.0; //조향 최댓값
 constexpr double kDefaultMaxIntegral = 1.0;
@@ -79,7 +79,7 @@ void ControlNode::on_offset(const std_msgs::msg::Float32::SharedPtr msg)
   const double raw_offset = static_cast<double>(msg->data);
   if (!std::isfinite(raw_offset)) {
     last_stamp_ = now;
-    double angular_z = std::clamp(last_angular_cmd_ * 1.1, -max_angular_z_, max_angular_z_);
+    double angular_z = std::clamp(last_angular_cmd_ * 1.2, -max_angular_z_, max_angular_z_);
     last_angular_cmd_ = angular_z;
 
     geometry_msgs::msg::Twist cmd;
