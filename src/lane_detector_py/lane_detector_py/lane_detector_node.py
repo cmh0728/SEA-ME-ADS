@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-import os
 from functools import partial
-from typing import Optional
-
 import cv2
 import numpy as np
 
@@ -30,65 +27,6 @@ except ImportError:  # pragma: no cover
     from .visualization import draw_lane_overlay, render_sliding_window_debug
 
 
-class PolynomialKalmanFilter:
-    """Simple constant-model Kalman filter for lane polynomial coefficients."""
-
-    def __init__(
-        self,
-        process_noise: float = 1e-4,
-        measurement_noise: float = 5e-2,
-        max_prediction_frames: int = 5,
-    ):
-        self.process_noise = float(process_noise)
-        self.measurement_noise = float(measurement_noise)
-        self.max_prediction_frames = int(max(1, max_prediction_frames))
-        self.x: Optional[np.ndarray] = None
-        self.P: Optional[np.ndarray] = None
-        self.missed = 0
-
-    def reset(self):
-        self.x = None
-        self.P = None
-        self.missed = 0
-
-    def update(self, measurement: np.ndarray) -> np.ndarray:
-        meas = np.asarray(measurement, dtype=np.float64).reshape(3, 1)
-        if self.x is None or self.P is None:
-            self.x = meas.copy()
-            self.P = np.eye(3, dtype=np.float64)
-            self.missed = 0
-            return self.x.ravel()
-
-        self._predict_covariance()
-        y = meas - self.x
-        S = self.P + self._measurement_cov()
-        K = self.P @ np.linalg.inv(S)
-        self.x = self.x + K @ y
-        self.P = (np.eye(3) - K) @ self.P
-        self.missed = 0
-        return self.x.ravel()
-
-    def predict(self) -> Optional[np.ndarray]:
-        if self.x is None or self.P is None:
-            return None
-        if self.missed >= self.max_prediction_frames:
-            return None
-        self._predict_covariance()
-        self.missed += 1
-        return self.x.ravel()
-
-    def _predict_covariance(self):
-        if self.P is None:
-            return
-        self.P = self.P + self._process_cov()
-
-    def _process_cov(self) -> np.ndarray:
-        return np.eye(3, dtype=np.float64) * self.process_noise
-
-    def _measurement_cov(self) -> np.ndarray:
-        return np.eye(3, dtype=np.float64) * self.measurement_noise
-
-
 # Lane Detector Node Class
 class LaneDetectorNode(Node):
     def __init__(self): # 노드 생성시 한번만 실행
@@ -101,25 +39,8 @@ class LaneDetectorNode(Node):
         self.declare_parameter('publish_heading_topic', '/lane/heading_offset')
         self.declare_parameter('use_birdeye', True)
         self.declare_parameter('enable_visualization', False) # 디버깅용 시각화 여부 파라미터 , 기본값 False
-        self.declare_parameter('lane_width_px', 650.0) # 차선폭 650px 기본 설정 
+        self.declare_parameter('lane_width_px', 650.0) # 차폭 650px 기본 설정 
         self.declare_parameter('vehicle_center_bias_px', -40.0)  # 이미지 중심 대비 차량 중심 보정값
-        self.declare_parameter('fit_smoothing_alpha', 0.2)
-        self.declare_parameter('use_high_contrast_preprocess', True)
-        self.declare_parameter('high_contrast_threshold', 170.0)
-        self.declare_parameter('high_contrast_blur_kernel', 3)
-        self.declare_parameter('high_contrast_dilate_kernel', 5)
-        self.declare_parameter('high_contrast_canny_low', 100.0)
-        self.declare_parameter('high_contrast_canny_high', 360.0)
-        self.declare_parameter('enable_remap_ipm', False)
-        self.declare_parameter('remap_map_x_path', '')
-        self.declare_parameter('remap_map_y_path', '')
-        self.declare_parameter('remap_map_delimiter', '\t')
-        self.declare_parameter('use_kalman_smoothing', True)
-        self.declare_parameter('kalman_process_noise', 1e-4)
-        self.declare_parameter('kalman_measurement_noise', 5e-2)
-        self.declare_parameter('kalman_max_prediction_frames', 5)
-        self.declare_parameter('publish_offset_in_meters', False)
-        self.declare_parameter('pixel_to_meter', 5.38e-4)
         self.crop_size = (860, 480)
         self.last_frame_shape = None
         self.prev_left_fit = None
@@ -147,25 +68,6 @@ class LaneDetectorNode(Node):
         offset_topic = self.get_parameter('publish_offset_topic').get_parameter_value().string_value
         self.use_birdeye = self.get_parameter('use_birdeye').get_parameter_value().bool_value
         self.visualize = self.get_parameter('enable_visualization').get_parameter_value().bool_value
-        self.fit_smoothing_alpha = float(self.get_parameter('fit_smoothing_alpha').value)
-        self.use_high_contrast = bool(self.get_parameter('use_high_contrast_preprocess').value)
-        self.high_contrast_cfg = {
-            'threshold': float(self.get_parameter('high_contrast_threshold').value),
-            'blur_kernel': int(self.get_parameter('high_contrast_blur_kernel').value),
-            'dilate_kernel': int(self.get_parameter('high_contrast_dilate_kernel').value),
-            'canny_low': float(self.get_parameter('high_contrast_canny_low').value),
-            'canny_high': float(self.get_parameter('high_contrast_canny_high').value),
-        }
-        self.enable_remap = bool(self.get_parameter('enable_remap_ipm').value)
-        self.remap_map_x_path = str(self.get_parameter('remap_map_x_path').value)
-        self.remap_map_y_path = str(self.get_parameter('remap_map_y_path').value)
-        self.remap_map_delimiter = str(self.get_parameter('remap_map_delimiter').value or '\t')
-        self.publish_offset_in_meters = bool(self.get_parameter('publish_offset_in_meters').value)
-        self.pixel_to_meter = float(self.get_parameter('pixel_to_meter').value)
-        if self.publish_offset_in_meters and self.pixel_to_meter <= 0.0:
-            self.get_logger().warn('pixel_to_meter must be positive; disabling meter conversion.')
-            self.publish_offset_in_meters = False
-        self._offset_unit_logged = False
 
         self.src_pts = np.array(self.get_parameter('src_points').value, dtype=np.float32).reshape(4, 2)
         self.dst_pts = np.array(self.get_parameter('dst_points').value, dtype=np.float32).reshape(4, 2)
@@ -191,22 +93,6 @@ class LaneDetectorNode(Node):
 
         # 호모그래피 미리 계산(버드아이뷰 변환에 사용할 행렬)--> 프레임 계산을 줄이기 위해 한번만 실행 
         self.H, self.Hinv = self._compute_homography()
-        self.remap_ready = False
-        self.remap_map_x: Optional[np.ndarray] = None
-        self.remap_map_y: Optional[np.ndarray] = None
-        if self.enable_remap:
-            self._load_remap_maps()
-
-        self.use_kalman = bool(self.get_parameter('use_kalman_smoothing').value)
-        process_noise = float(self.get_parameter('kalman_process_noise').value)
-        measurement_noise = float(self.get_parameter('kalman_measurement_noise').value)
-        max_preds = int(self.get_parameter('kalman_max_prediction_frames').value)
-        if self.use_kalman:
-            self.left_kalman = PolynomialKalmanFilter(process_noise, measurement_noise, max_preds)
-            self.right_kalman = PolynomialKalmanFilter(process_noise, measurement_noise, max_preds)
-        else:
-            self.left_kalman = None
-            self.right_kalman = None
 
         # 디버깅용 이미지 표시 창과 마우스 콜백 설정
         self.window_name = 'lane_detector_input'
@@ -252,147 +138,6 @@ class LaneDetectorNode(Node):
         if self._last_logged_lane_width is None or abs(width - self._last_logged_lane_width) >= 1.0:
             self._last_logged_lane_width = width
             # self.get_logger().info(f'Estimated lane width (px): {width:.2f}')
-
-    def _load_remap_maps(self):
-        if not self.remap_map_x_path or not self.remap_map_y_path:
-            self.get_logger().warn('enable_remap_ipm is true but remap_map_x_path/remap_map_y_path are empty.')
-            self.enable_remap = False
-            return
-        try:
-            self.remap_map_x = self._load_map_file(self.remap_map_x_path)
-            self.remap_map_y = self._load_map_file(self.remap_map_y_path)
-        except Exception as exc:  # pragma: no cover - file errors are runtime only
-            self.get_logger().warn(f'Failed to load remap maps: {exc}')
-            self.enable_remap = False
-            self.remap_ready = False
-            return
-
-        if self.remap_map_x.shape != self.remap_map_y.shape:
-            self.get_logger().warn('Remap map shapes do not match; disabling remap.')
-            self.enable_remap = False
-            self.remap_ready = False
-            return
-
-        if self.remap_map_x.dtype != np.float32:
-            self.remap_map_x = self.remap_map_x.astype(np.float32)
-        if self.remap_map_y.dtype != np.float32:
-            self.remap_map_y = self.remap_map_y.astype(np.float32)
-
-        self.remap_ready = True
-        self.get_logger().info(
-            f'Loaded remap maps ({self.remap_map_x.shape[1]}x{self.remap_map_x.shape[0]}) for IPM.'
-        )
-
-    def _load_map_file(self, path: str) -> np.ndarray:
-        if not os.path.isfile(path):
-            raise FileNotFoundError(path)
-        _, ext = os.path.splitext(path.lower())
-        if ext == '.npy':
-            data = np.load(path)
-        else:
-            delimiter = None if not self.remap_map_delimiter else self.remap_map_delimiter
-            kwargs = {}
-            if delimiter:
-                kwargs['delimiter'] = delimiter
-            data = np.loadtxt(path, **kwargs)
-        return np.asarray(data, dtype=np.float32)
-
-    def _apply_remap(self, image: np.ndarray) -> Optional[np.ndarray]:
-        if not self.remap_ready or self.remap_map_x is None or self.remap_map_y is None:
-            return None
-        try:
-            return cv2.remap(
-                image,
-                self.remap_map_x,
-                self.remap_map_y,
-                interpolation=cv2.INTER_LINEAR,
-                borderMode=cv2.BORDER_CONSTANT,
-                borderValue=0,
-            )
-        except cv2.error as exc:  # pragma: no cover
-            self.get_logger().warn(f'Remap failed: {exc}. Disabling remap.')
-            self.remap_ready = False
-            return None
-
-    def _center_crop(self, bgr: np.ndarray) -> np.ndarray:
-        crop_w, crop_h = self.crop_size
-        cur_h, cur_w, _ = bgr.shape
-        if cur_w >= crop_w and cur_h >= crop_h:
-            x0 = (cur_w - crop_w) // 2
-            y0 = (cur_h - crop_h) // 2
-            bgr = bgr[y0:y0 + crop_h, x0:x0 + crop_w]
-        else:
-            self.get_logger().warn(
-                f'Incoming image smaller than crop size ({cur_w}x{cur_h} < {crop_w}x{crop_h}); skipping center crop.')
-
-        cur_h, cur_w, _ = bgr.shape
-        if cur_w > crop_w:
-            x0 = (cur_w - crop_w) // 2
-            bgr = bgr[:, x0:x0 + crop_w]
-        elif cur_w < crop_w:
-            self.get_logger().warn(
-                f'Incoming image narrower than crop width ({cur_w} < {crop_w}); skipping horizontal crop.')
-        return bgr
-
-    def _high_contrast_binary(self, bgr: np.ndarray) -> np.ndarray:
-        gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-        blur_k = max(1, int(self.high_contrast_cfg['blur_kernel']))
-        if blur_k % 2 == 0:
-            blur_k += 1
-        gray = cv2.GaussianBlur(gray, (blur_k, blur_k), 0)
-        thresh = int(np.clip(self.high_contrast_cfg['threshold'], 0, 255))
-        _, binary = cv2.threshold(gray, thresh, 255, cv2.THRESH_BINARY)
-        kernel_size = max(1, int(self.high_contrast_cfg['dilate_kernel']))
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
-        binary = cv2.dilate(binary, kernel, iterations=1)
-        canny_low = int(np.clip(self.high_contrast_cfg['canny_low'], 0, 254))
-        canny_high = int(np.clip(self.high_contrast_cfg['canny_high'], canny_low + 1, 255))
-        edges = cv2.Canny(gray, canny_low, canny_high)
-        combo = np.zeros_like(binary)
-        combo[(binary == 255) | (edges == 255)] = 255
-        return combo
-
-    def _warp_mask(self, mask: np.ndarray) -> np.ndarray:
-        if self.remap_ready:
-            return mask
-        if mask.ndim == 3:
-            mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
-        warped = warp_to_top_view(mask, self.H) if self.H is not None else mask
-        if warped.ndim == 3:
-            warped = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
-        return warped
-
-    def _filter_fit(
-        self,
-        raw_fit: Optional[np.ndarray],
-        prev_fit: Optional[np.ndarray],
-        kalman_filter: Optional[PolynomialKalmanFilter],
-    ) -> Optional[np.ndarray]:
-        if raw_fit is None:
-            if kalman_filter is not None:
-                prediction = kalman_filter.predict()
-                if prediction is not None:
-                    return prediction.copy()
-            return prev_fit.copy() if prev_fit is not None else None
-
-        measurement = np.asarray(raw_fit, dtype=np.float64)
-        if kalman_filter is not None:
-            return kalman_filter.update(measurement)
-
-        if prev_fit is None:
-            return measurement
-        alpha = np.clip(self.fit_smoothing_alpha, 0.0, 1.0)
-        return (1.0 - alpha) * prev_fit + alpha * measurement
-
-    def _convert_offset_units(self, offset_px: float) -> float:
-        if not self.publish_offset_in_meters or not np.isfinite(offset_px):
-            return offset_px
-        if not self._offset_unit_logged:
-            self.get_logger().info(
-                f'Publishing offset in meters (pixel_to_meter={self.pixel_to_meter:.3e}).'
-            )
-            self._offset_unit_logged = True
-        return offset_px * self.pixel_to_meter
     
     def _ensure_homography_ui(self):
         if not self.use_birdeye or self.homography_ui_ready or self.last_frame_shape is None:
@@ -573,42 +318,82 @@ class LaneDetectorNode(Node):
     def _process_frame(self, bgr: np.ndarray, *, visualize: bool = None):
         viz_enabled = self.visualize if visualize is None else visualize
 
-        # 1) 영상 준비 (리맵 사용 시 원본 그대로 / 아니면 중앙 크롭)
-        working_bgr = bgr if self.remap_ready else self._center_crop(bgr)
-        remapped_bgr = self._apply_remap(working_bgr)
-        processing_bgr = remapped_bgr if remapped_bgr is not None else working_bgr
+        # 1) 중앙 크롭: 860x480 기준으로 중앙 영역만 사용
+        crop_w, crop_h = self.crop_size
+        cur_h, cur_w, _ = bgr.shape
+        if cur_w >= crop_w and cur_h >= crop_h:
+            x0 = (cur_w - crop_w) // 2
+            y0 = (cur_h - crop_h) // 2
+            bgr = bgr[y0:y0 + crop_h, x0:x0 + crop_w]
+        else:
+            self.get_logger().warn(
+                f'Incoming image smaller than crop size ({cur_w}x{cur_h} < {crop_w}x{crop_h}); skipping center crop.')
 
-        # track bar options (옵션으로만 활성화)
+        # # 2) 상단 1/3 제거하여 하단 2/3만 사용
+        # cur_h, cur_w, _ = bgr.shape
+        # top_cut = cur_h // 3
+        # if top_cut > 0:
+        #     bgr = bgr[top_cut:, :]
+
+        # 3) 가로가 넓을 경우 다시 중앙 정렬
+        cur_h, cur_w, _ = bgr.shape
+        if cur_w > crop_w:
+            x0 = (cur_w - crop_w) // 2
+            bgr = bgr[:, x0:x0 + crop_w]
+        elif cur_w < crop_w:
+            self.get_logger().warn(
+                f'Incoming image narrower than crop width ({cur_w} < {crop_w}); skipping horizontal crop.')
+
+        h, w, _ = bgr.shape
+        self.last_frame_shape = (w, h)
+
+        # track bar options
         # self._ensure_homography_ui()
         # self._ensure_binary_ui()
 
-        # 2) 전처리 → 이진 마스크
-        mask = create_lane_mask(processing_bgr, self.binary_params)
-        if mask.ndim == 3:
+        # 4) 전처리 → 이진 마스크
+        mask = create_lane_mask(bgr, self.binary_params)
+        # print(mask.shape)  # check mask shape(2)
+        if mask.ndim == 3: # if numpy array is 3 channels, convert to gray
             mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
-        if self.use_high_contrast:
-            high_contrast = self._high_contrast_binary(processing_bgr)
-            mask = cv2.bitwise_or(mask, high_contrast)
+        
 
-        # 3) 버드아이뷰 변환 (리맵 사용 시 그대로 활용)
-        top = self._warp_mask(mask)
+        # 5) 버드아이뷰 변환 (이진 마스크 기준)
+        top = warp_to_top_view(mask, self.H) if self.H is not None else mask
         if top.ndim == 3:
             top = cv2.cvtColor(top, cv2.COLOR_BGR2GRAY)
-        lane_h, lane_w = top.shape[:2]
-        self.last_frame_shape = (lane_w, lane_h)
+        
         
         # 6) 차선 검출 부분 
         # 슬라이딩 윈도우 → 피팅
         (lx, ly), (rx, ry), window_records = sliding_window_search(top)
         left_fit_raw = fit_polynomial((lx, ly))
         right_fit_raw = fit_polynomial((rx, ry))
-        left_fit = self._filter_fit(left_fit_raw, self.prev_left_fit, self.left_kalman)
-        right_fit = self._filter_fit(right_fit_raw, self.prev_right_fit, self.right_kalman)
+        left_detected = left_fit_raw is not None
+        right_detected = right_fit_raw is not None
 
-        if left_fit is not None:
+        alpha = getattr(self, 'fit_smoothing_alpha', 0.2)
+
+        def _smooth(prev, new):
+            if prev is None:
+                return new.copy()
+            return (1.0 - alpha) * prev + alpha * new
+
+        left_fit = None
+        if left_detected:
+            raw = np.array(left_fit_raw, dtype=float)
+            left_fit = _smooth(self.prev_left_fit, raw)
             self.prev_left_fit = left_fit.copy()
-        if right_fit is not None:
+        elif self.prev_left_fit is not None:
+            left_fit = self.prev_left_fit.copy()
+
+        right_fit = None
+        if right_detected:
+            raw = np.array(right_fit_raw, dtype=float)
+            right_fit = _smooth(self.prev_right_fit, raw)
             self.prev_right_fit = right_fit.copy()
+        elif self.prev_right_fit is not None:
+            right_fit = self.prev_right_fit.copy()
 
         if self.lane_width_px is not None:
             if left_fit is not None and right_fit is None:
@@ -620,7 +405,7 @@ class LaneDetectorNode(Node):
 
         # 차 폭/센터 오프셋 계산 (픽셀 기준 → 미터 변환은 사용자 설정)
         center_offset_px = float("nan")
-        y_eval = lane_h - 1
+        y_eval = h - 1
 
         def _eval_fit(fit):
             if fit is None:
@@ -628,9 +413,9 @@ class LaneDetectorNode(Node):
             return float(fit[0]*y_eval*y_eval + fit[1]*y_eval + fit[2])
 
         lane_center = None
-        img_center = lane_w / 2.0 + self.vehicle_center_bias_px
-        have_left = left_fit is not None
-        have_right = right_fit is not None
+        img_center = w / 2.0 + self.vehicle_center_bias_px
+        have_left = left_detected and left_fit is not None
+        have_right = right_detected and right_fit is not None
 
         def _eval_slope(fit):
             if fit is None:
@@ -677,27 +462,25 @@ class LaneDetectorNode(Node):
             # cv2.imshow("mask",mask)
             cv2.imshow(self.birdeye_window, debug_view)
 
-            if not self.remap_ready:
-                fill_overlay = have_left and have_right
-                overlay = draw_lane_overlay(
-                    working_bgr,
-                    top,
-                    self.Hinv,
-                    left_fit,
-                    right_fit,
-                    fill=fill_overlay,
-                    lane_center_point=lane_center_point_top,
-                    vehicle_center_px=img_center,
-                )
-                cv2.imshow(self.overlay_window, overlay)
+            fill_overlay = left_detected and right_detected
+            overlay = draw_lane_overlay(
+                bgr,
+                top,
+                self.Hinv,
+                left_fit,
+                right_fit,
+                fill=fill_overlay,
+                lane_center_point=lane_center_point_top,
+                vehicle_center_px=img_center,
+            )
+            cv2.imshow(self.overlay_window, overlay)
 
             # if you want to publish overlay image, uncomment below
             # self.pub_overlay.publish(self.bridge.cv2_to_imgmsg(overlay, encoding='bgr8'))
             cv2.waitKey(1)
 
         # 퍼블리시
-        offset_value = self._convert_offset_units(center_offset_px)
-        self.pub_offset.publish(Float32(data=float(offset_value)))
+        self.pub_offset.publish(Float32(data=center_offset_px))
         self.pub_heading.publish(Float32(data=heading_offset_rad))
 
 
