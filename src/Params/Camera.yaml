@@ -1,0 +1,11 @@
+# IPMParameterX : "./src/Integration/Param/ParamX.txt"
+# IPMParameterY : "./src/Integration/Param/ParamY.txt"
+
+MarginX       : 38
+MarginY       : 20
+IntervalX     : 0.05
+IntervalY     : 0.02
+
+# ParamX, ParamY 기준
+RemapHeight   : 780
+RemapWidth    : 600
