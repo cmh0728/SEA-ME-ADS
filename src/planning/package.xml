@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>decision</name>
+  <name>planning</name>
   <version>0.0.1</version>
-  <description>Decision-making stage of the SEA-ME autonomous driving stack.</description>
+  <description>Planning stage of the SEA-ME autonomous driving stack.</description>
   <maintainer email="todo@example.com">SEA:ME Team</maintainer>
   <license>Apache-2.0</license>
 
