@@ -11,15 +11,18 @@ find_package(sensor_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(yaml-cpp lREQUIRED)
 
-add_executable(CameraProcessing src/CamNode.cpp)
+add_executable(CameraProcessing
+  src/CamNode.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../global/global.cpp)
 target_include_directories(CameraProcessing
   PRIVATE
     include
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${OpenCV_INCLUDE_DIRS})
 ament_target_dependencies(CameraProcessing rclcpp sensor_msgs cv_bridge)
-target_link_libraries(CameraProcessing Eigen3::Eigen ${OpenCV_LIBRARIES})
+target_link_libraries(CameraProcessing Eigen3::Eigen ${OpenCV_LIBRARIES} yaml-cpp)
 
 
 install(TARGETS CameraProcessing
