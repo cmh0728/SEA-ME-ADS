@@ -11,7 +11,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(yaml-cpp lREQUIRED)
+find_package(yaml-cpp REQUIRED)
 
 add_executable(CameraProcessing
   src/CamNode.cpp
