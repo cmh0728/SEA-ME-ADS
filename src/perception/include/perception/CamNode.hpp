@@ -1,6 +1,5 @@
 #pragma once
 
-#include <sensor_msgs/CompressedImage.h>
 #include "global/global.hpp"
 #include <functional>
 #include <string>
