@@ -842,7 +842,7 @@ void FindLaneStartPositions(const cv::Mat& st_Edge, int32_t& s32_WindowCentorLef
 }
 
 // IPM 맵핑 테이블을 파일에서 읽어 cv::Mat으로 구성
-void LoadMappingParam(CAMERA_DATA_t *pst_CameraData) 
+void LoadMappingParam(CAMERA_DATA *pst_CameraData) 
 {
 
     // cv::Mat에서 원하는 DataType이 있기 때문에 s64_Value는 float형으로 설정해야 함
