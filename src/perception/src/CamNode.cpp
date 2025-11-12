@@ -17,13 +17,6 @@ CAMERA_LANEINFO st_LaneInfoRightMain{};
 bool visualize = true;
 static CAMERA_DATA g_camera_data;
 
-// kalman fileter variables
-CAMERA_LANEINFO st_LaneInfoLeft, st_LaneInfoRight; // sliding window에서 검출된 차선 정보 담는 구조체 
-st_LaneInfoLeft.b_IsLeft = true; // 왼쪽 차선 표시 --> 칼만 객체 생성에서 구분 
-KALMAN_STATE st_KalmanStateLeft, st_KalmanStateRight; // 새로 계산된 좌우 차선 거리 , 각도 저장 
-int32_t s32_I, s32_J, s32_KalmanStateCnt = 0;
-KALMAN_STATE arst_KalmanState[2] = {0};
-
 //################################################## CameraProcessing class functions ##################################################//
 
 // RealSense 이미지 토픽을 구독하고 시각화 창을 준비하는 ROS 노드 생성자
@@ -62,17 +55,12 @@ void CameraProcessing::on_image(const sensor_msgs::msg::CompressedImage::ConstSh
   {
     cv::Mat img = cv::imdecode(msg->data, cv::IMREAD_COLOR); // cv:Mat 형식 디코딩 
 
-
-    // 이미지 전처리 진행할 임시 이미지 버퍼 생성 
-    cv::Mat Temp_Img(camera_data->st_CameraParameter.s32_RemapHeight, camera_data->st_CameraParameter.s32_RemapWidth, CV_32FC1);
-    // cv::Mat st_NoneZero,st_Tmp, st_ResultImage(Temp_Img.size(), CV_8UC3, Scalar(0,0,0)); //결과랑 중간계산 mat, 최종시각화 검정색으로 초기화 
-
-    // 시각화 확인 
     if(visualize) // 시각화 옵션 on 일때
     {
-        cv::imshow("temp img", Temp_Img);
+        cv::imshow("input img", img);
         cv::waitKey(1);  // allow OpenCV to process window events
     }
+    ImgProcessing(img,&g_camera_data); // img processing main pipeline function
     
   }
   catch (const cv::Exception & e) // cv에러 예외처리 
@@ -849,7 +837,7 @@ void LoadMappingParam(CAMERA_DATA *pst_CameraData)
     float s64_Value;
     int32_t s32_Columns, s32_Rows;
 
-    std::ifstream st_IPMParameters(CameraData->st_CameraParameter.s_IPMParameterX);
+    std::ifstream st_IPMParameters(pst_CameraData->st_CameraParameter.s_IPMParameterX);
     if (!st_IPMParameters.is_open()) {
         std::cerr << "Failed to open file: " << pst_CameraData->st_CameraParameter.s_IPMParameterX << std::endl;
         return;
