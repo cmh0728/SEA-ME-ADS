@@ -3,6 +3,9 @@
 
 #include "perception/CamNode.hpp"
 
+//################################################## Global parameter ##################################################//
+
+
 cv::Mat st_ProcessedImage;
 SENSOR_DATA_t st_SensorData{};
 cv::Mat st_IPMX;
@@ -11,6 +14,7 @@ bool b_NoLaneLeft = false;
 bool b_NoLaneRight = false;
 CAMERA_LANEINFO_t st_LaneInfoLeftMain{};
 CAMERA_LANEINFO_t st_LaneInfoRightMain{};
+bool visualize = true;
 
 //################################################## CameraProcessing class functions ##################################################//
 
@@ -42,28 +46,19 @@ CameraProcessing::~CameraProcessing()
 // 압축 이미지를 디코딩하고 프레임을 미리보기로 띄우는 콜백
 void CameraProcessing::on_image(const sensor_msgs::msg::CompressedImage::ConstSharedPtr msg)
 {
-  if (msg->data.empty())
-  {
-    //warnning msg : img is empty
-    RCLCPP_WARN_THROTTLE(
-      get_logger(), *get_clock(), 2000, "Received compressed image with empty data buffer");
-    return;
-  }
-
+  //예외처리 
   try
   {
-    cv::Mat decoded = cv::imdecode(msg->data, cv::IMREAD_COLOR);
-    if (decoded.empty())
-    {
-      RCLCPP_ERROR_THROTTLE(
-        get_logger(), *get_clock(), 2000, "OpenCV failed to decode compressed image");
-      return;
-    }
+    cv::Mat img = cv::imdecode(msg->data, cv::IMREAD_COLOR);
 
-    cv::imshow(window_name_, decoded);
-    cv::waitKey(1);  // allow OpenCV to process window events
+    if(visualize) // 시각화 옵션 on 일때
+    {
+        cv::imshow("input img", img);
+        cv::waitKey(1);  // allow OpenCV to process window events
+    }
+    
   }
-  catch (const cv::Exception & e)
+  catch (const cv::Exception & e) // cv에러 예외처리 
   {
     RCLCPP_ERROR_THROTTLE(
       get_logger(), *get_clock(), 2000, "OpenCV exception during decode: %s", e.what());
