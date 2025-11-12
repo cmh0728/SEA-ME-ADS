@@ -1,5 +1,5 @@
-# IPMParameterX : "./src/Integration/Param/ParamX.txt"
-# IPMParameterY : "./src/Integration/Param/ParamY.txt"
+IPMParameterX : "./src/Integration/Param/ParamX.txt"
+IPMParameterY : "./src/Integration/Param/ParamY.txt"
 
 MarginX       : 38
 MarginY       : 20

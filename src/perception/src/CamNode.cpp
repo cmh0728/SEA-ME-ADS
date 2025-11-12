@@ -26,7 +26,7 @@ CameraProcessing::CameraProcessing() : rclcpp::Node("CameraProcessing_node") // 
   const auto image_topic = get_parameter("image_topic").as_string();
 
   LoadParam(&g_camera_data);          // 파라미터 로드
-  // LoadMappingParam(&g_camera_data);   // IPM 맵 로드
+  LoadMappingParam(&g_camera_data);   // IPM 맵 로드
 
   //img subscriber
   image_subscription_ = create_subscription<sensor_msgs::msg::CompressedImage>(image_topic, rclcpp::SensorDataQoS(),
@@ -656,8 +656,8 @@ void LoadParam(CAMERA_DATA_t *pst_CameraData)
 {
     YAML::Node st_CameraParam = YAML::LoadFile("src/Params/Camera.yaml");
 
-    // pst_CameraData->st_CameraParameter.s_IPMParameterX = st_CameraParam["IPMParameterX"].as<std::string>();
-    // pst_CameraData->st_CameraParameter.s_IPMParameterY = st_CameraParam["IPMParameterY"].as<std::string>();
+    pst_CameraData->st_CameraParameter.s_IPMParameterX = st_CameraParam["IPMParameterX"].as<std::string>();
+    pst_CameraData->st_CameraParameter.s_IPMParameterY = st_CameraParam["IPMParameterY"].as<std::string>();
     pst_CameraData->st_CameraParameter.s32_RemapHeight = st_CameraParam["RemapHeight"].as<int32_t>();
     pst_CameraData->st_CameraParameter.s32_RemapWidth  = st_CameraParam["RemapWidth"].as<int32_t>();
 
