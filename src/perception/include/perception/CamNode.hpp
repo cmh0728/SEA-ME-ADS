@@ -38,17 +38,17 @@ int32_t FindClosestToMidPoint(const int32_t points[5], int32_t s32_MidPoint);
 void FindLaneStartPositions(const cv::Mat& st_Edge, int32_t& s32_WindowCentorLeft, int32_t& s32_WindowCentorRight, bool& b_NoLaneLeft, bool& b_NoLaneRight);
 void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPosition, CAMERA_LANEINFO& st_LaneInfoLeft ,CAMERA_LANEINFO& st_LaneInfoRight ,int32_t& s32_LeftWindowCentor, int32_t& s32_RightWindowCentor, cv::Mat& st_ResultImage);
 // 모델 핏/차선 계수 계산: 다항식 차수 변경 등의 실험은 아래 부분에서
-LANE_COEFFICIENT_t FitModel(const Point& st_Point1, const Point& st_Point2, bool& b_Flag);
+LANE_COEFFICIENT FitModel(const Point& st_Point1, const Point& st_Point2, bool& b_Flag);
 void CalculateLaneCoefficient(CAMERA_LANEINFO& st_LaneInfo, int32_t s32_Iteration, int64_t s64_Threshold);
 // 칼만 필터 관련 함수: 추적 안정화 파라미터를 바꾸려면 이 영역을 수정
-void InitializeKalmanObject(LANE_KALMAN_t& st_KalmanObject);                            // 칼만 필터 초기화
-KALMAN_STATE CalculateKalmanState(const LANE_COEFFICIENT_t& st_LaneCoef, float32_t& f32_Distance, float32_t& f32_Angle);
-void UpdateObservation(LANE_KALMAN_t& st_KalmanObject, const KALMAN_STATE st_KalmanState);
-void SetInitialX(LANE_KALMAN_t& st_KalmanObject);
-void PredictState(LANE_KALMAN_t& st_KalmanObject);
-void UpdateMeasurement(LANE_KALMAN_t& st_KalmanObject);
-void CheckSameKalmanObject(LANE_KALMAN_t& st_KalmanObject, KALMAN_STATE st_KalmanStateLeft);
+void InitializeKalmanObject(LANE_KALMAN& st_KalmanObject);                            // 칼만 필터 초기화
+KALMAN_STATE CalculateKalmanState(const LANE_COEFFICIENT& st_LaneCoef, float32_t& f32_Distance, float32_t& f32_Angle);
+void UpdateObservation(LANE_KALMAN& st_KalmanObject, const KALMAN_STATE st_KalmanState);
+void SetInitialX(LANE_KALMAN& st_KalmanObject);
+void PredictState(LANE_KALMAN& st_KalmanObject);
+void UpdateMeasurement(LANE_KALMAN& st_KalmanObject);
+void CheckSameKalmanObject(LANE_KALMAN& st_KalmanObject, KALMAN_STATE st_KalmanStateLeft);
 void DeleteKalmanObject(CAMERA_DATA &pst_CameraData, int32_t& s32_KalmanObjectNum, int32_t s32_I);
 // 시각화·보조 함수: DrawDrivingLane, MakeKalmanStateBasedLaneCoef으로 결과를 검증
-void DrawDrivingLane(cv::Mat& st_ResultImage, const LANE_COEFFICIENT_t st_LaneCoef, cv::Scalar st_Color);
-void MakeKalmanStateBasedLaneCoef(const LANE_KALMAN_t& st_KalmanObject, LANE_COEFFICIENT_t& st_LaneCoefficient);
+void DrawDrivingLane(cv::Mat& st_ResultImage, const LANE_COEFFICIENT st_LaneCoef, cv::Scalar st_Color);
+void MakeKalmanStateBasedLaneCoef(const LANE_KALMAN& st_KalmanObject, LANE_COEFFICIENT& st_LaneCoefficient);

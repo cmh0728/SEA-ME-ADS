@@ -7,7 +7,6 @@
 
 
 cv::Mat st_ProcessedImage;
-SENSOR_DATA_t st_SensorData{};
 cv::Mat st_IPMX;
 cv::Mat st_IPMY;
 bool b_NoLaneLeft = false;
@@ -258,7 +257,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
 }
 
 // 칼만 상태를 선형 차선 계수로 변환
-void MakeKalmanStateBasedLaneCoef(const LANE_KALMAN_t& st_KalmanObject, LANE_COEFFICIENT_t& st_LaneCoefficient)
+void MakeKalmanStateBasedLaneCoef(const LANE_KALMAN& st_KalmanObject, LANE_COEFFICIENT& st_LaneCoefficient)
 {
     float64_t f64_Theta_Radian;
 
@@ -306,7 +305,7 @@ void DeleteKalmanObject(CAMERA_DATA &pst_CameraData, int32_t& s32_KalmanObjectNu
 }
 
 // 새 관측 차선이 기존 칼만 객체와 동일한지 여부 판단
-void CheckSameKalmanObject(LANE_KALMAN_t& st_KalmanObject, KALMAN_STATE st_KalmanStateLeft)
+void CheckSameKalmanObject(LANE_KALMAN& st_KalmanObject, KALMAN_STATE st_KalmanStateLeft)
 {
     st_KalmanObject.b_MeasurementUpdateFlag = false;
     // printf("Distance: Kalman Lane: %f, Real Time Liane: %f\n",st_KalmanObject.st_LaneState.f64_Distance,st_KalmanStateLeft.f64_Distance);
@@ -323,7 +322,7 @@ void CheckSameKalmanObject(LANE_KALMAN_t& st_KalmanObject, KALMAN_STATE st_Kalma
 }
 
 // 칼만 필터 예측 단계
-void PredictState(LANE_KALMAN_t& st_KalmanObject)
+void PredictState(LANE_KALMAN& st_KalmanObject)
 {
     st_KalmanObject.st_PrevX = st_KalmanObject.st_X;
 
@@ -333,7 +332,7 @@ void PredictState(LANE_KALMAN_t& st_KalmanObject)
 }
 
 // 칼만 필터 측정 업데이트 단계
-void UpdateMeasurement(LANE_KALMAN_t& st_KalmanObject)
+void UpdateMeasurement(LANE_KALMAN& st_KalmanObject)
 {
     st_KalmanObject.st_K = st_KalmanObject.st_P * st_KalmanObject.st_H.transpose() * (st_KalmanObject.st_H * st_KalmanObject.st_P * st_KalmanObject.st_H.transpose() + st_KalmanObject.st_R).inverse();
     st_KalmanObject.st_P = st_KalmanObject.st_P - st_KalmanObject.st_K * st_KalmanObject.st_H * st_KalmanObject.st_P;
@@ -344,7 +343,7 @@ void UpdateMeasurement(LANE_KALMAN_t& st_KalmanObject)
 }
 
 // 관측 기반으로 상태 벡터 초기화
-void SetInitialX(LANE_KALMAN_t& st_KalmanObject)
+void SetInitialX(LANE_KALMAN& st_KalmanObject)
 {
     st_KalmanObject.st_X(0) = st_KalmanObject.st_Z(0);
     st_KalmanObject.st_X(1) = st_KalmanObject.st_Z(1);
@@ -354,7 +353,7 @@ void SetInitialX(LANE_KALMAN_t& st_KalmanObject)
 
 
 // 관측 벡터에 거리/각도 값을 기록
-void UpdateObservation(LANE_KALMAN_t& st_KalmanObject, const KALMAN_STATE st_KalmanState)
+void UpdateObservation(LANE_KALMAN& st_KalmanObject, const KALMAN_STATE st_KalmanState)
 {
     st_KalmanObject.st_Z(0) = st_KalmanState.f64_Distance;
     st_KalmanObject.st_Z(1) = st_KalmanState.f64_DeltaDistance;
@@ -363,7 +362,7 @@ void UpdateObservation(LANE_KALMAN_t& st_KalmanObject, const KALMAN_STATE st_Kal
 }
 
 // 직선 모델을 거리·각도 형태의 칼만 상태로 변환
-KALMAN_STATE CalculateKalmanState(const LANE_COEFFICIENT_t& st_LaneCoef, float32_t& f64_Distance, float32_t& f64_Angle) 
+KALMAN_STATE CalculateKalmanState(const LANE_COEFFICIENT& st_LaneCoef, float32_t& f64_Distance, float32_t& f64_Angle) 
 {
 
     KALMAN_STATE st_KalmanState;
@@ -385,7 +384,7 @@ KALMAN_STATE CalculateKalmanState(const LANE_COEFFICIENT_t& st_LaneCoef, float32
 }
 
 // 칼만 필터 행렬 및 공분산 초기화
-void InitializeKalmanObject(LANE_KALMAN_t& st_KalmanObject)
+void InitializeKalmanObject(LANE_KALMAN& st_KalmanObject)
 {
     st_KalmanObject.st_A << 1, 1, 0, 0,
                             0, 1, 0, 0,
@@ -644,7 +643,7 @@ void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPositio
 }
 
 // 추정된 차선 계수로 결과 영상에 선을 그린다
-void DrawDrivingLane(cv::Mat& st_ResultImage, const LANE_COEFFICIENT_t st_LaneCoef, cv::Scalar st_Color)
+void DrawDrivingLane(cv::Mat& st_ResultImage, const LANE_COEFFICIENT st_LaneCoef, cv::Scalar st_Color)
 {
     int32_t x0 = int(-st_LaneCoef.f64_Intercept/st_LaneCoef.f64_Slope);
     int32_t x1 = int((779-st_LaneCoef.f64_Intercept)/st_LaneCoef.f64_Slope);
@@ -670,9 +669,9 @@ void LoadParam(CAMERA_DATA *CameraData)
 }  
 
 // 두 포인트를 이용해 직선 모델을 구성
-LANE_COEFFICIENT_t FitModel(const Point& st_Point1, const Point& st_Point2, bool& b_Flag)
+LANE_COEFFICIENT FitModel(const Point& st_Point1, const Point& st_Point2, bool& b_Flag)
 {
-    LANE_COEFFICIENT_t st_TmpModel;
+    LANE_COEFFICIENT st_TmpModel;
     
     if((st_Point2.x != st_Point1.x))
     {
@@ -692,7 +691,7 @@ void CalculateLaneCoefficient(CAMERA_LANEINFO& st_LaneInfo, int32_t s32_Iteratio
     srand(time(0)); // 난수 초기화
     int32_t s32_BestInlierCount = 0, s32_I, s32_Idx1, s32_Idx2, s32_InlierCount, s32_J;
     bool b_Flag = true;
-    LANE_COEFFICIENT_t st_Temp;
+    LANE_COEFFICIENT st_Temp;
 
     // Coef Reset
     st_LaneInfo.st_LaneCoefficient.f64_Slope = 0;

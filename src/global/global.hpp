@@ -167,72 +167,23 @@ const int32_t c_CONTROL_HORIZON = 10;
 
 
 
-// typedef struct _RAW_LIDAR_DATA
-// {
-//   uint64_t u64_Timestamp;
-//   int32_t s32_Num;
-//   char arc_Buffer[c_LIDAR_BUFFER_SIZE];
-//   int32_t s32_LiDARHeader;
-// } RAW_LIDAR_DATA_t;
-
-typedef struct _RAW_CAMERA_DATA
+struct RAW_CAMERA_DATA
 {
   uint64_t u64_Timestamp;
   int32_t s32_Num;
   char arc_Buffer[c_CAMERA_BUFFER_SIZE];
   int32_t s32_CameraHeader;
-} RAW_CAMERA_DATA_t;
+};
 
-// typedef struct _RAW_GPSINS_DATA
-// {
-//   uint64_t u64_Timestamp;
-//   int32_t s32_Num;
-//   char arc_Buffer[c_GPSINS_BUFFER_SIZE];
-//   int32_t s32_GPSINSHeader;
-// } RAW_GPSINS_DATA_t;
-
-typedef struct _RAW_IMU_DATA
+struct RAW_IMU_DATA
 {
   uint64_t u64_Timestamp;
   int32_t s32_Num;
   char arc_Buffer[c_IMU_BUFFER_SIZE];
   int32_t s32_IMUHeader;
-} RAW_IMU_DATA_t;
+};
 
-
-// typedef struct _RAW_CAN_DATA
-// {
-//   uint64_t u64_Timestamp;
-//   int32_t s32_Num;
-//   char arc_Buffer[c_CAN_BUFFER_SIZE];
-//   int32_t s32_CANHeader;
-// } RAW_CAN_DATA_t;
-
-
-
-
-// typedef struct _SENSOR_DATA
-// {
-//   uint64_t u64_Timestamp;
-  
-//   RAW_LIDAR_DATA_t st_RawLIDAR;
-//   RAW_CAMERA_DATA_t st_RawCamera;
-//   RAW_GPSINS_DATA_t st_RawGPSINS;
-//   RAW_IMU_DATA_t st_RawIMU;
-//   RAW_CAN_DATA_t st_RawCAN;
-
-//   pthread_mutex_t st_MutexLIDAR;
-//   pthread_mutex_t st_MutexCamera;
-//   pthread_mutex_t st_MutexGPSINS;
-//   pthread_mutex_t st_MutexIMU;
-//   pthread_mutex_t st_MutexCAN;
-
-// } SENSOR_DATA_t;
-
-
-
-
-typedef struct _VIEWER_PARAMETER
+struct VIEWER_PARAMETER
 {
   int32_t s32_ScreenX = 0;
   int32_t s32_ScreenY = 0;
@@ -289,149 +240,22 @@ typedef struct _VIEWER_PARAMETER
   int32_t s32_State = c_STATE_MODE_NULL;
   int32_t s32_ZoomFactorState = c_STATE_1XZOOMFACTOR;
   int32_t s32_GlobalWindowState = 0;
-
-} VIEWER_PARAMETER_t;
-
-
-
-
-typedef struct _POINT
+};
+struct KALMAN_STATE
 {
-    float32_t f32_X;
-    float32_t f32_Y;
-    float32_t f32_Z;
-
-    float32_t f32_Azimuth_deg;
-    float32_t f32_Azimuth_rad;
-    float32_t f32_Elevation_deg;
-    float32_t f32_Elevation_rad;
-    float32_t f32_Distance;
-    
-    uint8_t u8_Intensity;
-    uint8_t u8_Channel;
-    uint8_t u8_Flag;
-    uint16_t aru16_VoxelIdx[3];
-
-} POINT_t;
-
-typedef struct _VOXEL
-{
-  uint16_t aru16_Grid[c_GRID_DISTANCE_SIZE][c_GRID_AZIMUTH_SIZE][c_GRID_ELEVATION_SIZE];
-  int16_t ars16_ClusterIdx[c_GRID_DISTANCE_SIZE][c_GRID_AZIMUTH_SIZE][c_GRID_ELEVATION_SIZE];
-
-} VOXEL_t;
-
-typedef struct _CLUSTER
-{
-  uint16_t aru16_PointIdx[c_CLUSTER_POINT_NUM];
-  int32_t s32_PointNum;
-
-  float32_t f32_X;
-  float32_t f32_Y;
-  float32_t f32_Z;
-
-  float32_t f32_MaxX;
-  float32_t f32_MaxY;
-  float32_t f32_MaxZ;
-  float32_t f32_MinX;
-  float32_t f32_MinY;
-  float32_t f32_MinZ;
-
-  float32_t f32_Volume;
-  float32_t f32_Distance;
-  float32_t f32_Azimuth;
-  float32_t f32_Elevation;
-  uint8_t u8_Class;
-
-
-  // Test Data for Planning Processing
-  float32_t f32_VelocityX_m_s;
-  float32_t f32_VelocityY_m_s;
-  float32_t f32_Velocity_m_s;
-  float32_t f32_Yaw_rad_ENU;
-  float32_t f32_Yaw_rad_NED;
-  // Test Data for Planning Processing
-
-  bool b_State = false;
-
-} CLUSTER_t;
-
-typedef struct _TRACKING
-{
-    float32_t f32_X;
-    float32_t f32_Y;
-    float32_t f32_VelocityX_m_s;
-    float32_t f32_VelocityY_m_s;
-
-    float32_t f32_ClusterX;
-    float32_t f32_ClusterY;
-    float32_t f32_PrevClusterX;
-    float32_t f32_PrevClusterY;
-
-    uint32_t u32_EraseCnt = 0;
-    bool b_InitlzFlag = false;
-    bool b_UpdateFlag = false;
-
-    steady_clock::time_point st_PredictionTimeStart;
-    steady_clock::time_point st_PredictionTimeEnd;
-    float32_t f32_PredictionDt;
-
-    steady_clock::time_point st_UpdateTimeStart;
-    steady_clock::time_point st_UpdateTimeEnd;
-    float32_t f32_UpdateDt;
-
-    MatrixXf st_A = MatrixXf(4, 4);
-    VectorXf st_X = VectorXf(4);
-    VectorXf st_PrevX = VectorXf(4);
-    VectorXf st_Z = VectorXf(4);
-    MatrixXf st_H = Matrix4f::Identity();
-    MatrixXf st_K = MatrixXf(4, 4);
-    MatrixXf st_P = MatrixXf(4, 4);
-    MatrixXf st_Q = MatrixXf(4, 4);
-    MatrixXf st_R = MatrixXf(4, 4);
-
-    // float32_t f32_Heading_rad;
-    // float32_t f32_Heading_deg;
-    // float32_t f32_SizeW;
-    // float32_t f32_SizeH;
-
-} TRACKING_t;
-
-
-// typedef struct _LIDAR_DATA
-// {
-//     uint64_t u64_Timestamp;
-
-//     POINT_t arst_Point[c_TOTAL_POINT_NUM];
-//     VOXEL_t st_Voxel;
-//     CLUSTER_t arst_Cluster[c_TOTAL_CLUSTER_NUM];
-//     CLUSTER_t arst_PrevCluster[c_TOTAL_CLUSTER_NUM];
-//     TRACKING_t arst_Tracking[c_TOTAL_TRACKING_NUM];
-
-//     int32_t s32_PointNum;
-//     int32_t s32_ClusterNum = 0;
-//     int32_t s32_PrevClusterNum = 0;
-//     int32_t s32_TrackingNum = 0;
-
-// } LIDAR_DATA_t;
-
-typedef struct _KALMAN_STATE
-{
-  
   float64_t f64_Distance;
   float64_t f64_Angle;
   float64_t f64_DeltaDistance;
   float64_t f64_DeltaAngle;
+};
 
-} KALMAN_STATE;
-
-typedef struct _LANE_COEFFICIENT
+struct LANE_COEFFICIENT
 {
   float64_t f64_Slope;
   float64_t f64_Intercept;
-} LANE_COEFFICIENT_t;
+};
 
-typedef struct _LANE_KALMAN
+struct LANE_KALMAN
 {
   MatrixXf st_A = MatrixXf(4,4);          // 시스템 모델 행렬
   VectorXf st_X = VectorXf(4);            // 추정값
@@ -448,13 +272,13 @@ typedef struct _LANE_KALMAN
   bool b_IsLeft = false;
   int32_t s32_CntNoMatching = 0;
 
-  LANE_COEFFICIENT_t st_LaneCoefficient;
+  LANE_COEFFICIENT st_LaneCoefficient;
   KALMAN_STATE st_LaneState;
 
-} LANE_KALMAN_t;
+} LANE_KALMAN;
 
 
-typedef struct _CAMERA_PARAM
+struct CAMERA_PARAM
 {
     std::string s_IPMParameterX;
     std::string s_IPMParameterY;
@@ -467,27 +291,25 @@ typedef struct _CAMERA_PARAM
 
     int32_t s32_RemapHeight;
     int32_t s32_RemapWidth;
+};
 
-} CAMERA_PARAM_t;
-
-typedef struct _CMAMERA_LANEINFO
+struct CAMERA_LANEINFO
 {
   cv::Point arst_LaneSample[40];
   int32_t s32_SampleCount;
-  LANE_COEFFICIENT_t st_LaneCoefficient;
+  LANE_COEFFICIENT st_LaneCoefficient;
   bool b_IsLeft = false;
-
-} CAMERA_LANEINFO;
+};
 
 
 // 카메라 데이터 구조체 선언 
 struct CAMERA_DATA {
     uint64_t u64_Timestamp{};
-    CAMERA_PARAM_t st_CameraParameter{};
+    CAMERA_PARAM st_CameraParameter{};
     float32_t arf32_LaneCenterX[1000]{};
     float32_t arf32_LaneCenterY[1000]{};
     int32_t s32_LaneCenterNum{};
-    LANE_KALMAN_t arst_KalmanObject[10]{};
+    LANE_KALMAN arst_KalmanObject[10]{};
     int32_t s32_KalmanObjectNum{};
     float32_t f32_LastDistanceLeft{};
     float32_t f32_LastAngleLeft{};
@@ -497,20 +319,7 @@ struct CAMERA_DATA {
     bool b_ThereIsRight = false;
 };
 
-// typedef struct _GPS_DATA
-// {
-//     float64_t f64_Latitude;
-//     float64_t f64_Longitude;
-//     float64_t f64_Altitude;
-// } GPS_DATA_t;
-
-
-
-
-
-
-
-typedef struct _IMU_DATA
+struct IMU_DATA
 {
     float32_t f32_AccelX;
     float32_t f32_AccelY;
@@ -532,8 +341,7 @@ typedef struct _IMU_DATA
     float32_t f32_Pitch_deg;
     float32_t f32_Yaw_deg;
 
-
-} IMU_DATA_t;
+};
 
 
 
@@ -551,106 +359,6 @@ typedef struct _IMU_DATA
 //     float32_t f32_Heading_rad;
 
 // } CAN_DATA_t;
-
-
-typedef struct _GPS_IMU_EKF_MATRIX
-{
-  MatrixXf st_Q= MatrixXf(15, 15), st_H= MatrixXf(15, 15), st_K= MatrixXf(15, 15), st_P= MatrixXf(15, 15), 
-            st_F= MatrixXf(15, 15), st_F2= MatrixXf(15, 15), st_A= MatrixXf(15, 15), st_R= MatrixXf(15, 15);
-
-  MatrixXf st_X= MatrixXf(1, 9);
-
-  MatrixXf st_dX = MatrixXf(15, 1), st_dX0 = MatrixXf(15, 1), st_m_7 = MatrixXf(15, 1);
-  MatrixXf st_Cbn = MatrixXf(3, 3), st_f_ned = MatrixXf(3, 1), st_V = MatrixXf(3, 1),
-            st_V_ned = MatrixXf(3, 1), st_c3 = MatrixXf(3, 1), st_Vt = MatrixXf(3, 1), st_Vt2 = MatrixXf(3, 1),
-            st_Pt = MatrixXf(3, 1), st_Pt2 = MatrixXf(3, 1), st_av = MatrixXf(3, 3), st_g = MatrixXf(3, 1),
-            st_accel_b = MatrixXf(3,1), st_omega_b = MatrixXf(3,1);
-
-  MatrixXf st_w_ibb = MatrixXf(1, 3), st_w_enn = MatrixXf(1, 3), st_w_ien = MatrixXf(1, 3), st_w_inn = MatrixXf(1, 3),
-                st_c1 = MatrixXf(1, 3), st_c2 = MatrixXf(1, 3), st_c31 = MatrixXf(1, 3), st_c32 = MatrixXf(1, 3), 
-                st_c33 = MatrixXf(1, 3), st_c34 = MatrixXf(1, 3), st_c35 = MatrixXf(1, 3);
-
-  MatrixXf st_acc = MatrixXf(3, 1), st_av_exp = MatrixXf(3, 3), st_av_2 = MatrixXf(3, 3), st_Rotation = MatrixXf(3, 3), st_F_pp = MatrixXf(3, 3), 
-            st_F_pv = MatrixXf(3, 3), st_F_vp = MatrixXf(3, 3), st_F_vv = MatrixXf(3, 3), st_F_vphi = MatrixXf(3, 3), st_F_phip = MatrixXf(3, 3), 
-            st_F_phiv = MatrixXf(3, 3), st_F_phiphi = MatrixXf(3, 3), st_Cbn_minus = MatrixXf(3, 3), st_C_B2N = MatrixXf(3,3), minCbn = MatrixXf(3, 3);
-  
-  VectorXf euler_angles = VectorXf(3);
-
-
-} GPS_IMU_EKF_MATRIX_t;
-
-
-typedef struct _EKF_DATA
-{
-    float64_t lat, lon, alt, h;
-    float64_t gps_lat, gps_lon, gps_alt;
-    float64_t lat_origin, lon_origin, alt_origin;                                                         // origin LLA(rad)
-    float64_t wgs84_f, wgs84_e2;                      // wgs84 model
-    float64_t ecc, R0, Ome, gravity, ecc_2; // earth value
-    float64_t INSTime, lastINST, GPSTime, lastGPST;
-    float64_t cos_lat, sin_lat, tan_lat;
-
-    float32_t cur_E_prev, cur_N_prev, cur_E_aft, cur_N_aft;
-    float32_t av_x, av_y, av_z;
-    float32_t la_x, la_y, la_z;
-    float32_t qu_x, qu_y, qu_z, qu_w;
-    float32_t t0, t1, t2, t3, t4, t5;
-    float32_t setting_yaw;
-    float32_t roll, pitch, yaw, delta_yaw;
-    float32_t q_roll, q_pitch, q_yaw;
-    float32_t rho_n, rho_e, rho_d;
-    float32_t f_n, f_e, f_d;
-    float32_t x, y, z;
-    float32_t Rm, Rt, Rmm, Rtt;
-    float32_t v_e, v_n, v_u;
-    float32_t gps_v_e, gps_v_n, gps_v_u;
-    float32_t cur_E, cur_N, cur_U, prev_E, prev_N, prev_U;
-    float32_t gps_E, gps_N, gps_U, d_E, d_N, d_U;
-    float32_t dt, dt_gps;
-    float32_t prev_roll, prev_pitch, prev_yaw, prev_lat, prev_lon, prev_alt, prev_v_e, prev_v_n, prev_v_u;
-    
-    int32_t TAU_A;
-    int32_t SIG_G_D;
-    int32_t TAU_G;
-
-    bool flag0 , flag1, flag2, IMU_flag, GPS_flag, Ref_flag;
-
-} EKF_DATA_t;
-
-
-typedef struct _DEAD_RECKONING_DATA
-{
-    uint64_t u64_Timestamp;
-
-    GPS_DATA_t st_GPS;
-    IMU_DATA_t st_IMU;
-    CAN_DATA_t st_CAN;
-
-    float32_t f32_Latitude;
-    float32_t f32_Longitude;
-    float32_t f32_Altitude;
-
-    float32_t f32_Roll_rad;
-    float32_t f32_Pitch_rad;
-    float32_t f32_Yaw_rad;
-
-    float32_t f32_AccelX;
-    float32_t f32_AccelY;
-    float32_t f32_AccelZ;
-    
-    float32_t f32_GyroX;
-    float32_t f32_GyroY;
-    float32_t f32_GyroZ;
-
-    float32_t f32_VehicleSpeed_m_s;
-    float32_t f32_VehicleSpeed_kph;
-
-    EKF_DATA_t st_EKF_data; 
-    GPS_IMU_EKF_MATRIX_t st_EKF_Matrix;
-
-
-
-} DEAD_RECKONING_DATA_t;
 
 typedef struct FILE_INFO
 {
