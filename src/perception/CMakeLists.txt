@@ -19,7 +19,7 @@ target_include_directories(CameraProcessing
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${OpenCV_INCLUDE_DIRS})
 ament_target_dependencies(CameraProcessing rclcpp sensor_msgs cv_bridge)
-target_link_libraries(CameraProcessing ${OpenCV_LIBRARIES})
+target_link_libraries(CameraProcessing Eigen3::Eigen ${OpenCV_LIBRARIES})
 
 
 install(TARGETS CameraProcessing
