@@ -167,13 +167,13 @@ const int32_t c_CONTROL_HORIZON = 10;
 
 
 
-typedef struct _RAW_LIDAR_DATA
-{
-  uint64_t u64_Timestamp;
-  int32_t s32_Num;
-  char arc_Buffer[c_LIDAR_BUFFER_SIZE];
-  int32_t s32_LiDARHeader;
-} RAW_LIDAR_DATA_t;
+// typedef struct _RAW_LIDAR_DATA
+// {
+//   uint64_t u64_Timestamp;
+//   int32_t s32_Num;
+//   char arc_Buffer[c_LIDAR_BUFFER_SIZE];
+//   int32_t s32_LiDARHeader;
+// } RAW_LIDAR_DATA_t;
 
 typedef struct _RAW_CAMERA_DATA
 {
@@ -183,13 +183,13 @@ typedef struct _RAW_CAMERA_DATA
   int32_t s32_CameraHeader;
 } RAW_CAMERA_DATA_t;
 
-typedef struct _RAW_GPSINS_DATA
-{
-  uint64_t u64_Timestamp;
-  int32_t s32_Num;
-  char arc_Buffer[c_GPSINS_BUFFER_SIZE];
-  int32_t s32_GPSINSHeader;
-} RAW_GPSINS_DATA_t;
+// typedef struct _RAW_GPSINS_DATA
+// {
+//   uint64_t u64_Timestamp;
+//   int32_t s32_Num;
+//   char arc_Buffer[c_GPSINS_BUFFER_SIZE];
+//   int32_t s32_GPSINSHeader;
+// } RAW_GPSINS_DATA_t;
 
 typedef struct _RAW_IMU_DATA
 {
@@ -200,34 +200,34 @@ typedef struct _RAW_IMU_DATA
 } RAW_IMU_DATA_t;
 
 
-typedef struct _RAW_CAN_DATA
-{
-  uint64_t u64_Timestamp;
-  int32_t s32_Num;
-  char arc_Buffer[c_CAN_BUFFER_SIZE];
-  int32_t s32_CANHeader;
-} RAW_CAN_DATA_t;
+// typedef struct _RAW_CAN_DATA
+// {
+//   uint64_t u64_Timestamp;
+//   int32_t s32_Num;
+//   char arc_Buffer[c_CAN_BUFFER_SIZE];
+//   int32_t s32_CANHeader;
+// } RAW_CAN_DATA_t;
 
 
 
 
-typedef struct _SENSOR_DATA
-{
-  uint64_t u64_Timestamp;
+// typedef struct _SENSOR_DATA
+// {
+//   uint64_t u64_Timestamp;
   
-  RAW_LIDAR_DATA_t st_RawLIDAR;
-  RAW_CAMERA_DATA_t st_RawCamera;
-  RAW_GPSINS_DATA_t st_RawGPSINS;
-  RAW_IMU_DATA_t st_RawIMU;
-  RAW_CAN_DATA_t st_RawCAN;
+//   RAW_LIDAR_DATA_t st_RawLIDAR;
+//   RAW_CAMERA_DATA_t st_RawCamera;
+//   RAW_GPSINS_DATA_t st_RawGPSINS;
+//   RAW_IMU_DATA_t st_RawIMU;
+//   RAW_CAN_DATA_t st_RawCAN;
 
-  pthread_mutex_t st_MutexLIDAR;
-  pthread_mutex_t st_MutexCamera;
-  pthread_mutex_t st_MutexGPSINS;
-  pthread_mutex_t st_MutexIMU;
-  pthread_mutex_t st_MutexCAN;
+//   pthread_mutex_t st_MutexLIDAR;
+//   pthread_mutex_t st_MutexCamera;
+//   pthread_mutex_t st_MutexGPSINS;
+//   pthread_mutex_t st_MutexIMU;
+//   pthread_mutex_t st_MutexCAN;
 
-} SENSOR_DATA_t;
+// } SENSOR_DATA_t;
 
 
 
@@ -398,22 +398,22 @@ typedef struct _TRACKING
 } TRACKING_t;
 
 
-typedef struct _LIDAR_DATA
-{
-    uint64_t u64_Timestamp;
+// typedef struct _LIDAR_DATA
+// {
+//     uint64_t u64_Timestamp;
 
-    POINT_t arst_Point[c_TOTAL_POINT_NUM];
-    VOXEL_t st_Voxel;
-    CLUSTER_t arst_Cluster[c_TOTAL_CLUSTER_NUM];
-    CLUSTER_t arst_PrevCluster[c_TOTAL_CLUSTER_NUM];
-    TRACKING_t arst_Tracking[c_TOTAL_TRACKING_NUM];
+//     POINT_t arst_Point[c_TOTAL_POINT_NUM];
+//     VOXEL_t st_Voxel;
+//     CLUSTER_t arst_Cluster[c_TOTAL_CLUSTER_NUM];
+//     CLUSTER_t arst_PrevCluster[c_TOTAL_CLUSTER_NUM];
+//     TRACKING_t arst_Tracking[c_TOTAL_TRACKING_NUM];
 
-    int32_t s32_PointNum;
-    int32_t s32_ClusterNum = 0;
-    int32_t s32_PrevClusterNum = 0;
-    int32_t s32_TrackingNum = 0;
+//     int32_t s32_PointNum;
+//     int32_t s32_ClusterNum = 0;
+//     int32_t s32_PrevClusterNum = 0;
+//     int32_t s32_TrackingNum = 0;
 
-} LIDAR_DATA_t;
+// } LIDAR_DATA_t;
 
 typedef struct _KALMAN_STATE
 {
@@ -497,12 +497,12 @@ struct CAMERA_DATA {
     bool b_ThereIsRight = false;
 };
 
-typedef struct _GPS_DATA
-{
-    float64_t f64_Latitude;
-    float64_t f64_Longitude;
-    float64_t f64_Altitude;
-} GPS_DATA_t;
+// typedef struct _GPS_DATA
+// {
+//     float64_t f64_Latitude;
+//     float64_t f64_Longitude;
+//     float64_t f64_Altitude;
+// } GPS_DATA_t;
 
 
 
@@ -541,16 +541,16 @@ typedef struct _IMU_DATA
 
 
 
-typedef struct _CAN_DATA
-{
-    float32_t f32_Speed_kph;
-    float32_t f32_Speed_m_s;
-    float32_t f32_SteerAngle_deg;
-    float32_t f32_SteerAngle_rad;
-    float32_t f32_Heading_deg;
-    float32_t f32_Heading_rad;
+// typedef struct _CAN_DATA
+// {
+//     float32_t f32_Speed_kph;
+//     float32_t f32_Speed_m_s;
+//     float32_t f32_SteerAngle_deg;
+//     float32_t f32_SteerAngle_rad;
+//     float32_t f32_Heading_deg;
+//     float32_t f32_Heading_rad;
 
-} CAN_DATA_t;
+// } CAN_DATA_t;
 
 
 typedef struct _GPS_IMU_EKF_MATRIX
