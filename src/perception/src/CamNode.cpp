@@ -1,23 +1,85 @@
-#include "camera.h"
+// lane detection v2 with cpp 
+// main flow : 
 
-extern cv::Mat st_ProcessedImage;
-extern SENSOR_DATA_t st_SensorData;
-extern cv::Mat st_IPMX;
-extern cv::Mat st_IPMY;
-extern bool b_NoLaneLeft;
-extern bool b_NoLaneRight;
-extern CAMERA_LANEINFO_t st_LaneInfoLeftMain;
-extern CAMERA_LANEINFO_t st_LaneInfoRightMain;
+#include "perception/CamNode.hpp"
+
+namespace CameraProcessing
+{
+CameraProcessing::CameraProcessing() : rclcpp::Node("CameraProcessing_node")
+{
+  declare_parameter<std::string>("image_topic", "/camera/camera/color/image_raw/compressed");
+  declare_parameter<std::string>("window_name", "PerceptionView");
+
+  const auto image_topic = get_parameter("image_topic").as_string();
+  window_name_ = get_parameter("window_name").as_string();
+
+  cv::namedWindow(window_name_, cv::WINDOW_AUTOSIZE);
+
+  image_subscription_ = create_subscription<sensor_msgs::msg::CompressedImage>(
+    image_topic, rclcpp::SensorDataQoS(),
+    std::bind(&PerceptionNode::on_image, this, std::placeholders::_1));
+
+  RCLCPP_INFO(get_logger(), "Perception node subscribing to %s", image_topic.c_str());
+}
+CameraProcessing::~CameraProcessing()
+{
+  if (!window_name_.empty()) // window있을때 
+  {
+    cv::destroyWindow(window_name_); // 모든 window제거 
+  }
+}
+
+void CameraProcessing::on_image(const sensor_msgs::msg::CompressedImage::ConstSharedPtr msg)
+{
+  if (msg->data.empty())
+  {
+    //warnning msg : img is empty
+    RCLCPP_WARN_THROTTLE(
+      get_logger(), *get_clock(), 2000, "Received compressed image with empty data buffer");
+    return;
+  }
+
+  try
+  {
+    cv::Mat decoded = cv::imdecode(msg->data, cv::IMREAD_COLOR);
+    if (decoded.empty())
+    {
+      RCLCPP_ERROR_THROTTLE(
+        get_logger(), *get_clock(), 2000, "OpenCV failed to decode compressed image");
+      return;
+    }
+
+    cv::imshow(window_name_, decoded);
+    cv::waitKey(1);  // allow OpenCV to process window events
+  }
+  catch (const cv::Exception & e)
+  {
+    RCLCPP_ERROR_THROTTLE(
+      get_logger(), *get_clock(), 2000, "OpenCV exception during decode: %s", e.what());
+  }
+}
+}  // namespace CameraProcessing
+
+// main function 
+int main(int argc, char ** argv)
+{
+  rclcpp::init(argc, argv);
+  rclcpp::spin(std::make_shared<CameraProcessing::CameraProcessing>());
+  rclcpp::shutdown();
+  return 0;
+}
+
 
 
 void CameraProcessing(RAW_CAMERA_DATA_t *pst_RawData, CAMERA_DATA_t *pst_CameraData)
 {
-    // There is no Image
+    // 입력 버퍼가 비어 있으면 즉시 반환
     if (pst_RawData->s32_Num == 0)
     { 
         return;
     }
 
+    // 필요 시 JPEG 외 다른 포맷을 쓰고 싶다면 st_EncodedImage 처리부와 imdecode 옵션을 수정한다.
     std::vector<char> st_EncodedImage;
     CAMERA_LANEINFO_t st_LaneInfoLeft, st_LaneInfoRight;
     st_LaneInfoLeft.b_IsLeft = true;
@@ -27,48 +89,45 @@ void CameraProcessing(RAW_CAMERA_DATA_t *pst_RawData, CAMERA_DATA_t *pst_CameraD
 
     // memset(pst_CameraData->arst_KalmanObject, 0, 10);
 
-    // For Checking Processed Image
+    // 중간 결과를 직접 확인할 수 있도록 임시 Mat을 확보 (필요 없다면 GUI 출력부 제거 가능)
     cv::Mat st_TmpImage(pst_CameraData->st_CameraParameter.s32_RemapHeight, pst_CameraData->st_CameraParameter.s32_RemapWidth, CV_32FC1);
     cv::Mat st_NoneZero,st_Tmp, st_ResultImage(st_TmpImage.size(), CV_8UC3, Scalar(0,0,0));
 
-    // Allocate Raw Image to cv::Mat Object
+    // 1) JPEG 버퍼를 cv::Mat으로 복원 (압축 포맷을 바꾸려면 imdecode 옵션을 바꾼다)
     st_EncodedImage.assign(pst_RawData->arc_Buffer, pst_RawData->arc_Buffer + pst_RawData->s32_Num);
     st_ProcessedImage = cv::imdecode(st_EncodedImage, cv::IMREAD_COLOR);
 
-    // IPM - 780x600
+    // 2) IPM 맵을 이용해 780x600 영역으로 리맵 (맵 자체는 LoadMappingParam에서 로드)
     cv::remap(st_ProcessedImage,st_ProcessedImage,st_IPMX, st_IPMY, cv::INTER_NEAREST, cv::BORDER_CONSTANT);
 
-    // Pre-Processing
+    // 3) 전처리: 그레이 변환 + 블러 (필요 시 커널 크기/유형 변경)
     cv::cvtColor(st_ProcessedImage, st_TmpImage, COLOR_BGR2GRAY);
     cv::GaussianBlur(st_TmpImage, st_TmpImage, Size(1,1), 0);
 
-    // // Edge Detection
+    // 4) 이진화 + 팽창 + 캐니 엣지로 차선 후보 강조 (threshold, Canny 범위가 튜닝 포인트)
     cv::Mat st_K = cv::getStructuringElement(MORPH_RECT, Size(5, 5));
     cv::threshold(st_TmpImage,st_TmpImage,170,255,cv::THRESH_BINARY);   // 170 보다 크면 255 아니면 0
     cv::dilate(st_TmpImage,st_TmpImage,st_K);
     cv::Canny(st_TmpImage, st_TmpImage, 100, 360);
 
-    // // Sliding Window
+    // 5) 슬라이딩 윈도우 준비: 0이 아닌 픽셀 좌표 추출
     cv::findNonZero(st_TmpImage,st_Tmp);    // 0이 아닌 Pixel 추출
 
-    // _1. 시작 Index 계산
+    // _1. 히스토그램으로 좌/우 차선의 시작 x 위치 계산 (FindLaneStartPositions 내부 로직 수정 가능)
     cv::Mat HalfImage = st_TmpImage(cv::Range(700, st_TmpImage.rows), cv::Range(0, st_TmpImage.cols));
     double totalSum = cv::sum(HalfImage)[0]; // 그레이스케일 이미지의 경우
     int32_t s32_WindowCentorLeft, s32_WindowCentorRight;
     FindLaneStartPositions(st_TmpImage, s32_WindowCentorLeft, s32_WindowCentorRight, b_NoLaneLeft, b_NoLaneRight);
 
-    // _2. 차선 데이터 추출(Sliding Window)
+    // _2. 슬라이딩 윈도우로 좌/우 차선 포인트 추출
     SlidingWindow(st_TmpImage, st_Tmp, st_LaneInfoLeft, st_LaneInfoRight, s32_WindowCentorLeft, s32_WindowCentorRight, st_ResultImage);
-    // _3. Kalman Filter
-    // Kalman에 들어가는 차선의 갯수가 없을 때 -> 새로운 Kalman 객체로 등록
-    // b_NoLaneLeft is True -> there is no left lane = didn't find start point of left lane
-    // printf("--------------pst_CameraData->b_ThereIsLeft: %d, pst_CameraData->b_ThereIsRight: %d\n",pst_CameraData->b_ThereIsLeft,pst_CameraData->b_ThereIsRight);
-    // printf("--------------b_NoLaneLeft: %d, b_NoLaneRight: %d\n",b_NoLaneLeft,b_NoLaneRight);
+    // _3. Kalman Filter 단계: 기존 추적 객체와 비교해 갱신/추가 여부 결정
 
     if(!pst_CameraData->b_ThereIsLeft or !pst_CameraData->b_ThereIsRight)
     {
         if(!pst_CameraData->b_ThereIsLeft && !b_NoLaneLeft)
         {
+            // 좌측 차선이 새로 검출된 경우 칼만 객체 생성
             st_KalmanStateLeft = CalculateKalmanState(st_LaneInfoLeft.st_LaneCoefficient, pst_CameraData->f32_LastDistanceLeft, pst_CameraData->f32_LastAngleLeft);
 
             LANE_KALMAN_t st_KalmanObject;
@@ -92,6 +151,7 @@ void CameraProcessing(RAW_CAMERA_DATA_t *pst_RawData, CAMERA_DATA_t *pst_CameraD
 
         if(!pst_CameraData->b_ThereIsRight && !b_NoLaneRight)
         {
+            // 우측 차선이 새로 검출된 경우 칼만 객체 생성
             st_KalmanStateRight = CalculateKalmanState(st_LaneInfoRight.st_LaneCoefficient, pst_CameraData->f32_LastDistanceRight, pst_CameraData->f32_LastAngleRight);
 
             LANE_KALMAN_t st_KalmanObject;
@@ -124,7 +184,7 @@ void CameraProcessing(RAW_CAMERA_DATA_t *pst_RawData, CAMERA_DATA_t *pst_CameraD
     // 현재 Kalman Object가 있는 경우
     else
     {   
-        // 감지된 왼쪽 차선이 있는 경우
+        // 감지된 왼쪽 차선이 있는 경우 상태 업데이트
         if(!b_NoLaneLeft)
         {
             arst_KalmanState[0] = CalculateKalmanState(st_LaneInfoLeft.st_LaneCoefficient, pst_CameraData->f32_LastDistanceLeft, pst_CameraData->f32_LastAngleLeft);
@@ -140,10 +200,10 @@ void CameraProcessing(RAW_CAMERA_DATA_t *pst_RawData, CAMERA_DATA_t *pst_CameraD
 
             bool b_SameObj = false;
 
-            // for(s32_J = 0; s32_J < s32_KalmanStateCnt; s32_J++)
+            // 칼만 객체와 새 관측을 비교해 동일 차선인지 판별
             for(s32_J = 0; s32_J < 2; s32_J++)
             {
-                CheckSameKalmanObject(pst_CameraData->arst_KalmanObject[s32_I], arst_KalmanState[s32_J]);
+                CheckSameKalmanObject(pst_CameraData->arst_KalmanObject[s32_I], arst_KalmanState[s32_J]);  // 동일 차선인지 비교
                 if(pst_CameraData->arst_KalmanObject[s32_I].b_MeasurementUpdateFlag)
                 {
                     UpdateObservation(pst_CameraData->arst_KalmanObject[s32_I],arst_KalmanState[s32_J]);
@@ -195,6 +255,7 @@ void CameraProcessing(RAW_CAMERA_DATA_t *pst_RawData, CAMERA_DATA_t *pst_CameraD
     b_NoLaneRight = false;
     s32_KalmanStateCnt =0;
 
+    // GUI 출력이 필요 없다면 아래 imshow / waitKey 를 주석 처리해 성능을 확보한다.
     cv::imshow("st_TmpImage",st_TmpImage);
     cv::imshow("st_ResultImage",st_ResultImage);
     cv::waitKey(1);

@@ -11,15 +11,16 @@ find_package(sensor_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(OpenCV REQUIRED)
 
-add_executable(perception_node src/perception_node.cpp)
-target_include_directories(perception_node
+add_executable(CameraProcessing src/CamNode.cpp)
+target_include_directories(CameraProcessing
   PRIVATE
     include
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${OpenCV_INCLUDE_DIRS})
-ament_target_dependencies(perception_node rclcpp sensor_msgs cv_bridge)
-target_link_libraries(perception_node ${OpenCV_LIBRARIES})
+ament_target_dependencies(CameraProcessing rclcpp sensor_msgs cv_bridge)
+target_link_libraries(CameraProcessing ${OpenCV_LIBRARIES})
 
-install(TARGETS perception_node
+install(TARGETS CameraProcessing
   DESTINATION lib/${PROJECT_NAME})
 
 ament_export_dependencies(rclcpp sensor_msgs cv_bridge OpenCV)

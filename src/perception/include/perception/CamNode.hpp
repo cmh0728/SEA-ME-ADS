@@ -1,0 +1,66 @@
+#pragma once
+
+#include <sensor_msgs/CompressedImage.h>
+#include "global/global.hpp"
+#include <functional>
+#include <string>
+#include "opencv2/highgui.hpp"
+#include "opencv2/imgcodecs.hpp"
+#include "rclcpp/qos.hpp"
+#include "rclcpp/rclcpp.hpp"
+#include "sensor_msgs/msg/compressed_image.hpp"
+
+// global variables
+extern cv::Mat st_ProcessedImage;
+extern SENSOR_DATA_t st_SensorData;
+extern cv::Mat st_IPMX;
+extern cv::Mat st_IPMY;
+extern bool b_NoLaneLeft;
+extern bool b_NoLaneRight;
+extern CAMERA_LANEINFO_t st_LaneInfoLeftMain;
+extern CAMERA_LANEINFO_t st_LaneInfoRightMain;
+
+namespace CameraProcessing
+{
+// RealSense 이미지 토픽을 구독해 OpenCV 창으로 출력하는 간단한 지각 노드
+class CameraProcessing : public rclcpp::Node
+{
+public:
+  CameraProcessing();
+  ~CameraProcessing() override;
+
+private:
+  void on_image(const sensor_msgs::msg::CompressedImage::ConstSharedPtr msg);
+
+  std::string window_name_;
+  rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr image_subscription_;
+};
+}  // namespace CameraProcessing
+
+// 메인 파이프라인: Raw → 차선 Kalman 업데이트까지 전체 흐름 제어
+void CameraProcessing(RAW_CAMERA_DATA_t *pst_RawData, CAMERA_DATA_t *pst_CameraData);  // 메인 파이프라인
+// 파라미터/맵 로더: 카메라 세팅, IPM 맵 변경 시 이 함수 구현 수정
+void LoadParam(CAMERA_DATA_t *pst_CameraData);                                         // 파라미터 로드
+void LoadMappingParam(CAMERA_DATA_t *pst_CameraData);                                  // IPM 맵 로드
+
+// Lane Detection
+// 히스토그램 기반 시작점 탐색 로직을 조정하려면 아래 함수군을 수정
+void FindTop5MaxIndices(const int32_t* ps32_Histogram, int32_t s32_MidPoint, int32_t ars32_TopIndices[5], bool& b_NoLane);
+int32_t FindClosestToMidPoint(const int32_t points[5], int32_t s32_MidPoint);
+void FindLaneStartPositions(const cv::Mat& st_Edge, int32_t& s32_WindowCentorLeft, int32_t& s32_WindowCentorRight, bool& b_NoLaneLeft, bool& b_NoLaneRight);
+void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPosition, CAMERA_LANEINFO_t& st_LaneInfoLeft ,CAMERA_LANEINFO_t& st_LaneInfoRight ,int32_t& s32_LeftWindowCentor, int32_t& s32_RightWindowCentor, cv::Mat& st_ResultImage);
+// 모델 핏/차선 계수 계산: 다항식 차수 변경 등의 실험은 아래 부분에서
+LANE_COEFFICIENT_t FitModel(const Point& st_Point1, const Point& st_Point2, bool& b_Flag);
+void CalculateLaneCoefficient(CAMERA_LANEINFO_t& st_LaneInfo, int32_t s32_Iteration, int64_t s64_Threshold);
+// 칼만 필터 관련 함수: 추적 안정화 파라미터를 바꾸려면 이 영역을 수정
+void InitializeKalmanObject(LANE_KALMAN_t& st_KalmanObject);                            // 칼만 필터 초기화
+KALMAN_STATE_t CalculateKalmanState(const LANE_COEFFICIENT_t& st_LaneCoef, float32_t& f32_Distance, float32_t& f32_Angle);
+void UpdateObservation(LANE_KALMAN_t& st_KalmanObject, const KALMAN_STATE_t st_KalmanState);
+void SetInitialX(LANE_KALMAN_t& st_KalmanObject);
+void PredictState(LANE_KALMAN_t& st_KalmanObject);
+void UpdateMeasurement(LANE_KALMAN_t& st_KalmanObject);
+void CheckSameKalmanObject(LANE_KALMAN_t& st_KalmanObject, KALMAN_STATE_t st_KalmanStateLeft);
+void DeleteKalmanObject(CAMERA_DATA_t &pst_CameraData, int32_t& s32_KalmanObjectNum, int32_t s32_I);
+// 시각화·보조 함수: DrawDrivingLane, MakeKalmanStateBasedLaneCoef으로 결과를 검증
+void DrawDrivingLane(cv::Mat& st_ResultImage, const LANE_COEFFICIENT_t st_LaneCoef, cv::Scalar st_Color);
+void MakeKalmanStateBasedLaneCoef(const LANE_KALMAN_t& st_KalmanObject, LANE_COEFFICIENT_t& st_LaneCoefficient);

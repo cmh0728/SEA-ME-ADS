@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# lane detector node v1.20
 from functools import partial
 import cv2
 import numpy as np
@@ -503,5 +504,4 @@ def main():
 if __name__ == '__main__':
     main()
 
-# 실제 차폭 --> 픽셀 차폭 계산필요 
-# 실제 차폭 : 35cm 정도 
+
