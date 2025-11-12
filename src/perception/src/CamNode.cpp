@@ -12,8 +12,6 @@ bool b_NoLaneRight = false;
 CAMERA_LANEINFO_t st_LaneInfoLeftMain{};
 CAMERA_LANEINFO_t st_LaneInfoRightMain{};
 
-namespace CameraProcessing
-{
 CameraProcessing::CameraProcessing() : rclcpp::Node("CameraProcessing_node")
 {
   declare_parameter<std::string>("image_topic", "/camera/camera/color/image_raw/compressed");
@@ -67,13 +65,12 @@ void CameraProcessing::on_image(const sensor_msgs::msg::CompressedImage::ConstSh
       get_logger(), *get_clock(), 2000, "OpenCV exception during decode: %s", e.what());
   }
 }
-}  // namespace CameraProcessing
 
 // main function 
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<CameraProcessing::CameraProcessing>());
+  rclcpp::spin(std::make_shared<CameraProcessing>());
   rclcpp::shutdown();
   return 0;
 }

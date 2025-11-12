@@ -11,8 +11,6 @@
 
 
 
-namespace CameraProcessing
-{
 // RealSense 이미지 토픽을 구독해 OpenCV 창으로 출력하는 간단한 지각 노드
 class CameraProcessing : public rclcpp::Node
 {
@@ -26,7 +24,6 @@ private:
   std::string window_name_;
   rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr image_subscription_;
 };
-}  // namespace CameraProcessing
 
 // 메인 파이프라인: Raw → 차선 Kalman 업데이트까지 전체 흐름 제어
 void ImgProcessing(RAW_CAMERA_DATA_t *pst_RawData, CAMERA_DATA_t *pst_CameraData);  // 메인 파이프라인
