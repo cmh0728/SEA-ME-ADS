@@ -15,6 +15,7 @@ bool b_NoLaneRight = false;
 CAMERA_LANEINFO_t st_LaneInfoLeftMain{};
 CAMERA_LANEINFO_t st_LaneInfoRightMain{};
 bool visualize = true;
+static CAMERA_DATA_t g_camera_data;
 
 //################################################## CameraProcessing class functions ##################################################//
 
@@ -23,6 +24,9 @@ CameraProcessing::CameraProcessing() : rclcpp::Node("CameraProcessing_node") // 
 {
   declare_parameter<std::string>("image_topic", "/camera/camera/color/image_raw/compressed");
   const auto image_topic = get_parameter("image_topic").as_string();
+
+  LoadParam(&g_camera_data);          // 파라미터 로드
+  LoadMappingParam(&g_camera_data);   // IPM 맵 로드
 
   //img subscriber
   image_subscription_ = create_subscription<sensor_msgs::msg::CompressedImage>(image_topic, rclcpp::SensorDataQoS(),
@@ -49,13 +53,14 @@ void CameraProcessing::on_image(const sensor_msgs::msg::CompressedImage::ConstSh
   //예외처리 
   try
   {
-    cv::Mat img = cv::imdecode(msg->data, cv::IMREAD_COLOR);
+    cv::Mat img = cv::imdecode(msg->data, cv::IMREAD_COLOR); // cv:Mat 형식 디코딩 
 
     if(visualize) // 시각화 옵션 on 일때
     {
         cv::imshow("input img", img);
         cv::waitKey(1);  // allow OpenCV to process window events
     }
+    ImgProcessing(img,&g_camera_data); // img processing main pipeline function
     
   }
   catch (const cv::Exception & e) // cv에러 예외처리 
@@ -65,51 +70,33 @@ void CameraProcessing::on_image(const sensor_msgs::msg::CompressedImage::ConstSh
   }
 }
 
-//################################################## Camera node main function ##################################################//
 
-// ROS 런타임을 올리고 CameraProcessing 노드를 실행
-int main(int argc, char ** argv)
-{
-  rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<CameraProcessing>()); // 객체 생성 및 spin(이벤트 루프 홀출)
-  rclcpp::shutdown();
-  return 0;
-}
-
+//################################################## img processing functions ##################################################//
 
 
 // RAW 카메라 버퍼에서 차선 정보까지 계산하는 메인 파이프라인
-void ImgProcessing(RAW_CAMERA_DATA_t *pst_RawData, CAMERA_DATA_t *pst_CameraData)
+void ImgProcessing(const cv::Mat& frame, CAMERA_DATA_t* camera_data)
 {
-    // 입력 버퍼가 비어 있으면 즉시 반환
-    if (pst_RawData->s32_Num == 0)
-    { 
-        return;
-    }
 
-    // 필요 시 JPEG 외 다른 포맷을 쓰고 싶다면 st_EncodedImage 처리부와 imdecode 옵션을 수정한다.
-    std::vector<char> st_EncodedImage;
-    CAMERA_LANEINFO_t st_LaneInfoLeft, st_LaneInfoRight;
-    st_LaneInfoLeft.b_IsLeft = true;
-    KALMAN_STATE_t st_KalmanStateLeft, st_KalmanStateRight;
+    // kalman fileter variables
+    CAMERA_LANEINFO_t st_LaneInfoLeft, st_LaneInfoRight; // sliding window에서 검출된 차선 정보 담는 구조체 
+    st_LaneInfoLeft.b_IsLeft = true; // 왼쪽 차선 표시 --> 칼만 객체 생성에서 구분 
+    KALMAN_STATE_t st_KalmanStateLeft, st_KalmanStateRight; // 새로 계산된 좌우 차선 거리 , 각도 저장 
     int32_t s32_I, s32_J, s32_KalmanStateCnt = 0;
     KALMAN_STATE_t arst_KalmanState[2] = {0};
 
-    // memset(pst_CameraData->arst_KalmanObject, 0, 10);
+    // 이미지 전처리 진행할 임시 행렬 생성 
+    cv::Mat st_TmpImage(camera_data->st_CameraParameter.s32_RemapHeight, camera_data->st_CameraParameter.s32_RemapWidth, CV_32FC1);
+    cv::Mat st_NoneZero,st_Tmp, st_ResultImage(st_TmpImage.size(), CV_8UC3, Scalar(0,0,0)); //결과랑 중간계산 mat, 최종시각화 검정색으로 초기화 
 
-    // 중간 결과를 직접 확인할 수 있도록 임시 Mat을 확보 (필요 없다면 GUI 출력부 제거 가능)
-    cv::Mat st_TmpImage(pst_CameraData->st_CameraParameter.s32_RemapHeight, pst_CameraData->st_CameraParameter.s32_RemapWidth, CV_32FC1);
-    cv::Mat st_NoneZero,st_Tmp, st_ResultImage(st_TmpImage.size(), CV_8UC3, Scalar(0,0,0));
+    // 1) 콜백 frame 얕은 복사  
+    cv::Mat ori_img = frame; // 원본 이미지 자체를 같은 버퍼로 사용 
 
-    // 1) JPEG 버퍼를 cv::Mat으로 복원 (압축 포맷을 바꾸려면 imdecode 옵션을 바꾼다)
-    st_EncodedImage.assign(pst_RawData->arc_Buffer, pst_RawData->arc_Buffer + pst_RawData->s32_Num);
-    st_ProcessedImage = cv::imdecode(st_EncodedImage, cv::IMREAD_COLOR);
-
-    // 2) IPM 맵을 이용해 780x600 영역으로 리맵 (맵 자체는 LoadMappingParam에서 로드)
-    cv::remap(st_ProcessedImage,st_ProcessedImage,st_IPMX, st_IPMY, cv::INTER_NEAREST, cv::BORDER_CONSTANT);
+    // 2) IPM 맵을 이용해 780x600 영역으로 리맵 (맵 자체는 LoadMappingParam에서 로드) --> IPM 정보 어디에 ? 
+    cv::remap(ori_img,ori_img,st_IPMX, st_IPMY, cv::INTER_NEAREST, cv::BORDER_CONSTANT);
 
     // 3) 전처리: 그레이 변환 + 블러 (필요 시 커널 크기/유형 변경)
-    cv::cvtColor(st_ProcessedImage, st_TmpImage, COLOR_BGR2GRAY);
+    cv::cvtColor(ori_img, st_TmpImage, COLOR_BGR2GRAY);
     cv::GaussianBlur(st_TmpImage, st_TmpImage, Size(1,1), 0);
 
     // 4) 이진화 + 팽창 + 캐니 엣지로 차선 후보 강조 (threshold, Canny 범위가 튜닝 포인트)
@@ -131,12 +118,12 @@ void ImgProcessing(RAW_CAMERA_DATA_t *pst_RawData, CAMERA_DATA_t *pst_CameraData
     SlidingWindow(st_TmpImage, st_Tmp, st_LaneInfoLeft, st_LaneInfoRight, s32_WindowCentorLeft, s32_WindowCentorRight, st_ResultImage);
     // _3. Kalman Filter 단계: 기존 추적 객체와 비교해 갱신/추가 여부 결정
 
-    if(!pst_CameraData->b_ThereIsLeft or !pst_CameraData->b_ThereIsRight)
+    if(!camera_data->b_ThereIsLeft or !camera_data->b_ThereIsRight)
     {
-        if(!pst_CameraData->b_ThereIsLeft && !b_NoLaneLeft)
+        if(!camera_data->b_ThereIsLeft && !b_NoLaneLeft)
         {
             // 좌측 차선이 새로 검출된 경우 칼만 객체 생성
-            st_KalmanStateLeft = CalculateKalmanState(st_LaneInfoLeft.st_LaneCoefficient, pst_CameraData->f32_LastDistanceLeft, pst_CameraData->f32_LastAngleLeft);
+            st_KalmanStateLeft = CalculateKalmanState(st_LaneInfoLeft.st_LaneCoefficient, camera_data->f32_LastDistanceLeft, camera_data->f32_LastAngleLeft);
 
             LANE_KALMAN_t st_KalmanObject;
             InitializeKalmanObject(st_KalmanObject);
@@ -151,16 +138,16 @@ void ImgProcessing(RAW_CAMERA_DATA_t *pst_RawData, CAMERA_DATA_t *pst_CameraData
                 st_KalmanObject.b_IsLeft = false;
 
             st_KalmanObject.st_LaneState = st_KalmanStateLeft;
-            pst_CameraData->b_ThereIsLeft = true;
-            pst_CameraData->arst_KalmanObject[pst_CameraData->s32_KalmanObjectNum] = st_KalmanObject;
-            pst_CameraData->s32_KalmanObjectNum += 1;
+            camera_data->b_ThereIsLeft = true;
+            camera_data->arst_KalmanObject[camera_data->s32_KalmanObjectNum] = st_KalmanObject;
+            camera_data->s32_KalmanObjectNum += 1;
             DrawDrivingLane(st_ResultImage,st_KalmanObject.st_LaneCoefficient, cv::Scalar(255,0,255));
         }
 
-        if(!pst_CameraData->b_ThereIsRight && !b_NoLaneRight)
+        if(!camera_data->b_ThereIsRight && !b_NoLaneRight)
         {
             // 우측 차선이 새로 검출된 경우 칼만 객체 생성
-            st_KalmanStateRight = CalculateKalmanState(st_LaneInfoRight.st_LaneCoefficient, pst_CameraData->f32_LastDistanceRight, pst_CameraData->f32_LastAngleRight);
+            st_KalmanStateRight = CalculateKalmanState(st_LaneInfoRight.st_LaneCoefficient, camera_data->f32_LastDistanceRight, camera_data->f32_LastAngleRight);
 
             LANE_KALMAN_t st_KalmanObject;
             InitializeKalmanObject(st_KalmanObject);
@@ -175,9 +162,9 @@ void ImgProcessing(RAW_CAMERA_DATA_t *pst_RawData, CAMERA_DATA_t *pst_CameraData
                 st_KalmanObject.b_IsLeft = false;
 
             st_KalmanObject.st_LaneState = st_KalmanStateRight;
-            pst_CameraData->b_ThereIsRight = true; 
-            pst_CameraData->arst_KalmanObject[pst_CameraData->s32_KalmanObjectNum] = st_KalmanObject;
-            pst_CameraData->s32_KalmanObjectNum += 1;
+            camera_data->b_ThereIsRight = true; 
+            camera_data->arst_KalmanObject[camera_data->s32_KalmanObjectNum] = st_KalmanObject;
+            camera_data->s32_KalmanObjectNum += 1;
             DrawDrivingLane(st_ResultImage,st_KalmanObject.st_LaneCoefficient, cv::Scalar(255,255,255));
         }
         
@@ -195,15 +182,15 @@ void ImgProcessing(RAW_CAMERA_DATA_t *pst_RawData, CAMERA_DATA_t *pst_CameraData
         // 감지된 왼쪽 차선이 있는 경우 상태 업데이트
         if(!b_NoLaneLeft)
         {
-            arst_KalmanState[0] = CalculateKalmanState(st_LaneInfoLeft.st_LaneCoefficient, pst_CameraData->f32_LastDistanceLeft, pst_CameraData->f32_LastAngleLeft);
+            arst_KalmanState[0] = CalculateKalmanState(st_LaneInfoLeft.st_LaneCoefficient, camera_data->f32_LastDistanceLeft, camera_data->f32_LastAngleLeft);
             // s32_KalmanStateCnt ++;
         }
         if(!b_NoLaneRight)
         {
-            arst_KalmanState[1] = CalculateKalmanState(st_LaneInfoRight.st_LaneCoefficient, pst_CameraData->f32_LastDistanceRight, pst_CameraData->f32_LastAngleRight);
+            arst_KalmanState[1] = CalculateKalmanState(st_LaneInfoRight.st_LaneCoefficient, camera_data->f32_LastDistanceRight, camera_data->f32_LastAngleRight);
             // s32_KalmanStateCnt ++;
         }
-        for(s32_I = 0;s32_I<pst_CameraData->s32_KalmanObjectNum;s32_I++)
+        for(s32_I = 0;s32_I<camera_data->s32_KalmanObjectNum;s32_I++)
         {
 
             bool b_SameObj = false;
@@ -211,21 +198,21 @@ void ImgProcessing(RAW_CAMERA_DATA_t *pst_RawData, CAMERA_DATA_t *pst_CameraData
             // 칼만 객체와 새 관측을 비교해 동일 차선인지 판별
             for(s32_J = 0; s32_J < 2; s32_J++)
             {
-                CheckSameKalmanObject(pst_CameraData->arst_KalmanObject[s32_I], arst_KalmanState[s32_J]);  // 동일 차선인지 비교
-                if(pst_CameraData->arst_KalmanObject[s32_I].b_MeasurementUpdateFlag)
+                CheckSameKalmanObject(camera_data->arst_KalmanObject[s32_I], arst_KalmanState[s32_J]);  // 동일 차선인지 비교
+                if(camera_data->arst_KalmanObject[s32_I].b_MeasurementUpdateFlag)
                 {
-                    UpdateObservation(pst_CameraData->arst_KalmanObject[s32_I],arst_KalmanState[s32_J]);
-                    PredictState(pst_CameraData->arst_KalmanObject[s32_I]);
+                    UpdateObservation(camera_data->arst_KalmanObject[s32_I],arst_KalmanState[s32_J]);
+                    PredictState(camera_data->arst_KalmanObject[s32_I]);
                     if (s32_J == 0)
-                        pst_CameraData->arst_KalmanObject[s32_I].st_LaneCoefficient = st_LaneInfoLeft.st_LaneCoefficient;        // 주행 차선 정보 Update
+                        camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient = st_LaneInfoLeft.st_LaneCoefficient;        // 주행 차선 정보 Update
                     else if(s32_J == 1)
-                        pst_CameraData->arst_KalmanObject[s32_I].st_LaneCoefficient = st_LaneInfoRight.st_LaneCoefficient;        // 주행 차선 정보 Update
-                    UpdateMeasurement(pst_CameraData->arst_KalmanObject[s32_I]);
-                    MakeKalmanStateBasedLaneCoef(pst_CameraData->arst_KalmanObject[s32_I], pst_CameraData->arst_KalmanObject[s32_I].st_LaneCoefficient);
+                        camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient = st_LaneInfoRight.st_LaneCoefficient;        // 주행 차선 정보 Update
+                    UpdateMeasurement(camera_data->arst_KalmanObject[s32_I]);
+                    MakeKalmanStateBasedLaneCoef(camera_data->arst_KalmanObject[s32_I], camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient);
                     if (s32_J == 0)
-                        DrawDrivingLane(st_ResultImage,pst_CameraData->arst_KalmanObject[s32_I].st_LaneCoefficient, cv::Scalar(255,0,255));
+                        DrawDrivingLane(st_ResultImage,camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient, cv::Scalar(255,0,255));
                     else if(s32_J == 1)
-                        DrawDrivingLane(st_ResultImage,pst_CameraData->arst_KalmanObject[s32_I].st_LaneCoefficient, cv::Scalar(255,255,255));
+                        DrawDrivingLane(st_ResultImage,camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient, cv::Scalar(255,255,255));
 
                     b_SameObj = true;
                     
@@ -235,27 +222,27 @@ void ImgProcessing(RAW_CAMERA_DATA_t *pst_RawData, CAMERA_DATA_t *pst_CameraData
 
             if (!b_SameObj)
             {
-                if (pst_CameraData->arst_KalmanObject[s32_I].s32_CntNoMatching < 20)
+                if (camera_data->arst_KalmanObject[s32_I].s32_CntNoMatching < 20)
                 {
-                    pst_CameraData->arst_KalmanObject[s32_I].s32_CntNoMatching += 1;
+                    camera_data->arst_KalmanObject[s32_I].s32_CntNoMatching += 1;
                     
-                    PredictState(pst_CameraData->arst_KalmanObject[s32_I]);
-                    MakeKalmanStateBasedLaneCoef(pst_CameraData->arst_KalmanObject[s32_I], pst_CameraData->arst_KalmanObject[s32_I].st_LaneCoefficient);
-                    DrawDrivingLane(st_ResultImage,pst_CameraData->arst_KalmanObject[s32_I].st_LaneCoefficient, cv::Scalar(255,255,0));
+                    PredictState(camera_data->arst_KalmanObject[s32_I]);
+                    MakeKalmanStateBasedLaneCoef(camera_data->arst_KalmanObject[s32_I], camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient);
+                    DrawDrivingLane(st_ResultImage,camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient, cv::Scalar(255,255,0));
                 
-                    // printf("------------- No Matched Kalman Lane Object & s32_CntNoMatching: %d-------------\n",pst_CameraData->arst_KalmanObject[s32_I].s32_CntNoMatching);
+                    // printf("------------- No Matched Kalman Lane Object & s32_CntNoMatching: %d-------------\n",camera_data->arst_KalmanObject[s32_I].s32_CntNoMatching);
                 }
                 else
                 {
-                    // printf("------------- You should Delete Kalman object & s32_CntNoMatching: %d-------------\n",pst_CameraData->arst_KalmanObject[s32_I].s32_CntNoMatching);
-                    DeleteKalmanObject(*pst_CameraData, pst_CameraData->s32_KalmanObjectNum, s32_I);
+                    // printf("------------- You should Delete Kalman object & s32_CntNoMatching: %d-------------\n",camera_data->arst_KalmanObject[s32_I].s32_CntNoMatching);
+                    DeleteKalmanObject(*camera_data, camera_data->s32_KalmanObjectNum, s32_I);
                 }
 
             }
 
         }
     }
-    // printf("------------- s32_KalmanObjectNum: %d-------------\n",pst_CameraData->s32_KalmanObjectNum);
+    // printf("------------- s32_KalmanObjectNum: %d-------------\n",camera_data->s32_KalmanObjectNum);
     
 
     /////////////////////////// For Checking Processed Image /////////////////////////////////////////
@@ -877,3 +864,15 @@ void LoadMappingParam(CAMERA_DATA_t *pst_CameraData)
 
 // RANSAC 구현 및 Coefficient 추출 완료
 // Data를 다루는 구조를 다시한번 생각 후 Kalman Filter까지 결합 진행
+
+
+//################################################## Camera node main function ##################################################//
+
+// ROS 런타임을 올리고 CameraProcessing 노드를 실행
+int main(int argc, char ** argv)
+{
+  rclcpp::init(argc, argv);
+  rclcpp::spin(std::make_shared<CameraProcessing>()); // 객체 생성 및 spin(이벤트 루프 홀출)
+  rclcpp::shutdown();
+  return 0;
+}
