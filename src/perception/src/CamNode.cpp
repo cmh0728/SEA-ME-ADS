@@ -71,7 +71,7 @@ int main(int argc, char ** argv)
 
 
 
-void CameraProcessing(RAW_CAMERA_DATA_t *pst_RawData, CAMERA_DATA_t *pst_CameraData)
+void ImgProcessing(RAW_CAMERA_DATA_t *pst_RawData, CAMERA_DATA_t *pst_CameraData)
 {
     // 입력 버퍼가 비어 있으면 즉시 반환
     if (pst_RawData->s32_Num == 0)

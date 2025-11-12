@@ -37,7 +37,7 @@ private:
 }  // namespace CameraProcessing
 
 // 메인 파이프라인: Raw → 차선 Kalman 업데이트까지 전체 흐름 제어
-void CameraProcessing(RAW_CAMERA_DATA_t *pst_RawData, CAMERA_DATA_t *pst_CameraData);  // 메인 파이프라인
+void ImgProcessing(RAW_CAMERA_DATA_t *pst_RawData, CAMERA_DATA_t *pst_CameraData);  // 메인 파이프라인
 // 파라미터/맵 로더: 카메라 세팅, IPM 맵 변경 시 이 함수 구현 수정
 void LoadParam(CAMERA_DATA_t *pst_CameraData);                                         // 파라미터 로드
 void LoadMappingParam(CAMERA_DATA_t *pst_CameraData);                                  // IPM 맵 로드
