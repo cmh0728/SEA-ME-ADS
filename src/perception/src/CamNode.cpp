@@ -305,7 +305,7 @@ void DeleteKalmanObject(CAMERA_DATA &pst_CameraData, int32_t& s32_KalmanObjectNu
 }
 
 // 새 관측 차선이 기존 칼만 객체와 동일한지 여부 판단
-void CheckSameKalmanObject(LANE_KALMAN_t& st_KalmanObject, KALMAN_STATE st_KalmanStateLeft)
+void CheckSameKalmanObject(LANE_KALMAN& st_KalmanObject, KALMAN_STATE st_KalmanStateLeft)
 {
     st_KalmanObject.b_MeasurementUpdateFlag = false;
     // printf("Distance: Kalman Lane: %f, Real Time Liane: %f\n",st_KalmanObject.st_LaneState.f64_Distance,st_KalmanStateLeft.f64_Distance);
@@ -322,7 +322,7 @@ void CheckSameKalmanObject(LANE_KALMAN_t& st_KalmanObject, KALMAN_STATE st_Kalma
 }
 
 // 칼만 필터 예측 단계
-void PredictState(LANE_KALMAN_t& st_KalmanObject)
+void PredictState(LANE_KALMAN& st_KalmanObject)
 {
     st_KalmanObject.st_PrevX = st_KalmanObject.st_X;
 
@@ -332,7 +332,7 @@ void PredictState(LANE_KALMAN_t& st_KalmanObject)
 }
 
 // 칼만 필터 측정 업데이트 단계
-void UpdateMeasurement(LANE_KALMAN_t& st_KalmanObject)
+void UpdateMeasurement(LANE_KALMAN& st_KalmanObject)
 {
     st_KalmanObject.st_K = st_KalmanObject.st_P * st_KalmanObject.st_H.transpose() * (st_KalmanObject.st_H * st_KalmanObject.st_P * st_KalmanObject.st_H.transpose() + st_KalmanObject.st_R).inverse();
     st_KalmanObject.st_P = st_KalmanObject.st_P - st_KalmanObject.st_K * st_KalmanObject.st_H * st_KalmanObject.st_P;
@@ -343,7 +343,7 @@ void UpdateMeasurement(LANE_KALMAN_t& st_KalmanObject)
 }
 
 // 관측 기반으로 상태 벡터 초기화
-void SetInitialX(LANE_KALMAN_t& st_KalmanObject)
+void SetInitialX(LANE_KALMAN& st_KalmanObject)
 {
     st_KalmanObject.st_X(0) = st_KalmanObject.st_Z(0);
     st_KalmanObject.st_X(1) = st_KalmanObject.st_Z(1);
@@ -353,7 +353,7 @@ void SetInitialX(LANE_KALMAN_t& st_KalmanObject)
 
 
 // 관측 벡터에 거리/각도 값을 기록
-void UpdateObservation(LANE_KALMAN_t& st_KalmanObject, const KALMAN_STATE st_KalmanState)
+void UpdateObservation(LANE_KALMAN& st_KalmanObject, const KALMAN_STATE st_KalmanState)
 {
     st_KalmanObject.st_Z(0) = st_KalmanState.f64_Distance;
     st_KalmanObject.st_Z(1) = st_KalmanState.f64_DeltaDistance;
@@ -384,7 +384,7 @@ KALMAN_STATE CalculateKalmanState(const LANE_COEFFICIENT& st_LaneCoef, float32_t
 }
 
 // 칼만 필터 행렬 및 공분산 초기화
-void InitializeKalmanObject(LANE_KALMAN_t& st_KalmanObject)
+void InitializeKalmanObject(LANE_KALMAN& st_KalmanObject)
 {
     st_KalmanObject.st_A << 1, 1, 0, 0,
                             0, 1, 0, 0,
