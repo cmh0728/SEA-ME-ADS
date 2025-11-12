@@ -14,7 +14,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
-#include <eigen3/Eigen/Dense>
+#include <eigen3/Eigen/Dense> // Eigen Library : 선형대수 템플릿 라이브러리 
 #include <algorithm>
 #include <chrono>
 #include <stdint.h>
