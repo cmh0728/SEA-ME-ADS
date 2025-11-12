@@ -23,14 +23,15 @@
 
 #include "opencv2/opencv.hpp"       
 
-// #include "casadi/casadi.hpp"
+// 제어 최적화 라이브러리 casadi
+// #include "casadi/casadi.hpp" 
 // #include "casadi/core/sparsity_interface.hpp"
 
 // #include "Integration/GNSSInfo.h"
 // #include "Integration/object_msg_arr.h"
 
 #include <yaml-cpp/yaml.h>
-#include <mlpack.hpp>
+// #include <mlpack.hpp> // 머신러닝 라이브러리 통합 헤더 
 
 
 #define NONE -1e9
