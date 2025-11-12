@@ -17,7 +17,7 @@ CameraProcessing::CameraProcessing() : rclcpp::Node("CameraProcessing_node")
 
   image_subscription_ = create_subscription<sensor_msgs::msg::CompressedImage>(
     image_topic, rclcpp::SensorDataQoS(),
-    std::bind(&PerceptionNode::on_image, this, std::placeholders::_1));
+    std::bind(&CameraProcessing::on_image, this, std::placeholders::_1));
 
   RCLCPP_INFO(get_logger(), "Perception node subscribing to %s", image_topic.c_str());
 }
