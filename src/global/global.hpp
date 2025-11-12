@@ -479,30 +479,23 @@ typedef struct _CMAMERA_LANEINFO
 
 } CAMERA_LANEINFO;
 
-typedef struct _CAMERA_DATA
-{
-    uint64_t u64_Timestamp;
-    CAMERA_PARAM_t st_CameraParameter;
-    // cv::Mat st_Image;
 
-    float32_t arf32_LaneCenterX[1000];
-    float32_t arf32_LaneCenterY[1000];
-    int32_t s32_LaneCenterNum;
-
-    LANE_KALMAN_t arst_KalmanObject[10];
-    int32_t s32_KalmanObjectNum;
-
-    float32_t f32_LastDistanceLeft;
-    float32_t f32_LastAngleLeft;
-
-    float32_t f32_LastDistanceRight;
-    float32_t f32_LastAngleRight;
-
-    // 현재 내가 주행중인 차선에 대한 정보
+// 카메라 데이터 구조체 선언 
+struct CAMERA_DATA {
+    uint64_t u64_Timestamp{};
+    CAMERA_PARAM_t st_CameraParameter{};
+    float32_t arf32_LaneCenterX[1000]{};
+    float32_t arf32_LaneCenterY[1000]{};
+    int32_t s32_LaneCenterNum{};
+    LANE_KALMAN_t arst_KalmanObject[10]{};
+    int32_t s32_KalmanObjectNum{};
+    float32_t f32_LastDistanceLeft{};
+    float32_t f32_LastAngleLeft{};
+    float32_t f32_LastDistanceRight{};
+    float32_t f32_LastAngleRight{};
     bool b_ThereIsLeft = false;
     bool b_ThereIsRight = false;
-
-} CAMERA_DATA;
+};
 
 typedef struct _GPS_DATA
 {

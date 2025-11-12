@@ -83,7 +83,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     // 이미지 전처리 진행할 임시 이미지 버퍼 생성 
     cv::Mat Temp_Img(camera_data->st_CameraParameter.s32_RemapHeight, camera_data->st_CameraParameter.s32_RemapWidth, CV_32FC1);
     cv::Mat st_NoneZero,st_Tmp, st_ResultImage(Temp_Img.size(), CV_8UC3, Scalar(0,0,0)); //결과랑 중간계산 mat, 최종시각화 검정색으로 초기화 
-    std::cout << img_frame.size() <<std::endl; // check origin img size
+    std::cout << img_frame.size() <<std::endl; // check origin img size (1280*720)
 
     // // 1) 콜백 img_frame 얕은 복사  
     // cv::Mat ori_img = img_frame; // 원본 이미지 자체를 같은 버퍼로 사용 
