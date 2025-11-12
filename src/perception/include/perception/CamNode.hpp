@@ -9,15 +9,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/compressed_image.hpp"
 
-// global variables
-extern cv::Mat st_ProcessedImage;
-extern SENSOR_DATA_t st_SensorData;
-extern cv::Mat st_IPMX;
-extern cv::Mat st_IPMY;
-extern bool b_NoLaneLeft;
-extern bool b_NoLaneRight;
-extern CAMERA_LANEINFO_t st_LaneInfoLeftMain;
-extern CAMERA_LANEINFO_t st_LaneInfoRightMain;
+
 
 namespace CameraProcessing
 {

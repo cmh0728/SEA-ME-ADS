@@ -1,7 +1,16 @@
 #include "global.hpp"
 
 extern float64_t f64_Vx, f64_Vy, f64_Ax, f64_Ay, f64_c_V, f64_c_A;
-extern int32_t s32_FileNum;
+
+float64_t c_ORIGIN_LATITUDE_DEG = 0.0;
+float64_t c_ORIGIN_LONGITUDE_DEG = 0.0;
+float64_t c_ORIGIN_LATITUDE_RAD = 0.0;
+float64_t c_ORIGIN_LONGITUDE_RAD = 0.0;
+float64_t c_ORIGIN_ALTITUDE = 0.0;
+float64_t c_ORIGIN_REFERENCE_X = 0.0;
+float64_t c_ORIGIN_REFERENCE_Y = 0.0;
+float64_t c_ORIGIN_REFERENCE_Z = 0.0;
+int32_t s32_FileNum = 0;
 
 
 // extern int32_t s32_Obj_Cnt;
@@ -667,4 +676,3 @@ void rotationMatrix(float32_t f32_Roll, float32_t f32_Pitch, float32_t f32_Yaw, 
 // 3차원 포인트 회전 함수
 void rotatePoint(float32_t f32_X, float32_t f32_Y, float32_t f32_Z, float32_t f32_Roll, float32_t f32_Pitch, float32_t f32_Yaw, float32_t &f32_RX, float32_t &f32_RY, float32_t &f32_RZ) {
 }
-

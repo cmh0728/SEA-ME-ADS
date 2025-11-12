@@ -3,6 +3,16 @@
 
 #include "perception/CamNode.hpp"
 
+// global variables
+extern cv::Mat st_ProcessedImage;
+extern SENSOR_DATA_t st_SensorData;
+extern cv::Mat st_IPMX;
+extern cv::Mat st_IPMY;
+extern bool b_NoLaneLeft;
+extern bool b_NoLaneRight;
+extern CAMERA_LANEINFO_t st_LaneInfoLeftMain;
+extern CAMERA_LANEINFO_t st_LaneInfoRightMain;
+
 namespace CameraProcessing
 {
 CameraProcessing::CameraProcessing() : rclcpp::Node("CameraProcessing_node")
@@ -550,8 +560,7 @@ void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPositio
                 }
 
                 // Draw Window 
-                cv::rectangle(st_EdgeImage, cv::Point(s32_WindowMinWidthRight, s32_WindowHeight), 
-                                        cv::Point(s32_WindowMaxWidthRight, s32_WindowMinHeight), cv::Scalar(255, 255, 255), 2);
+                cv::rectangle(st_EdgeImage, cv::Point(s32_WindowMinWidthRight, s32_WindowHeight), cv::Point(s32_WindowMaxWidthRight, s32_WindowMinHeight), cv::Scalar(255, 255, 255), 2);
             }
             // Check Valid Window
             if (b_CheckValidWindowRight == false)
