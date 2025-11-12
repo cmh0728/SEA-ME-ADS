@@ -1029,7 +1029,7 @@ typedef struct _Mpc_State
   State_t st_MPCState;
 
   // reference State
-  casadi::MX MX_refState;
+  // casadi::MX MX_refState;
 
   // predict State
   float32_t arf32_PredictX[c_CONTROL_HORIZON + 1];
