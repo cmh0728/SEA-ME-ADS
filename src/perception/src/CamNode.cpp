@@ -654,7 +654,7 @@ void DrawDrivingLane(cv::Mat& st_ResultImage, const LANE_COEFFICIENT_t st_LaneCo
 // YAML 카메라 설정을 로드하고 기본 상태를 초기화
 void LoadParam(CAMERA_DATA_t *pst_CameraData)
 {
-    YAML::Node st_CameraParam = YAML::LoadFile("../Params/camera.yaml");
+    YAML::Node st_CameraParam = YAML::LoadFile("src/Params/camera.yaml");
 
     // pst_CameraData->st_CameraParameter.s_IPMParameterX = st_CameraParam["IPMParameterX"].as<std::string>();
     // pst_CameraData->st_CameraParameter.s_IPMParameterY = st_CameraParam["IPMParameterY"].as<std::string>();
