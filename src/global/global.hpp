@@ -274,8 +274,7 @@ struct LANE_KALMAN
 
   LANE_COEFFICIENT st_LaneCoefficient;
   KALMAN_STATE st_LaneState;
-
-} LANE_KALMAN;
+};
 
 
 struct CAMERA_PARAM
