@@ -11,5 +11,5 @@ IntervalY     : 0.02
 # Camera extrinsic parameters
 
 # ParamX, ParamY 기준
-RemapHeight   : 780
-RemapWidth    : 600
+RemapHeight   : 1280
+RemapWidth    : 720
