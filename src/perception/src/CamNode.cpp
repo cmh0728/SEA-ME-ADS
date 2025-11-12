@@ -3,15 +3,14 @@
 
 #include "perception/CamNode.hpp"
 
-// global variables
-extern cv::Mat st_ProcessedImage;
-extern SENSOR_DATA_t st_SensorData;
-extern cv::Mat st_IPMX;
-extern cv::Mat st_IPMY;
-extern bool b_NoLaneLeft;
-extern bool b_NoLaneRight;
-extern CAMERA_LANEINFO_t st_LaneInfoLeftMain;
-extern CAMERA_LANEINFO_t st_LaneInfoRightMain;
+cv::Mat st_ProcessedImage;
+SENSOR_DATA_t st_SensorData{};
+cv::Mat st_IPMX;
+cv::Mat st_IPMY;
+bool b_NoLaneLeft = false;
+bool b_NoLaneRight = false;
+CAMERA_LANEINFO_t st_LaneInfoLeftMain{};
+CAMERA_LANEINFO_t st_LaneInfoRightMain{};
 
 namespace CameraProcessing
 {
