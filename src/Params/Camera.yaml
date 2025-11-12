@@ -1,10 +1,14 @@
+# IPM mapping parameters
 IPMParameterX : "./src/Integration/Param/ParamX.txt"
 IPMParameterY : "./src/Integration/Param/ParamY.txt"
 
+# Camera intrinsic parameters
 MarginX       : 38
 MarginY       : 20
 IntervalX     : 0.05
 IntervalY     : 0.02
+
+# Camera extrinsic parameters
 
 # ParamX, ParamY 기준
 RemapHeight   : 780

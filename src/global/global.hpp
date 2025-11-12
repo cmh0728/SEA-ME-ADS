@@ -423,7 +423,7 @@ typedef struct _KALMAN_STATE
   float64_t f64_DeltaDistance;
   float64_t f64_DeltaAngle;
 
-} KALMAN_STATE_t;
+} KALMAN_STATE;
 
 typedef struct _LANE_COEFFICIENT
 {
@@ -449,7 +449,7 @@ typedef struct _LANE_KALMAN
   int32_t s32_CntNoMatching = 0;
 
   LANE_COEFFICIENT_t st_LaneCoefficient;
-  KALMAN_STATE_t st_LaneState;
+  KALMAN_STATE st_LaneState;
 
 } LANE_KALMAN_t;
 
@@ -477,7 +477,7 @@ typedef struct _CMAMERA_LANEINFO
   LANE_COEFFICIENT_t st_LaneCoefficient;
   bool b_IsLeft = false;
 
-} CAMERA_LANEINFO_t;
+} CAMERA_LANEINFO;
 
 typedef struct _CAMERA_DATA
 {
@@ -502,7 +502,7 @@ typedef struct _CAMERA_DATA
     bool b_ThereIsLeft = false;
     bool b_ThereIsRight = false;
 
-} CAMERA_DATA_t;
+} CAMERA_DATA;
 
 typedef struct _GPS_DATA
 {
