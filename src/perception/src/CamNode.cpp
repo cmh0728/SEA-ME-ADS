@@ -85,14 +85,14 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     // std::cout << img_frame.size() <<std::endl; // check origin img size (1280*720)
 
     // // 1) 콜백 img_frame 얕은 복사  
-    // cv::Mat ori_img = img_frame; // 원본 이미지 자체를 같은 버퍼로 사용 
+    cv::Mat ori_img = img_frame; // 원본 이미지 자체를 같은 버퍼로 사용 
 
     // // 2) IPM 맵을 이용해 780x600 영역으로 리맵 (맵 자체는 LoadMappingParam에서 로드) 
-    // cv::remap(ori_img,ori_img,st_IPMX, st_IPMY, cv::INTER_NEAREST, cv::BORDER_CONSTANT);
+    cv::remap(ori_img,ori_img,st_IPMX, st_IPMY, cv::INTER_NEAREST, cv::BORDER_CONSTANT);
 
     // // 3) 전처리: 그레이 변환 + 블러 (필요 시 커널 크기/유형 변경)
-    // cv::cvtColor(ori_img, Temp_Img, COLOR_BGR2GRAY);
-    // cv::GaussianBlur(Temp_Img, Temp_Img, Size(1,1), 0);
+    cv::cvtColor(ori_img, Temp_Img, COLOR_BGR2GRAY);
+    cv::GaussianBlur(Temp_Img, Temp_Img, Size(1,1), 0);
 
     // // 4) 이진화 + 팽창 + 캐니 엣지로 차선 후보 강조 (threshold, Canny 범위가 튜닝 포인트)
     // cv::Mat st_K = cv::getStructuringElement(MORPH_RECT, Size(5, 5));
