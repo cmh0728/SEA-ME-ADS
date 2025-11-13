@@ -74,7 +74,7 @@ def main():
         ok, corners = cv2.findChessboardCornersSB(gray, pattern_size, flags=sb_flags)
         if ok:
             corners = corners.reshape(BOARD_ROWS, BOARD_COLS, 1, 2)
-            corners = corners.transpose(1, 0, 2, 3).reshape(-1, 1, 2)
+            corners = corners.reshape(-1, 1, 2)
             vis = undistorted.copy()
             cv2.drawChessboardCorners(vis, pattern_size, corners, ok)
             cv2.imwrite("corners_debug.png", vis)
@@ -91,7 +91,7 @@ def main():
             criteria = (cv2.TERM_CRITERIA_EPS+cv2.TERM_CRITERIA_MAX_ITER, 30, 1e-3)
             corners = cv2.cornerSubPix(gray, corners, (11,11), (-1,-1), criteria)
             corners = corners.reshape(BOARD_ROWS, BOARD_COLS, 1, 2)
-            corners = corners.transpose(1, 0, 2, 3).reshape(-1, 1, 2)
+            corners = corners.reshape(-1, 1, 2)
             vis = undistorted.copy()
             cv2.drawChessboardCorners(vis, pattern_size, corners, ok)
             cv2.imwrite("corners_debug.png", vis)
@@ -101,17 +101,11 @@ def main():
         sys.exit(1)
 
     # 4) 3D 보드 코너 (Z=0 평면)
-    objp = np.zeros((BOARD_COLS*BOARD_ROWS, 3), np.float32)
-    objp[:,:2] = np.mgrid[0:BOARD_COLS, 0:BOARD_ROWS].T.reshape(-1,2)
-    objp *= SQUARE_SIZE_M
-
-    # 카메라에서 본 체커보드가 가로로 놓여 있을 경우
-    # (cols 방향이 차량 좌우, rows 방향이 차량 앞/뒤) 축을 재정의해준다.
-    # vehicle X=foward, Y=left 를 가정한다.
-    rot_objp = np.zeros_like(objp)
-    rot_objp[:, 0] = objp[:,1]  # rows(이미지 위→아래) → 차량 +X(앞쪽). 필요 시 부호/축을 바꿔서 차량 좌표계에 맞춰줘.
-    rot_objp[:, 1] = -objp[:,0]  # cols(이미지 왼→오른) → 차량 +Y(왼쪽). 원하는 좌표계에 맞게 수정 가능.
-    objp = rot_objp
+    # 체커보드 행(row)이 차량 앞(+X), 열(col)이 좌(+Y)을 향하도록 좌표계를 정의
+    grid_row, grid_col = np.mgrid[0:BOARD_ROWS, 0:BOARD_COLS]
+    objp = np.zeros((BOARD_ROWS * BOARD_COLS, 3), np.float32)
+    objp[:, 0] = -grid_row.reshape(-1) * SQUARE_SIZE_M  # row는 위→아래 증가하므로 부호를 뒤집어 앞(+X)이 양수
+    objp[:, 1] = -grid_col.reshape(-1) * SQUARE_SIZE_M  # col은 왼→오른 증가, 왼쪽을 +Y로 두기 위해 부호 뒤집기
     print("Mapped checkerboard object points preview (first 10 rows):")
     print(objp[:10]) # 체크보드 좌표계 확인 
 
