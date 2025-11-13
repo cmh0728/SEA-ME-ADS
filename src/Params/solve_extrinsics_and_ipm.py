@@ -109,7 +109,7 @@ def main():
     rows = np.tile(np.arange(BOARD_ROWS), BOARD_COLS)      # row index changes fastest (matches corners flatten order)
     cols = np.repeat(np.arange(BOARD_COLS), BOARD_ROWS)    # column index stays constant for each row block
     objp = np.zeros((BOARD_ROWS * BOARD_COLS, 3), np.float32)
-    objp[:, 0] = rows * SQUARE_SIZE_M        # row 증가(이미지 아래) → 차량 +X(앞) 이 되도록 부호 반전
+    objp[:, 0] = -rows * SQUARE_SIZE_M        # row 증가(이미지 아래) → 차량 +X(앞) 이 되도록 부호 반전
     objp[:, 1] = -cols * SQUARE_SIZE_M        # col 증가(오른쪽) → 차량 +Y(왼쪽 양수) 되도록 부호 반전
     print("Mapped checkerboard object points preview (first 10 rows):")
     print(objp[:10]) # 체크보드 좌표계 확인 
