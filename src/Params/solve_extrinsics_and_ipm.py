@@ -9,8 +9,8 @@ BOARD_COLS, BOARD_ROWS = 9, 7
 SQUARE_SIZE_M = 0.011  # 1.1 cm
 
 # IPM 영역/스케일
-X_MIN, X_MAX = -0.05, 0.088 + 0.05
-Y_MIN, Y_MAX = -0.05, 0.066 + 0.05
+X_MIN, X_MAX = 0.0 , 0.35
+Y_MIN, Y_MAX = 0.0 , 0.6
 W_target, H_target = 640, 480
 INTERVAL_X = (X_MAX - X_MIN) / W_target
 INTERVAL_Y = (Y_MAX - Y_MIN) / H_target
