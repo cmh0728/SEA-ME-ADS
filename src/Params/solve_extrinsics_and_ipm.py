@@ -3,11 +3,11 @@ import numpy as np
 import cv2
 
 # ---------- 사용자 설정 ----------
-IMAGE_PATH = "frame.png"          # 바닥 체스보드가 보이는 한 장
-CAMERA_YAML = "ost.yaml"       # oST v5 형식 (camera_calibration 결과)
+IMAGE_PATH = "frame.jpg"          # 바닥 체스보드가 보이는 한 장
+CAMERA_YAML = "calibration.txt"       # oST v5 형식 (camera_calibration 결과)
 # 체스보드 내부 코너 수(가로 x 세로)와 한 칸 길이[m]
-BOARD_COLS, BOARD_ROWS = 8, 6
-SQUARE_SIZE_M = 0.025
+BOARD_COLS, BOARD_ROWS = 9, 7
+SQUARE_SIZE_M = 0.011 # 1.1 cm
 
 # IPM 영역/스케일(원하는 맵 범위와 해상도)
 # 예: X: -1.5~+1.5 m, Y: 0~8 m 범위로 만들고, 1픽셀=2cm
