@@ -103,7 +103,7 @@ def main():
 
     # 4) 3D 보드 코너 (Z=0 평면)
     # OpenCV 코너 순서: row-major (row 0..ROWS-1, 각 row마다 col 0..COLS-1)
-    # 여기서 row 방향을 차량 +X(앞), col 방향을 차량 +Y(왼쪽 양수)로 정의
+    # row 방향 -> 차량 +X(앞), col 방향 -> 차량 +Y(왼쪽 양수)
     objp = []
     for row in range(BOARD_ROWS):
         for col in range(BOARD_COLS):
@@ -130,27 +130,35 @@ def main():
     R, _ = cv2.Rodrigues(rvec)
     t = tvec.reshape(3,1)
 
+    # ★ 카메라 중심 (월드 좌표계) 계산
+    #   X_cam = R X_world + t  →  X_world = R^T (X_cam - t)
+    #   카메라 중심은 X_cam = 0 → C_world = -R^T t
+    C_world = -R.T @ t
+    cam_height = abs(C_world[2,0])
+
     roll, pitch, yaw = rodrigues_to_rpy(R)
     print("\n=== Extrinsics (Z=0=ground, 체커보드 평면) ===")
     print("R=\n", R)
-    print("t(m)=\n", t)
+    print("t(m) [world origin in camera frame]=\n", t)
+    print("Camera center in world frame C_w = -R^T t :\n", C_world)
     print(f"roll={math.degrees(roll):.2f}°, pitch={math.degrees(pitch):.2f}°, yaw={math.degrees(yaw):.2f}°")
-    print(f"camera height ~= {-t[2,0]:.3f} m")
+    print(f"camera height ~= {cam_height:.3f} m")
 
     # 6) H 만들고 IPM 생성
     H = build_ipm_homography_from_plane(K, R, t)  # 바닥(Z=0) → 이미지 호모그래피
 
-    # IPM 해상도 계산 (결과적으로 W = W_target, Hh = H_target와 같음)
+    # IPM 해상도 계산
     W  = int(round((X_MAX - X_MIN)/INTERVAL_X))
     Hh = int(round((Y_MAX - Y_MIN)/INTERVAL_Y))
     print(f"IPM target size: {W} x {Hh}")
 
-    # 바닥 평면 상의 사각형 (X,Y)을 이미지로 투영
+    # 가로(W) 방향: Y_MIN → Y_MAX (좌/우)
+    # 세로(Hh) 방향: X_MIN → X_MAX (앞/뒤)
     ground_corners = np.float32([
-        [X_MIN, Y_MIN, 1.0],
-        [X_MAX, Y_MIN, 1.0],
-        [X_MAX, Y_MAX, 1.0],
-        [X_MIN, Y_MAX, 1.0],
+        [X_MIN, Y_MIN, 1.0],   # 좌측 근처
+        [X_MIN, Y_MAX, 1.0],   # 우측 근처
+        [X_MAX, Y_MAX, 1.0],   # 우측 먼 쪽
+        [X_MAX, Y_MIN, 1.0],   # 좌측 먼 쪽
     ]).T  # 3x4
 
     img_corners_h = H @ ground_corners    # 3x4
@@ -173,10 +181,10 @@ def main():
 
     # IPM 목적지 좌표 (픽셀 공간)
     dst_corners = np.float32([
-        [0,     0],
-        [W-1,   0],
-        [W-1, Hh-1],
-        [0,   Hh-1],
+        [0,     0],        # 좌측-가까운
+        [W-1,   0],        # 우측-가까운
+        [W-1, Hh-1],       # 우측-먼 쪽
+        [0,   Hh-1],       # 좌측-먼 쪽
     ])
 
     # 이미지 상의 네 점(img_corners) → IPM 평면(dst_corners) 호모그래피
@@ -187,11 +195,12 @@ def main():
 
     out = {
         "R": R.tolist(),
-        "t": t.reshape(-1).tolist(),
+        "t_world_origin_in_cam": t.reshape(-1).tolist(),
+        "camera_center_world": C_world.reshape(-1).tolist(),
         "roll_deg": float(math.degrees(roll)),
         "pitch_deg": float(math.degrees(pitch)),
         "yaw_deg": float(math.degrees(yaw)),
-        "camera_height_m": float(-t[2,0]),
+        "camera_height_m": float(cam_height),
         "H_ground_to_image": H.tolist()
     }
     with open("extrinsics_and_h.yaml", "w") as f:
@@ -200,3 +209,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
