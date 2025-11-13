@@ -2,11 +2,18 @@
 IPMParameterX : "./src/Integration/Param/ParamX.txt"
 IPMParameterY : "./src/Integration/Param/ParamY.txt"
 
+
+# Camera lane info parameters
+MarginX : 38   # 좌우 여백 (픽셀)
+MarginY : 20   # 상하 여백 (픽셀)
+IntervalX : 0.05 # 1픽셀당 5cm
+IntervalY : 0.02 # 1픽셀당 2cm
+
 # Camera intrinsic parameters
-MarginX       : 38
-MarginY       : 20
-IntervalX     : 0.05
-IntervalY     : 0.02
+D : [-0.08518303109375061, 0.09162271169535907, 0.0031898210475882326, -0.005419073450784245, 0.0]
+K : [671.3594253991467, 0.0, 644.3611380949407, 0.0, 630.607858047108, 350.24879773346635, 0.0, 0.0, 1.0]
+R : [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+P : [691.3732719305283, 0.0, 635.1545782791846, 0.0, 0.0, 652.0944375524983, 353.9317933389513, 0.0, 0.0, 0.0, 1.0, 0.0]
 
 # Camera extrinsic parameters
 
