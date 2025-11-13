@@ -108,6 +108,8 @@ def main():
     rot_objp[:, 0] = -objp[:,1]  # rows(이미지 위→아래) → 차량 +X(앞쪽). 필요 시 부호/축을 바꿔서 차량 좌표계에 맞춰줘.
     rot_objp[:, 1] = -objp[:,0]  # cols(이미지 왼→오른) → 차량 +Y(왼쪽). 원하는 좌표계에 맞게 수정 가능.
     objp = rot_objp
+    print("Mapped checkerboard object points preview (first 10 rows):")
+    print(objp[:10])
 
     # 5) PnP → R, t
     ok, rvec, tvec = cv2.solvePnP(objp, corners, K, D, flags=cv2.SOLVEPNP_ITERATIVE)
