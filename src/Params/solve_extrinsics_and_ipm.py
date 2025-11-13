@@ -139,6 +139,17 @@ def main():
     img_corners_h = H @ ground_corners
     img_corners = (img_corners_h[:2] / img_corners_h[2]).T.astype(np.float32)
 
+    # Debug: visualize projected IPM region on undistorted image
+    debug = undistorted.copy()
+    cv2.polylines(
+        debug,
+        [img_corners.reshape(-1, 1, 2).astype(int)],
+        isClosed=True,
+        color=(0, 0, 255),
+        thickness=3
+    )
+    cv2.imwrite("ipm_region.png", debug)
+
     dst_corners = np.float32([
         [0, 0],
         [W-1, 0],
