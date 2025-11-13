@@ -9,8 +9,8 @@ BOARD_COLS, BOARD_ROWS = 9, 7
 SQUARE_SIZE_M = 0.011  # 1.1 cm
 
 # IPM 영역/스케일
-X_MIN, X_MAX = 0.0 , 0.6 # 차량 앞쪽 60cm
-Y_MIN, Y_MAX = -0.25 , 0.25
+X_MIN, X_MAX = 0.0 , 0.2 # 차량 앞쪽 60cm
+Y_MIN, Y_MAX = -0.2 , 0.2 # 차량 좌우 40cm
 W_target, H_target = 1280, 720  # 목표 IPM 크기 (픽셀)
 INTERVAL_X = (X_MAX - X_MIN) / W_target
 INTERVAL_Y = (Y_MAX - Y_MIN) / H_target
@@ -105,8 +105,8 @@ def main():
     # (cols 방향이 차량 좌우, rows 방향이 차량 앞/뒤) 축을 재정의해준다.
     # vehicle X=foward, Y=left 를 가정한다.
     rot_objp = objp.copy()
-    rot_objp[:, 0] = -objp[:,1]  # rows(위→아래) -> 차량 +X(앞쪽)
-    rot_objp[:, 1] = -objp[:,0]  # cols(왼→오른) -> 차량 +Y(왼쪽)
+    rot_objp[:, 0] = -objp[:,1]  # rows(이미지 위→아래) → 차량 +X(앞쪽). 필요 시 부호/축을 바꿔서 차량 좌표계에 맞춰줘.
+    rot_objp[:, 1] = -objp[:,0]  # cols(이미지 왼→오른) → 차량 +Y(왼쪽). 원하는 좌표계에 맞게 수정 가능.
     objp = rot_objp
 
     # 5) PnP → R, t
@@ -138,6 +138,9 @@ def main():
 
     img_corners_h = H @ ground_corners
     img_corners = (img_corners_h[:2] / img_corners_h[2]).T.astype(np.float32)
+    # 여기서 img_corners를 원하는 값으로 직접 수정해도 됨.
+    # 예: img_corners = np.array([[x0,y0],[x1,y1],...], dtype=np.float32)
+    # 각 꼭짓점이 영상 안에 있는지 확인하고 수정해 주세요.
 
     # Debug: visualize projected IPM region on undistorted image
     debug = undistorted.copy()
