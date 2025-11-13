@@ -105,8 +105,8 @@ def main():
     # (cols 방향이 차량 좌우, rows 방향이 차량 앞/뒤) 축을 재정의해준다.
     # vehicle X=foward, Y=left 를 가정한다.
     rot_objp = objp.copy()
-    rot_objp[:, 0] = -objp[:,1]  # rows(위→아래) -> 차량 +X(앞쪽, 이미지 위쪽이 +X이므로 부호 반전)
-    rot_objp[:, 1] = objp[:,0]   # cols(왼→오른) -> 차량 +Y(왼쪽 양수)
+    rot_objp[:, 0] = -objp[:,1]  # rows(위→아래) -> 차량 +X(앞쪽)
+    rot_objp[:, 1] = -objp[:,0]  # cols(왼→오른) -> 차량 +Y(왼쪽)
     objp = rot_objp
 
     # 5) PnP → R, t
