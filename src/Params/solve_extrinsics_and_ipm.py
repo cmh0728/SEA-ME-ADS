@@ -74,7 +74,7 @@ def main():
         ok, corners = cv2.findChessboardCornersSB(gray, pattern_size, flags=sb_flags)
         if ok:
             corners = corners.reshape(BOARD_ROWS, BOARD_COLS, 1, 2)
-            corners = corners.transpose(1, 0, 2, 3).reshape(-1, 1, 2, order='F')
+            corners = corners.transpose(1, 0, 2, 3).reshape(-1, 1, 2)
             vis = undistorted.copy()
             cv2.drawChessboardCorners(vis, pattern_size, corners, ok)
             cv2.imwrite("corners_debug.png", vis)
@@ -91,7 +91,7 @@ def main():
             criteria = (cv2.TERM_CRITERIA_EPS+cv2.TERM_CRITERIA_MAX_ITER, 30, 1e-3)
             corners = cv2.cornerSubPix(gray, corners, (11,11), (-1,-1), criteria)
             corners = corners.reshape(BOARD_ROWS, BOARD_COLS, 1, 2)
-            corners = corners.transpose(1, 0, 2, 3).reshape(-1, 1, 2, order='F')
+            corners = corners.transpose(1, 0, 2, 3).reshape(-1, 1, 2)
             vis = undistorted.copy()
             cv2.drawChessboardCorners(vis, pattern_size, corners, ok)
             cv2.imwrite("corners_debug.png", vis)
@@ -102,10 +102,11 @@ def main():
 
     # 4) 3D 보드 코너 (Z=0 평면)
     # 체커보드 행(row)이 차량 앞(+X), 열(col)이 좌(+Y)을 향하도록 좌표계를 정의
-    grid_row, grid_col = np.mgrid[0:BOARD_ROWS, 0:BOARD_COLS]
+    rows = np.repeat(np.arange(BOARD_ROWS), BOARD_COLS)
+    cols = np.tile(np.arange(BOARD_COLS), BOARD_ROWS)
     objp = np.zeros((BOARD_ROWS * BOARD_COLS, 3), np.float32)
-    objp[:, 0] = -grid_row.reshape(-1, order='F') * SQUARE_SIZE_M  # rows -> +X
-    objp[:, 1] =  grid_col.reshape(-1, order='F') * SQUARE_SIZE_M   # cols -> +Y (오른쪽 양수, 필요 시 부호 조정)
+    objp[:, 0] = rows * SQUARE_SIZE_M         # row 증가 → 차량 +X(앞)
+    objp[:, 1] = -cols * SQUARE_SIZE_M        # col 증가 → 차량 +Y(왼쪽이 양수)
     print("Mapped checkerboard object points preview (first 10 rows):")
     print(objp[:10]) # 체크보드 좌표계 확인 
 
