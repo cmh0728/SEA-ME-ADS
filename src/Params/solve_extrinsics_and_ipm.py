@@ -9,9 +9,9 @@ IMAGE_PATH = "frame0004.jpg"      # 바닥 체스보드가 보이는 한 장
 BOARD_COLS, BOARD_ROWS = 9, 7
 SQUARE_SIZE_M = 0.011  # 1.1 cm
 
-# IPM 영역/스케일
-X_MIN, X_MAX = 0.0 , 0.2 # 차량 앞쪽 20cm
-Y_MIN, Y_MAX = -0.2 , 0.2 # 차량 좌우 40cm
+# IPM 영역/스케일 (체커보드 평면 기준 [X(앞), Y(좌/우)])
+X_MIN, X_MAX = 0.0 , 0.2   # 차량 앞쪽 0 ~ 20cm
+Y_MIN, Y_MAX = -0.2 , 0.2  # 차량 좌우 -20 ~ +20cm
 W_target, H_target = 1280, 720  # 목표 IPM 크기 (픽셀)
 INTERVAL_X = (X_MAX - X_MIN) / W_target
 INTERVAL_Y = (Y_MAX - Y_MIN) / H_target
@@ -33,11 +33,11 @@ def rodrigues_to_rpy(R):
     return roll, pitch, yaw
 
 def build_ipm_homography_from_plane(K, R, t):
-    # 바닥(z=0) 기준 호모그래피 계산
-    n = np.array([[0.0],[0.0],[1.0]])   # ground normal
-    d = -t[2,0]                         # distance to plane (sign!)
-    Kinv = np.linalg.inv(K)
-    H = K @ (R - (t @ n.T)/d) @ Kinv
+    """
+    Z=0(체커보드/바닥) 평면에서 [X, Y, 1]^T → 이미지 픽셀 [u, v, 1]^T 로 가는 H
+    s [u, v, 1]^T = K [ r1 r2 t ] [X, Y, 1]^T
+    """
+    H = K @ np.hstack([R[:, 0:2], t])   # 3x3
     return H
 
 def main():
@@ -57,31 +57,29 @@ def main():
     print("D=", D)
 
     # 1) 이미지 로드
-    # 왜곡 보정 → 전처리(그레이/CLAHE/블러)
     img = cv2.imread(IMAGE_PATH)
-
-    undistorted = cv2.undistort(img, K, D)
+    if img is None:
+        print("Fail to read image:", IMAGE_PATH)
+        sys.exit(1)
 
     # 2) 전처리 (그레이 → CLAHE → 블러)
-    gray = cv2.cvtColor(undistorted, cv2.COLOR_BGR2GRAY)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
     gray = clahe.apply(gray)
     gray = cv2.GaussianBlur(gray, (5,5), 0)
 
     # 3) 체스보드 코너 검출 (SB → 구형 폴백)
-    # 좌표계를 objp와 일치시키기 위해 reshape/transpose 수행
-    pattern_size = (BOARD_COLS, BOARD_ROWS)  # 내부 코너 수!
+    pattern_size = (BOARD_COLS, BOARD_ROWS)  # (cols, rows)
     ok = False
+
     try:
         sb_flags = cv2.CALIB_CB_EXHAUSTIVE | cv2.CALIB_CB_ACCURACY
         ok, corners = cv2.findChessboardCornersSB(gray, pattern_size, flags=sb_flags)
         if ok:
-            corners = corners.reshape(BOARD_ROWS, BOARD_COLS, 1, 2)
-            corners = corners.transpose(1, 0, 2, 3).reshape(-1, 1, 2)
-            vis = undistorted.copy()
+            # corners: (N, 1, 2), row-major 순서 그대로 사용
+            vis = img.copy()
             cv2.drawChessboardCorners(vis, pattern_size, corners, ok)
             cv2.imwrite("corners_debug.png", vis)
-
     except Exception:
         ok = False
 
@@ -93,49 +91,61 @@ def main():
         if ok:
             criteria = (cv2.TERM_CRITERIA_EPS+cv2.TERM_CRITERIA_MAX_ITER, 30, 1e-3)
             corners = cv2.cornerSubPix(gray, corners, (11,11), (-1,-1), criteria)
-            corners = corners.reshape(BOARD_ROWS, BOARD_COLS, 1, 2)
-            corners = corners.transpose(1, 0, 2, 3).reshape(-1, 1, 2)
-            vis = undistorted.copy()
+            vis = img.copy()
             cv2.drawChessboardCorners(vis, pattern_size, corners, ok)
             cv2.imwrite("corners_debug.png", vis)
 
     if not ok:
-        print("Chessboard not found. 조명/반사/거리/내부코너 수 확인해줘.")
+        print("Chessboard not found. 조명/반사/거리/내부코너 수(BOARD_COLS, BOARD_ROWS) 확인해줘.")
         sys.exit(1)
 
+    print(f"Detected {len(corners)} corners.")
+
     # 4) 3D 보드 코너 (Z=0 평면)
-    # 체커보드 행(row)이 차량 앞(+X), 열(col)이 좌(+Y)을 향하도록 좌표계를 정의
-    # 체커보드 월드 좌표 생성: 행(row) → 차량 +X, 열(col) → 차량 +Y(왼쪽)
+    # OpenCV 코너 순서: row-major (row 0..ROWS-1, 각 row마다 col 0..COLS-1)
+    # 여기서 row 방향을 차량 +X(앞), col 방향을 차량 +Y(왼쪽 양수)로 정의
     objp = []
     for row in range(BOARD_ROWS):
         for col in range(BOARD_COLS):
-            x = row * SQUARE_SIZE_M                # 체커보드 세로(row) -> 차량 전방(+X)
-            y = -(col * SQUARE_SIZE_M)             # 체커보드 가로(col) -> 차량 좌측(+Y), 왼쪽 양수 유지
-            objp.append([x, y, 0.0])
+            X =  row * SQUARE_SIZE_M       # 앞(+X)
+            Y = -col * SQUARE_SIZE_M       # 왼쪽(+Y) 되도록 col 증가에 -부호
+            objp.append([X, Y, 0.0])
     objp = np.array(objp, dtype=np.float32)
-    print("Mapped checkerboard object points preview (first 10 rows):")
-    print(objp[:10]) # 체크보드 좌표계 확인 
+
+    print("Mapped checkerboard object points preview (first 10):")
+    print(objp[:10])
 
     # 5) PnP → R, t
-    ok, rvec, tvec = cv2.solvePnP(objp, corners, K, D, flags=cv2.SOLVEPNP_ITERATIVE)
+    ok, rvec, tvec = cv2.solvePnP(
+        objp,
+        corners,
+        K,
+        D,
+        flags=cv2.SOLVEPNP_ITERATIVE
+    )
     if not ok:
-        print("solvePnP failed"); sys.exit(1)
+        print("solvePnP failed")
+        sys.exit(1)
+
     R, _ = cv2.Rodrigues(rvec)
     t = tvec.reshape(3,1)
 
     roll, pitch, yaw = rodrigues_to_rpy(R)
-    print("\n=== Extrinsics (Z=0=ground) ===")
+    print("\n=== Extrinsics (Z=0=ground, 체커보드 평면) ===")
     print("R=\n", R)
     print("t(m)=\n", t)
     print(f"roll={math.degrees(roll):.2f}°, pitch={math.degrees(pitch):.2f}°, yaw={math.degrees(yaw):.2f}°")
     print(f"camera height ~= {-t[2,0]:.3f} m")
 
     # 6) H 만들고 IPM 생성
-    H = build_ipm_homography_from_plane(K, R, t)  # 바닥 → 이미지 호모그래피
+    H = build_ipm_homography_from_plane(K, R, t)  # 바닥(Z=0) → 이미지 호모그래피
 
+    # IPM 해상도 계산 (결과적으로 W = W_target, Hh = H_target와 같음)
     W  = int(round((X_MAX - X_MIN)/INTERVAL_X))
     Hh = int(round((Y_MAX - Y_MIN)/INTERVAL_Y))
+    print(f"IPM target size: {W} x {Hh}")
 
+    # 바닥 평면 상의 사각형 (X,Y)을 이미지로 투영
     ground_corners = np.float32([
         [X_MIN, Y_MIN, 1.0],
         [X_MAX, Y_MIN, 1.0],
@@ -143,14 +153,14 @@ def main():
         [X_MIN, Y_MAX, 1.0],
     ]).T  # 3x4
 
-    img_corners_h = H @ ground_corners
-    img_corners = (img_corners_h[:2] / img_corners_h[2]).T.astype(np.float32)
-    # 여기서 img_corners를 원하는 값으로 직접 수정해도 됨.
-    # 예: img_corners = np.array([[x0,y0],[x1,y1],...], dtype=np.float32)
-    # 각 꼭짓점이 영상 안에 있는지 확인하고 수정해 주세요.
+    img_corners_h = H @ ground_corners    # 3x4
+    img_corners = (img_corners_h[:2] / img_corners_h[2]).T.astype(np.float32)  # 4x2
+
+    print("Projected IPM region corners on image:")
+    print(img_corners)
 
     # Debug: IPM 대상 영역이 영상 안에 들어오는지 빨간 폴리라인으로 확인
-    debug = undistorted.copy()
+    debug = img.copy()
     cv2.polylines(
         debug,
         [img_corners.reshape(-1, 1, 2).astype(int)],
@@ -159,16 +169,19 @@ def main():
         thickness=3
     )
     cv2.imwrite("ipm_region.png", debug)
+    print("Wrote ipm_region.png (red polygon on original image).")
 
+    # IPM 목적지 좌표 (픽셀 공간)
     dst_corners = np.float32([
-        [0, 0],
-        [W-1, 0],
+        [0,     0],
+        [W-1,   0],
         [W-1, Hh-1],
-        [0, Hh-1],
+        [0,   Hh-1],
     ])
 
+    # 이미지 상의 네 점(img_corners) → IPM 평면(dst_corners) 호모그래피
     G = cv2.getPerspectiveTransform(img_corners, dst_corners)
-    ipm = cv2.warpPerspective(undistorted, G, (W, Hh))
+    ipm = cv2.warpPerspective(img, G, (W, Hh))
     cv2.imwrite("ipm.png", ipm)
     print(f"\nSaved IPM to ipm.png  ({W}x{Hh})")
 
