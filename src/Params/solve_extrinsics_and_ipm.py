@@ -3,13 +3,14 @@ import numpy as np
 import cv2
 
 # ---------- 사용자 설정 ----------
+# 단일 체커보드 프레임으로 외부 파라미터와 IPM을 추정하는 스크립트
 IMAGE_PATH = "frame0004.jpg"      # 바닥 체스보드가 보이는 한 장
 # 내부 코너 수(가로 x 세로) - 인쇄물 내부코너 기준으로 맞춰주세요!
 BOARD_COLS, BOARD_ROWS = 9, 7
 SQUARE_SIZE_M = 0.011  # 1.1 cm
 
 # IPM 영역/스케일
-X_MIN, X_MAX = 0.0 , 0.2 # 차량 앞쪽 60cm
+X_MIN, X_MAX = 0.0 , 0.2 # 차량 앞쪽 20cm
 Y_MIN, Y_MAX = -0.2 , 0.2 # 차량 좌우 40cm
 W_target, H_target = 1280, 720  # 목표 IPM 크기 (픽셀)
 INTERVAL_X = (X_MAX - X_MIN) / W_target
@@ -18,6 +19,7 @@ INTERVAL_Y = (Y_MAX - Y_MIN) / H_target
 # ---------------------------------
 
 def rodrigues_to_rpy(R):
+    # Rodrigues → roll/pitch/yaw 변환 (디버그용)
     sy = math.sqrt(R[0,0]*R[0,0] + R[1,0]*R[1,0])
     singular = sy < 1e-6
     if not singular:
@@ -31,6 +33,7 @@ def rodrigues_to_rpy(R):
     return roll, pitch, yaw
 
 def build_ipm_homography_from_plane(K, R, t):
+    # 바닥(z=0) 기준 호모그래피 계산
     n = np.array([[0.0],[0.0],[1.0]])   # ground normal
     d = -t[2,0]                         # distance to plane (sign!)
     Kinv = np.linalg.inv(K)
@@ -54,9 +57,8 @@ def main():
     print("D=", D)
 
     # 1) 이미지 로드
+    # 왜곡 보정 → 전처리(그레이/CLAHE/블러)
     img = cv2.imread(IMAGE_PATH)
-    if img is None:
-        print("Fail to read image:", IMAGE_PATH); sys.exit(1)
 
     undistorted = cv2.undistort(img, K, D)
 
@@ -67,6 +69,7 @@ def main():
     gray = cv2.GaussianBlur(gray, (5,5), 0)
 
     # 3) 체스보드 코너 검출 (SB → 구형 폴백)
+    # 좌표계를 objp와 일치시키기 위해 reshape/transpose 수행
     pattern_size = (BOARD_COLS, BOARD_ROWS)  # 내부 코너 수!
     ok = False
     try:
@@ -102,10 +105,11 @@ def main():
 
     # 4) 3D 보드 코너 (Z=0 평면)
     # 체커보드 행(row)이 차량 앞(+X), 열(col)이 좌(+Y)을 향하도록 좌표계를 정의
+    # 체커보드 월드 좌표 생성: 행(row) → 차량 +X, 열(col) → 차량 +Y(왼쪽)
     rows = np.tile(np.arange(BOARD_ROWS), BOARD_COLS)      # row index changes fastest (matches corners flatten order)
     cols = np.repeat(np.arange(BOARD_COLS), BOARD_ROWS)    # column index stays constant for each row block
     objp = np.zeros((BOARD_ROWS * BOARD_COLS, 3), np.float32)
-    objp[:, 0] = -rows * SQUARE_SIZE_M        # row 증가(이미지 아래) → 차량 +X(앞) 이 되도록 부호 반전
+    objp[:, 0] = rows * SQUARE_SIZE_M        # row 증가(이미지 아래) → 차량 +X(앞) 이 되도록 부호 반전
     objp[:, 1] = -cols * SQUARE_SIZE_M        # col 증가(오른쪽) → 차량 +Y(왼쪽 양수) 되도록 부호 반전
     print("Mapped checkerboard object points preview (first 10 rows):")
     print(objp[:10]) # 체크보드 좌표계 확인 
@@ -125,7 +129,7 @@ def main():
     print(f"camera height ~= {-t[2,0]:.3f} m")
 
     # 6) H 만들고 IPM 생성
-    H = build_ipm_homography_from_plane(K, R, t)
+    H = build_ipm_homography_from_plane(K, R, t)  # 바닥 → 이미지 호모그래피
 
     W  = int(round((X_MAX - X_MIN)/INTERVAL_X))
     Hh = int(round((Y_MAX - Y_MIN)/INTERVAL_Y))
@@ -143,7 +147,7 @@ def main():
     # 예: img_corners = np.array([[x0,y0],[x1,y1],...], dtype=np.float32)
     # 각 꼭짓점이 영상 안에 있는지 확인하고 수정해 주세요.
 
-    # Debug: visualize projected IPM region on undistorted image
+    # Debug: IPM 대상 영역이 영상 안에 들어오는지 빨간 폴리라인으로 확인
     debug = undistorted.copy()
     cv2.polylines(
         debug,
