@@ -73,8 +73,8 @@ def main():
         sb_flags = cv2.CALIB_CB_EXHAUSTIVE | cv2.CALIB_CB_ACCURACY
         ok, corners = cv2.findChessboardCornersSB(gray, pattern_size, flags=sb_flags)
         if ok:
-            # corners = corners.reshape(BOARD_ROWS, BOARD_COLS, 1, 2)
-            # corners = corners.transpose(1, 0, 2, 3).reshape(-1, 1, 2)
+            corners = corners.reshape(BOARD_ROWS, BOARD_COLS, 1, 2)
+            corners = corners.transpose(1, 0, 2, 3).reshape(-1, 1, 2)
             vis = undistorted.copy()
             cv2.drawChessboardCorners(vis, pattern_size, corners, ok)
             cv2.imwrite("corners_debug.png", vis)
@@ -90,6 +90,8 @@ def main():
         if ok:
             criteria = (cv2.TERM_CRITERIA_EPS+cv2.TERM_CRITERIA_MAX_ITER, 30, 1e-3)
             corners = cv2.cornerSubPix(gray, corners, (11,11), (-1,-1), criteria)
+            corners = corners.reshape(BOARD_ROWS, BOARD_COLS, 1, 2)
+            corners = corners.transpose(1, 0, 2, 3).reshape(-1, 1, 2)
             vis = undistorted.copy()
             cv2.drawChessboardCorners(vis, pattern_size, corners, ok)
             cv2.imwrite("corners_debug.png", vis)
