@@ -68,6 +68,8 @@ def main():
 
     # 3) 체스보드 코너 검출 (SB → 구형 폴백)
     pattern_size = (BOARD_COLS, BOARD_ROWS)  # 내부 코너 수!
+    corners = corners.reshape(BOARD_ROWS, BOARD_COLS, 1, 2)
+    corners = corners.transpose(1, 0, 2, 3).reshape(-1, 1, 2)
     ok = False
     try:
         sb_flags = cv2.CALIB_CB_EXHAUSTIVE | cv2.CALIB_CB_ACCURACY
@@ -106,7 +108,7 @@ def main():
     # vehicle X=foward, Y=left 를 가정한다.
     rot_objp = objp.copy()
     rot_objp[:, 0] = objp[:,1]  # rows(이미지 위→아래) → 차량 +X(앞쪽). 필요 시 부호/축을 바꿔서 차량 좌표계에 맞춰줘.
-    rot_objp[:, 1] = objp[:,0]  # cols(이미지 왼→오른) → 차량 +Y(왼쪽). 원하는 좌표계에 맞게 수정 가능.
+    rot_objp[:, 1] = -objp[:,0]  # cols(이미지 왼→오른) → 차량 +Y(왼쪽). 원하는 좌표계에 맞게 수정 가능.
     objp = rot_objp
     print("Mapped checkerboard object points preview (first 10 rows):")
     print(objp[:10]) # 체크보드 좌표계 확인 
