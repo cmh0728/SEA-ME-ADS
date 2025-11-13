@@ -106,7 +106,7 @@ def main():
     # 카메라에서 본 체커보드가 가로로 놓여 있을 경우
     # (cols 방향이 차량 좌우, rows 방향이 차량 앞/뒤) 축을 재정의해준다.
     # vehicle X=foward, Y=left 를 가정한다.
-    rot_objp = objp.copy()
+    rot_objp = np.zeros_like(objp)
     rot_objp[:, 0] = objp[:,1]  # rows(이미지 위→아래) → 차량 +X(앞쪽). 필요 시 부호/축을 바꿔서 차량 좌표계에 맞춰줘.
     rot_objp[:, 1] = -objp[:,0]  # cols(이미지 왼→오른) → 차량 +Y(왼쪽). 원하는 좌표계에 맞게 수정 가능.
     objp = rot_objp
