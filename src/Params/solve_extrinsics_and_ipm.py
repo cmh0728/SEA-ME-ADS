@@ -74,7 +74,7 @@ def main():
         ok, corners = cv2.findChessboardCornersSB(gray, pattern_size, flags=sb_flags)
         if ok:
             corners = corners.reshape(BOARD_ROWS, BOARD_COLS, 1, 2)
-            corners = corners.reshape(-1, 1, 2)
+            corners = corners.transpose(1, 0, 2, 3).reshape(-1, 1, 2, order='F')
             vis = undistorted.copy()
             cv2.drawChessboardCorners(vis, pattern_size, corners, ok)
             cv2.imwrite("corners_debug.png", vis)
@@ -91,7 +91,7 @@ def main():
             criteria = (cv2.TERM_CRITERIA_EPS+cv2.TERM_CRITERIA_MAX_ITER, 30, 1e-3)
             corners = cv2.cornerSubPix(gray, corners, (11,11), (-1,-1), criteria)
             corners = corners.reshape(BOARD_ROWS, BOARD_COLS, 1, 2)
-            corners = corners.reshape(-1, 1, 2)
+            corners = corners.transpose(1, 0, 2, 3).reshape(-1, 1, 2, order='F')
             vis = undistorted.copy()
             cv2.drawChessboardCorners(vis, pattern_size, corners, ok)
             cv2.imwrite("corners_debug.png", vis)
@@ -104,8 +104,8 @@ def main():
     # 체커보드 행(row)이 차량 앞(+X), 열(col)이 좌(+Y)을 향하도록 좌표계를 정의
     grid_row, grid_col = np.mgrid[0:BOARD_ROWS, 0:BOARD_COLS]
     objp = np.zeros((BOARD_ROWS * BOARD_COLS, 3), np.float32)
-    objp[:, 0] = -grid_row.reshape(-1) * SQUARE_SIZE_M  # row는 위→아래 증가하므로 부호를 뒤집어 앞(+X)이 양수
-    objp[:, 1] = -grid_col.reshape(-1) * SQUARE_SIZE_M  # col은 왼→오른 증가, 왼쪽을 +Y로 두기 위해 부호 뒤집기
+    objp[:, 0] = -grid_row.reshape(-1, order='F') * SQUARE_SIZE_M  # rows -> +X
+    objp[:, 1] =  grid_col.reshape(-1, order='F') * SQUARE_SIZE_M   # cols -> +Y (오른쪽 양수, 필요 시 부호 조정)
     print("Mapped checkerboard object points preview (first 10 rows):")
     print(objp[:10]) # 체크보드 좌표계 확인 
 
