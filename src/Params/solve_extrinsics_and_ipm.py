@@ -9,10 +9,12 @@ BOARD_COLS, BOARD_ROWS = 9, 7
 SQUARE_SIZE_M = 0.011  # 1.1 cm
 
 # IPM 영역/스케일
-X_MIN, X_MAX = -1.5, 1.5
-Y_MIN, Y_MAX = 0.0, 8.0
-INTERVAL_X = 0.02
-INTERVAL_Y = 0.02
+X_MIN, X_MAX = -0.05, 0.088 + 0.05
+Y_MIN, Y_MAX = -0.05, 0.066 + 0.05
+W_target, H_target = 640, 480
+INTERVAL_X = (X_MAX - X_MIN) / W_target
+INTERVAL_Y = (Y_MAX - Y_MIN) / H_target
+
 # ---------------------------------
 
 def rodrigues_to_rpy(R):
