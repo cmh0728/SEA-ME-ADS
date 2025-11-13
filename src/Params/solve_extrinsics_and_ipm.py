@@ -101,6 +101,14 @@ def main():
     objp[:,:2] = np.mgrid[0:BOARD_COLS, 0:BOARD_ROWS].T.reshape(-1,2)
     objp *= SQUARE_SIZE_M
 
+    # 카메라에서 본 체커보드가 가로로 놓여 있을 경우
+    # (cols 방향이 차량 좌우, rows 방향이 차량 앞/뒤) 축을 재정의해준다.
+    # vehicle X=foward, Y=left 를 가정한다.
+    rot_objp = objp.copy()
+    rot_objp[:, 0] = -objp[:,1]  # rows(위→아래) -> 차량 +X(앞쪽, 이미지 위쪽이 +X이므로 부호 반전)
+    rot_objp[:, 1] = objp[:,0]   # cols(왼→오른) -> 차량 +Y(왼쪽 양수)
+    objp = rot_objp
+
     # 5) PnP → R, t
     ok, rvec, tvec = cv2.solvePnP(objp, corners, K, D, flags=cv2.SOLVEPNP_ITERATIVE)
     if not ok:
