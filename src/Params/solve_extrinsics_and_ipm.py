@@ -3,15 +3,15 @@ import numpy as np
 import cv2
 
 # ---------- 사용자 설정 ----------
-IMAGE_PATH = "frame0003.jpg"      # 바닥 체스보드가 보이는 한 장
+IMAGE_PATH = "frame0004.jpg"      # 바닥 체스보드가 보이는 한 장
 # 내부 코너 수(가로 x 세로) - 인쇄물 내부코너 기준으로 맞춰주세요!
 BOARD_COLS, BOARD_ROWS = 9, 7
 SQUARE_SIZE_M = 0.011  # 1.1 cm
 
 # IPM 영역/스케일
-X_MIN, X_MAX = 0.0 , 0.35
-Y_MIN, Y_MAX = 0.0 , 0.6
-W_target, H_target = 640, 480
+X_MIN, X_MAX = 0.0 , 0.6 # 차량 앞쪽 60cm
+Y_MIN, Y_MAX = -0.25 , 0.25
+W_target, H_target = 1280, 720  # 목표 IPM 크기 (픽셀)
 INTERVAL_X = (X_MAX - X_MIN) / W_target
 INTERVAL_Y = (Y_MAX - Y_MIN) / H_target
 
@@ -58,8 +58,10 @@ def main():
     if img is None:
         print("Fail to read image:", IMAGE_PATH); sys.exit(1)
 
+    undistorted = cv2.undistort(img, K, D)
+
     # 2) 전처리 (그레이 → CLAHE → 블러)
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    gray = cv2.cvtColor(undistorted, cv2.COLOR_BGR2GRAY)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
     gray = clahe.apply(gray)
     gray = cv2.GaussianBlur(gray, (5,5), 0)
@@ -70,6 +72,11 @@ def main():
     try:
         sb_flags = cv2.CALIB_CB_EXHAUSTIVE | cv2.CALIB_CB_ACCURACY
         ok, corners = cv2.findChessboardCornersSB(gray, pattern_size, flags=sb_flags)
+        if ok:
+            vis = undistorted.copy()
+            cv2.drawChessboardCorners(vis, pattern_size, corners, ok)
+            cv2.imwrite("corners_debug.png", vis)
+
     except Exception:
         ok = False
 
@@ -81,6 +88,9 @@ def main():
         if ok:
             criteria = (cv2.TERM_CRITERIA_EPS+cv2.TERM_CRITERIA_MAX_ITER, 30, 1e-3)
             corners = cv2.cornerSubPix(gray, corners, (11,11), (-1,-1), criteria)
+            vis = undistorted.copy()
+            cv2.drawChessboardCorners(vis, pattern_size, corners, ok)
+            cv2.imwrite("corners_debug.png", vis)
 
     if not ok:
         print("Chessboard not found. 조명/반사/거리/내부코너 수 확인해줘.")
@@ -129,7 +139,7 @@ def main():
     ])
 
     G = cv2.getPerspectiveTransform(img_corners, dst_corners)
-    ipm = cv2.warpPerspective(img, G, (W, Hh))
+    ipm = cv2.warpPerspective(undistorted, G, (W, Hh))
     cv2.imwrite("ipm.png", ipm)
     print(f"\nSaved IPM to ipm.png  ({W}x{Hh})")
 
