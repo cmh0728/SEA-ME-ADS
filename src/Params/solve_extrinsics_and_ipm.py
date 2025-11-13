@@ -106,11 +106,13 @@ def main():
     # 4) 3D 보드 코너 (Z=0 평면)
     # 체커보드 행(row)이 차량 앞(+X), 열(col)이 좌(+Y)을 향하도록 좌표계를 정의
     # 체커보드 월드 좌표 생성: 행(row) → 차량 +X, 열(col) → 차량 +Y(왼쪽)
-    rows = np.tile(np.arange(BOARD_ROWS), BOARD_COLS)      # row index changes fastest (matches corners flatten order)
-    cols = np.repeat(np.arange(BOARD_COLS), BOARD_ROWS)    # column index stays constant for each row block
-    objp = np.zeros((BOARD_ROWS * BOARD_COLS, 3), np.float32)
-    objp[:, 0] = -rows * SQUARE_SIZE_M        # row 증가(이미지 아래) → 차량 +X(앞) 이 되도록 부호 반전
-    objp[:, 1] = -cols * SQUARE_SIZE_M        # col 증가(오른쪽) → 차량 +Y(왼쪽 양수) 되도록 부호 반전
+    objp = []
+    for row in range(BOARD_ROWS):
+        for col in range(BOARD_COLS):
+            x = row * SQUARE_SIZE_M                # 체커보드 세로(row) -> 차량 전방(+X)
+            y = -(col * SQUARE_SIZE_M)             # 체커보드 가로(col) -> 차량 좌측(+Y), 왼쪽 양수 유지
+            objp.append([x, y, 0.0])
+    objp = np.array(objp, dtype=np.float32)
     print("Mapped checkerboard object points preview (first 10 rows):")
     print(objp[:10]) # 체크보드 좌표계 확인 
 
