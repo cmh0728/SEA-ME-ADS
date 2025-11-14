@@ -72,5 +72,6 @@ Extrinsic:
 
 
 # ParamX, ParamY 기준
-RemapHeight   : 640
-RemapWidth    : 860
+RemapHeight   : 720
+RemapWidth    : 1280
+# 기본 이미지 1280 * 720 기준
