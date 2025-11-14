@@ -132,9 +132,6 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     cv::Mat st_Tmp;
     cv::findNonZero(g_TempImg, st_Tmp);    // 0이 아닌 Pixel 추출
 
-    // cv::Mat HalfImage = Temp_Img(cv::Range(700, Temp_Img.rows), cv::Range(0, Temp_Img.cols));
-    // double totalSum = cv::sum(HalfImage)[0]; // 그레이스케일 이미지의 경우
-
     int32_t s32_WindowCentorLeft  = 0;
     int32_t s32_WindowCentorRight = 0;
 
