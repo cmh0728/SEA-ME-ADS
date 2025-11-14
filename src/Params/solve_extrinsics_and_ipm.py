@@ -4,7 +4,7 @@ import cv2
 
 # ---------- 사용자 설정 ----------
 # 단일 체커보드 프레임으로 외부 파라미터와 IPM을 추정하는 스크립트
-IMAGE_PATH = "frame0004.jpg"      # 바닥 체스보드가 보이는 한 장
+IMAGE_PATH = "frame0001.jpg"      # 바닥 체스보드가 보이는 한 장
 # 내부 코너 수(가로 x 세로) - 인쇄물 내부코너 기준으로 맞춰주세요!
 BOARD_COLS, BOARD_ROWS = 9, 7
 SQUARE_SIZE_M = 0.011  # 1.1 cm
