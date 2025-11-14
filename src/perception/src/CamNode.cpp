@@ -9,6 +9,9 @@
 cv::Mat st_ProcessedImage;
 cv::Mat st_IPMX;
 cv::Mat st_IPMY;
+cv::Mat g_IpmImg;       // IPM 결과 (컬러)
+cv::Mat g_TempImg;      // 그레이 + 이후 전처리
+cv::Mat g_ResultImage;  // 시각화용
 bool b_NoLaneLeft = false;
 bool b_NoLaneRight = false;
 CAMERA_LANEINFO st_LaneInfoLeftMain{};
@@ -30,6 +33,7 @@ CameraProcessing::CameraProcessing() : rclcpp::Node("CameraProcessing_node") // 
   //img subscriber
   image_subscription_ = create_subscription<sensor_msgs::msg::CompressedImage>(image_topic, rclcpp::SensorDataQoS(),
     std::bind(&CameraProcessing::on_image, this, std::placeholders::_1)); // 콜백 함수 바인딩 : on_image
+
 
   RCLCPP_INFO(get_logger(), "Perception node subscribing to %s", image_topic.c_str()); //debug msg
 }
@@ -79,20 +83,56 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     int32_t s32_I, s32_J, s32_KalmanStateCnt = 0;
     KALMAN_STATE arst_KalmanState[2] = {0};
 
-    // 이미지 전처리 진행할 임시 이미지 버퍼 생성 Camera.yaml의 remap size 참고
-    cv::Mat Temp_Img(camera_data->st_CameraParameter.s32_RemapHeight, camera_data->st_CameraParameter.s32_RemapWidth, CV_8UC3);
-    cv::Mat st_NoneZero,st_Tmp, st_ResultImage(Temp_Img.size(), CV_8UC3, Scalar(0,0,0)); //결과랑 중간계산 mat, 최종시각화 검정색으로 초기화 
-    // std::cout << img_frame.size() <<std::endl; // check origin img size (1280*720)
+    //setting mat 
 
-    // // 1) 콜백 img_frame 얕은 복사  
-    cv::Mat ori_img = img_frame; // 원본 이미지 자체를 같은 버퍼로 사용 
+    // 1) IPM 결과 버퍼 준비 (카메라 해상도가 바뀔 수 있으니 create 사용)
+    g_IpmImg.create(
+        camera_data->st_CameraParameter.s32_RemapHeight,
+        camera_data->st_CameraParameter.s32_RemapWidth,
+        img_frame.type()          // 보통 CV_8UC3
+    );
 
-    // // 2) IPM 맵을 이용해 780x600 영역으로 리맵 (맵 자체는 LoadMappingParam에서 로드) 
-    cv::remap(ori_img,ori_img,st_IPMX, st_IPMY, cv::INTER_NEAREST, cv::BORDER_CONSTANT);
+    // 2) Temp_Img (gray) 버퍼 준비
+    g_TempImg.create(
+        camera_data->st_CameraParameter.s32_RemapHeight,
+        camera_data->st_CameraParameter.s32_RemapWidth,
+        CV_8UC1
+    );
 
-    // // 3) 전처리: 그레이 변환 + 블러 (필요 시 커널 크기/유형 변경)
-    cv::cvtColor(ori_img, Temp_Img, COLOR_BGR2GRAY);
-    cv::GaussianBlur(Temp_Img, Temp_Img, Size(1,1), 0);
+    // 3) 결과 이미지 버퍼 준비
+    g_ResultImage.create(
+        camera_data->st_CameraParameter.s32_RemapHeight,
+        camera_data->st_CameraParameter.s32_RemapWidth,
+        CV_8UC3
+    );
+    g_ResultImage.setTo(cv::Scalar(0,0,0)); // 매 프레임 초기화
+
+    // process pipe line 
+
+    // (A) 원본 → IPM (탑뷰)
+    cv::remap(img_frame, g_IpmImg, st_IPMX, st_IPMY,
+              cv::INTER_NEAREST, cv::BORDER_CONSTANT);
+
+    // (B) IPM → Gray
+    cv::cvtColor(g_IpmImg, g_TempImg, cv::COLOR_BGR2GRAY);
+    cv::GaussianBlur(g_TempImg, g_TempImg, cv::Size(3,3), 0);  // 1x1은 사실상 no-op
+
+    //########################cmh codes for lane detection v2 ########################//
+
+    // // 이미지 전처리 진행할 임시 이미지 버퍼 생성 Camera.yaml의 remap size 참고
+    // cv::Mat Temp_Img(camera_data->st_CameraParameter.s32_RemapHeight, camera_data->st_CameraParameter.s32_RemapWidth, CV_8UC1);
+    // cv::Mat st_NoneZero,st_Tmp, st_ResultImage(Temp_Img.size(), CV_8UC3, Scalar(0,0,0)); //결과랑 중간계산 mat, 최종시각화 검정색으로 초기화 
+    // // std::cout << img_frame.size() <<std::endl; // check origin img size (1280*720)
+
+    // // // 1) 콜백 img_frame 얕은 복사  
+    // cv::Mat ori_img = img_frame; // 원본 이미지 자체를 같은 버퍼로 사용 
+
+    // // // 2) IPM 맵을 이용해 860*640 영역으로 리맵 (맵 자체는 LoadMappingParam에서 로드) 
+    // cv::remap(img_frame,g_IpmImg,st_IPMX, st_IPMY, cv::INTER_NEAREST, cv::BORDER_CONSTANT);
+
+    // // // 3) 전처리: 그레이 변환 + 블러 (필요 시 커널 크기/유형 변경)
+    // cv::cvtColor(ori_img, Temp_Img, COLOR_BGR2GRAY);
+    // cv::GaussianBlur(Temp_Img, Temp_Img, Size(1,1), 0);
 
     // // 4) 이진화 + 팽창 + 캐니 엣지로 차선 후보 강조 (threshold, Canny 범위가 튜닝 포인트)
     // cv::Mat st_K = cv::getStructuringElement(MORPH_RECT, Size(5, 5));
@@ -248,8 +288,9 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     // GUI 출력이 필요 없다면 아래 imshow / waitKey 를 주석 처리해 성능을 확보한다.
     if(visualize)
     {
-        cv::imshow("Temp_Img",Temp_Img);
-        cv::imshow("st_ResultImage",st_ResultImage);
+        cv::imshow("IPM", g_IpmImg);
+        cv::imshow("Temp_Img", g_TempImg);
+        cv::imshow("st_ResultImage", g_ResultImage);
         cv::waitKey(1);
     }
     
