@@ -110,9 +110,10 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     // process pipe line 
 
     // (A) 원본 → IPM (탑뷰)
-    cv::remap(img_frame, g_IpmImg, st_IPMX, st_IPMY,
-              cv::INTER_NEAREST, cv::BORDER_CONSTANT);
-
+   // cv::remap(img_frame, g_IpmImg, st_IPMX, st_IPMY,
+     //         cv::INTER_NEAREST, cv::BORDER_CONSTANT);
+	// 그냥 원본을 바로 사용
+    g_IpmImg = img_frame.clone();
     // (B) IPM → Gray
     cv::cvtColor(g_IpmImg, g_TempImg, cv::COLOR_BGR2GRAY);
     cv::GaussianBlur(g_TempImg, g_TempImg, cv::Size(3,3), 0);  // 1x1은 사실상 no-op
