@@ -882,7 +882,7 @@ void FindLaneStartPositions(const cv::Mat& st_Edge, int32_t& s32_WindowCentorLef
     // OpenCV의 Mat객체의 Height, Width는 우리가 생각하는 것과 반대
     int32_t* ps32_Histogram = new int32_t[st_Edge.cols](); // 동적 할당, 모두 0으로 초기화
 
-    // 700~780 열에 해당하는 행 데이터들을 각 열별로 다 더한 후 최대가 되는 x좌표(행) 추출
+    // 700~780 열에 해당하는 행 데이터들을 각 열별로 다 더한 후 최대가 되는 x좌표(행) 추출 --> height가 700이상이여야 작동한다. 
     for (s32_row = 0; s32_row < st_Edge.cols; ++s32_row) {
         for (s32_col = 700; s32_col < st_Edge.rows; ++s32_col) {
             ps32_Histogram[s32_row] += st_Edge.at<uchar>(s32_col, s32_row) > 0 ? 1 : 0;
