@@ -132,6 +132,9 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     cv::Mat st_Tmp;
     cv::findNonZero(g_TempImg, st_Tmp);    // 0이 아닌 Pixel 추출
 
+    // cv::Mat HalfImage = Temp_Img(cv::Range(700, Temp_Img.rows), cv::Range(0, Temp_Img.cols));
+    // double totalSum = cv::sum(HalfImage)[0]; // 그레이스케일 이미지의 경우
+
     int32_t s32_WindowCentorLeft  = 0;
     int32_t s32_WindowCentorRight = 0;
 
@@ -227,7 +230,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     else
     {
         // ---- 이미 Kalman Object가 있는 경우: 업데이트 ----
-
+        // 감지된 왼쪽 차선이 있는 경우 상태 업데이트
         if (!b_NoLaneLeft)
         {
             arst_KalmanState[0] = CalculateKalmanState(
@@ -249,7 +252,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
         for (s32_I = 0; s32_I < camera_data->s32_KalmanObjectNum; s32_I++)
         {
             bool b_SameObj = false;
-
+            // 칼만 객체와 새 관측을 비교해 동일 차선인지 판별
             for (s32_J = 0; s32_J < 2; s32_J++)
             {
                 CheckSameKalmanObject(camera_data->arst_KalmanObject[s32_I],
