@@ -661,6 +661,7 @@ void LoadParam(CAMERA_DATA *CameraData)
     CameraData->st_CameraParameter.s32_RemapHeight = st_CameraParam["RemapHeight"].as<int32_t>();
     CameraData->st_CameraParameter.s32_RemapWidth  = st_CameraParam["RemapWidth"].as<int32_t>();
 
+    std::cout << "Sucess to Load Camera Parameter!" << std::endl;
     // Kalman Object InitialLize
     CameraData->s32_KalmanObjectNum = 0;
     CameraData->f32_LastDistanceLeft = 0;
