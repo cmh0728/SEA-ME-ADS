@@ -7,25 +7,26 @@ with open("extrinsics_and_h.yaml", "r") as f:
 H = np.array(data["H_ground_to_image"], dtype=np.float64)
 
 # --- IPM 영역 (바닥 좌표계: X=앞, Y=좌(+), 우(-)) ---
-X_MIN, X_MAX = -0.3 , 0.1    # 네가 solve_extrinsics에서 썼던 값이랑 맞춰
+X_MIN, X_MAX = -0.3 , 0.1
 Y_MIN, Y_MAX = -0.25 , 0.18
 
-# --- camera.yaml 과 반드시 같게 ---
-H_ipm = 600   # RemapHeight
-W_ipm = 800   # RemapWidth
+# --- camera.yaml 과 동일 ---
+H_ipm = 600
+W_ipm = 800
 
 map_x = np.zeros((H_ipm, W_ipm), np.float32)
 map_y = np.zeros((H_ipm, W_ipm), np.float32)
 
 for r in range(H_ipm):
-    # r=0 (위쪽)  -> X_MIN (가까운 쪽)
-    # r=H_ipm-1   -> X_MAX (먼 쪽)
+    # (위=가까운, 아래=먼 쪽) or 반대로 – X는 너가 원하는 방향으로 선택
     X = X_MIN + (X_MAX - X_MIN) * r / (H_ipm - 1)
 
     for c in range(W_ipm):
-        # c=0 (왼쪽) -> Y_MIN
-        # c=W_ipm-1 -> Y_MAX
-        Y = Y_MIN + (Y_MAX - Y_MIN) * c / (W_ipm - 1)
+        # *** 여기만 바꿈 ***
+        # c=0 (왼쪽)  -> Y_MAX (차량 왼쪽)
+        # c=W-1(오른쪽)-> Y_MIN (차량 오른쪽)
+        Y = Y_MAX - (Y_MAX - Y_MIN) * c / (W_ipm - 1)
+        # 또는 Y_MIN/Y_MAX를 바꾸고 기존 공식을 써도 됨
 
         ground = np.array([X, Y, 1.0], dtype=np.float64)
         img_h = H @ ground
