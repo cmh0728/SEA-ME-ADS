@@ -1,6 +1,6 @@
 # IPM mapping parameters
-IPMParameterX : "./src/Integration/Param/ParamX.txt"
-IPMParameterY : "./src/Integration/Param/ParamY.txt"
+IPMParameterX : "./src/Params/ParamX.txt"
+IPMParameterY : "./src/Params/ParamY.txt"
 
 
 # Camera lane info parameters

@@ -253,6 +253,7 @@ struct LANE_COEFFICIENT
 {
   float64_t f64_Slope;
   float64_t f64_Intercept;
+  bool b_IsLeft = true;
 };
 
 struct LANE_KALMAN

@@ -14,7 +14,7 @@ bool b_NoLaneRight = false;
 CAMERA_LANEINFO st_LaneInfoLeftMain{};
 CAMERA_LANEINFO st_LaneInfoRightMain{};
 bool visualize = true;
-static CAMERA_DATA g_camera_data;
+static CAMERA_DATA static_camera_data;
 
 //################################################## CameraProcessing class functions ##################################################//
 
@@ -24,8 +24,8 @@ CameraProcessing::CameraProcessing() : rclcpp::Node("CameraProcessing_node") // 
   declare_parameter<std::string>("image_topic", "/camera/camera/color/image_raw/compressed");
   const auto image_topic = get_parameter("image_topic").as_string();
 
-  LoadParam(&g_camera_data);          // 파라미터 로드
-  LoadMappingParam(&g_camera_data);   // IPM 맵 로드
+  LoadParam(&static_camera_data);          // cameardata param load
+  LoadMappingParam(&static_camera_data);   // cameradata IPM 맵 로드
 
   //img subscriber
   image_subscription_ = create_subscription<sensor_msgs::msg::CompressedImage>(image_topic, rclcpp::SensorDataQoS(),
@@ -54,7 +54,7 @@ void CameraProcessing::on_image(const sensor_msgs::msg::CompressedImage::ConstSh
   {
     cv::Mat img = cv::imdecode(msg->data, cv::IMREAD_COLOR); // cv:Mat 형식 디코딩 
 
-    ImgProcessing(img,&g_camera_data); // img processing main pipeline function
+    ImgProcessing(img,&static_camera_data); // img processing main pipeline function
     
   }
   catch (const cv::Exception & e) // cv에러 예외처리 
@@ -654,6 +654,7 @@ void DrawDrivingLane(cv::Mat& st_ResultImage, const LANE_COEFFICIENT st_LaneCoef
 void LoadParam(CAMERA_DATA *CameraData)
 {
     YAML::Node st_CameraParam = YAML::LoadFile("src/Params/Camera.yaml");
+    std::cout << "Loading Camera Parameter from YAML File..." << std::endl;
 
     CameraData->st_CameraParameter.s_IPMParameterX = st_CameraParam["IPMParameterX"].as<std::string>();
     CameraData->st_CameraParameter.s_IPMParameterY = st_CameraParam["IPMParameterY"].as<std::string>();
