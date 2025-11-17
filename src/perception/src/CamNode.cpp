@@ -526,6 +526,7 @@ void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPositio
     // image size
     int cols = st_EdgeImage.cols;
     int rows = st_EdgeImage.rows;
+    int32_t ImgHeight = rows - 1; 
 
     // x : 윈도우 가로 반폭 (50픽셀) , y : 윈도우 세로 높이 (50픽셀)
     int32_t s32_MarginX = 50, s32_MarginY = 50, s32_I,s32_J, s32_ClosestPnt, s32_CentorX, s32_CentorY;
@@ -622,7 +623,7 @@ void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPositio
                     {
                         // st_LeftWindowInds.push_back(st_Position);
                         st_DetectedLane.at<Vec3b>(st_Position.y, st_Position.x) = Vec3b(255,0,0);
-                        if(s32_ClosestPnt>400-st_Position.x)
+                        if(s32_ClosestPnt>cols/2-st_Position.x)
                         {
                             st_Position.y = ImgHeight + st_Position.y*(-1);
                             st_LaneInfoLeft.arst_LaneSample[st_LaneInfoLeft.s32_SampleCount] = st_Position;
@@ -729,9 +730,13 @@ void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPositio
 // 추정된 차선 계수로 결과 영상에 선을 그린다
 void DrawDrivingLane(cv::Mat& st_ResultImage, const LANE_COEFFICIENT st_LaneCoef, cv::Scalar st_Color)
 {
-    int32_t x0 = int(-st_LaneCoef.f64_Intercept/st_LaneCoef.f64_Slope);
-    int32_t x1 = int((779-st_LaneCoef.f64_Intercept)/st_LaneCoef.f64_Slope);
-    cv::line(st_ResultImage, cv::Point(x0, 780), cv::Point(x1, 0), st_Color, 2);
+    int rows = st_ResultImage.rows;
+    int32_t x0 = int(-st_LaneCoef.f64_Intercept / st_LaneCoef.f64_Slope);
+    int32_t x1 = int(((rows - 1) - st_LaneCoef.f64_Intercept) / st_LaneCoef.f64_Slope);
+    cv::line(st_ResultImage,
+            cv::Point(x0, rows - 1),
+            cv::Point(x1, 0),
+            st_Color, 2);    
 }
 
 
