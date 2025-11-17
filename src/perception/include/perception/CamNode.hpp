@@ -36,7 +36,14 @@ void LoadMappingParam(CAMERA_DATA *pst_CameraData);                             
 void FindTop5MaxIndices(const int32_t* ps32_Histogram, int32_t s32_MidPoint, int32_t ars32_TopIndices[5], bool& b_NoLane);
 int32_t FindClosestToMidPoint(const int32_t points[5], int32_t s32_MidPoint);
 void FindLaneStartPositions(const cv::Mat& st_Edge, int32_t& s32_WindowCentorLeft, int32_t& s32_WindowCentorRight, bool& b_NoLaneLeft, bool& b_NoLaneRight);
-void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPosition, CAMERA_LANEINFO& st_LaneInfoLeft ,CAMERA_LANEINFO& st_LaneInfoRight ,int32_t& s32_LeftWindowCentor, int32_t& s32_RightWindowCentor, cv::Mat& st_ResultImage);
+void SlidingWindow(const cv::Mat& st_EdgeImage,
+                   const cv::Mat& st_NonZeroPosition,
+                   CAMERA_LANEINFO& st_LaneInfoLeft,
+                   CAMERA_LANEINFO& st_LaneInfoRight,
+                   int32_t& s32_LeftWindowCentor,
+                   int32_t& s32_RightWindowCentor,
+                   cv::Mat& st_ResultImage,
+                   int32_t s32_ImageHeight);
 // 모델 핏/차선 계수 계산: 다항식 차수 변경 등의 실험은 아래 부분에서
 LANE_COEFFICIENT FitModel(const Point& st_Point1, const Point& st_Point2, bool& b_Flag);
 void CalculateLaneCoefficient(CAMERA_LANEINFO& st_LaneInfo, int32_t s32_Iteration, int64_t s64_Threshold);
