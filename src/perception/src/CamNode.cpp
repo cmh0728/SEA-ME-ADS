@@ -346,6 +346,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
         cv::waitKey(1);
     }
 }
+//######################################### MakeKalmanStateBasedLaneCoef func  ##################################################//
 
 // 칼만 상태를 선형 차선 계수로 변환
 void MakeKalmanStateBasedLaneCoef(const LANE_KALMAN& st_KalmanObject, LANE_COEFFICIENT& st_LaneCoefficient)
@@ -366,7 +367,8 @@ void MakeKalmanStateBasedLaneCoef(const LANE_KALMAN& st_KalmanObject, LANE_COEFF
         // std::cout << "y = " << st_LaneCoefficient.f64_Slope << "x + " << st_LaneCoefficient.f64_Intercept << std::endl;
     }
 }
- 
+ //######################################### DeleteKalmanObject func  ##################################################//
+
 // 매칭 실패한 칼만 차선 객체를 제거
 void DeleteKalmanObject(CAMERA_DATA &pst_CameraData, int32_t& s32_KalmanObjectNum, int32_t s32_I)
 {
@@ -394,6 +396,7 @@ void DeleteKalmanObject(CAMERA_DATA &pst_CameraData, int32_t& s32_KalmanObjectNu
 
     }
 }
+//######################################### CheckSameKalmanObject func  ##################################################//
 
 // 새 관측 차선이 기존 칼만 객체와 동일한지 여부 판단
 void CheckSameKalmanObject(LANE_KALMAN& st_KalmanObject, KALMAN_STATE st_KalmanStateLeft)
@@ -411,6 +414,7 @@ void CheckSameKalmanObject(LANE_KALMAN& st_KalmanObject, KALMAN_STATE st_KalmanS
         }
     }
 }
+//######################################### PredictState func  ##################################################//
 
 // 칼만 필터 예측 단계
 void PredictState(LANE_KALMAN& st_KalmanObject)
@@ -421,6 +425,8 @@ void PredictState(LANE_KALMAN& st_KalmanObject)
     st_KalmanObject.st_P = st_KalmanObject.st_A * st_KalmanObject.st_P * st_KalmanObject.st_A.transpose() + st_KalmanObject.st_Q;
 
 }
+
+//######################################### UpdateMeasurement func  ##################################################//
 
 // 칼만 필터 측정 업데이트 단계
 void UpdateMeasurement(LANE_KALMAN& st_KalmanObject)
@@ -433,6 +439,8 @@ void UpdateMeasurement(LANE_KALMAN& st_KalmanObject)
 
 }
 
+//######################################### SetInitialX func  ##################################################//
+
 // 관측 기반으로 상태 벡터 초기화
 void SetInitialX(LANE_KALMAN& st_KalmanObject)
 {
@@ -442,6 +450,7 @@ void SetInitialX(LANE_KALMAN& st_KalmanObject)
     st_KalmanObject.st_X(3) = st_KalmanObject.st_Z(3);
 }
 
+//######################################### UpdateObservation func  ##################################################//
 
 // 관측 벡터에 거리/각도 값을 기록
 void UpdateObservation(LANE_KALMAN& st_KalmanObject, const KALMAN_STATE st_KalmanState)
@@ -451,6 +460,8 @@ void UpdateObservation(LANE_KALMAN& st_KalmanObject, const KALMAN_STATE st_Kalma
     st_KalmanObject.st_Z(2) = st_KalmanState.f64_Angle;
     st_KalmanObject.st_Z(3) = st_KalmanState.f64_DeltaAngle;
 }
+
+//######################################### CalculateKalmanState func  ##################################################//
 
 // 직선 모델을 거리·각도 형태의 칼만 상태로 변환
 KALMAN_STATE CalculateKalmanState(const LANE_COEFFICIENT& st_LaneCoef, float32_t& f64_Distance, float32_t& f64_Angle) 
@@ -473,6 +484,8 @@ KALMAN_STATE CalculateKalmanState(const LANE_COEFFICIENT& st_LaneCoef, float32_t
     f64_Angle = st_KalmanState.f64_Angle;
     return st_KalmanState;
 }
+
+//######################################### InitializeKalmanObject func  ##################################################//
 
 // 칼만 필터 행렬 및 공분산 초기화
 void InitializeKalmanObject(LANE_KALMAN& st_KalmanObject)
@@ -503,7 +516,7 @@ void InitializeKalmanObject(LANE_KALMAN& st_KalmanObject)
 
 }
 
-//############################################ sliding window function ##################################################//
+//######################################### SlidingWindow func ##################################################//
 
 
 // 에지 이미지에서 슬라이딩 윈도로 좌/우 차선 포인트를 추출
@@ -727,6 +740,8 @@ void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPositio
 
 }
 
+//###################################### DrawDrivingLane func ##################################################//
+
 // 추정된 차선 계수로 결과 영상에 선을 그린다
 void DrawDrivingLane(cv::Mat& st_ResultImage, const LANE_COEFFICIENT st_LaneCoef, cv::Scalar st_Color)
 {
@@ -739,6 +754,7 @@ void DrawDrivingLane(cv::Mat& st_ResultImage, const LANE_COEFFICIENT st_LaneCoef
             st_Color, 2);    
 }
 
+//###################################### FitModel func ##################################################//
 
 // 두 포인트를 이용해 직선 모델을 구성
 LANE_COEFFICIENT FitModel(const Point& st_Point1, const Point& st_Point2, bool& b_Flag)
@@ -755,6 +771,8 @@ LANE_COEFFICIENT FitModel(const Point& st_Point1, const Point& st_Point2, bool& 
 
     return st_TmpModel;
 }
+
+//###################################### CalculateLaneCoefficient func ##################################################//
 
 // 슬라이딩 윈도우로 수집한 점들에서 RANSAC으로 차선 계수를 산출
 void CalculateLaneCoefficient(CAMERA_LANEINFO& st_LaneInfo, int32_t s32_Iteration, int64_t s64_Threshold)
@@ -808,6 +826,8 @@ void CalculateLaneCoefficient(CAMERA_LANEINFO& st_LaneInfo, int32_t s32_Iteratio
     // cout<<"y = "<<st_LaneInfo.st_LaneCoefficient.f64_Slope<<" * x + "<<st_LaneInfo.st_LaneCoefficient.f64_Intercept<<endl;
 }
 
+//###################################### FindTop5MaxIndices func ##################################################//
+
 // 히스토그램에서 가장 누적 픽셀이 높은  다섯 개의 열 인덱스를 구하기 
 void FindTop5MaxIndices(const int32_t* ps32_Histogram, int32_t s32_MidPoint, int32_t ars32_resultIdxs[5], bool& b_NoLane) 
 {
@@ -837,6 +857,8 @@ void FindTop5MaxIndices(const int32_t* ps32_Histogram, int32_t s32_MidPoint, int
         b_NoLane = true;
 }
 
+//###################################### FindClosestToMidPoint func ##################################################//
+
 // 인덱스 중 중앙선과 가장 가까운 값을 반환
 int32_t FindClosestToMidPoint(const int32_t points[5], int32_t s32_MidPoint) 
 {
@@ -857,6 +879,7 @@ int32_t FindClosestToMidPoint(const int32_t points[5], int32_t s32_MidPoint)
     return s32_ClosestIndex;
 }
 
+//###################################### FindLaneStartPositions func ##################################################//
 
 // 히스토그램 분석으로 좌·우 슬라이딩 윈도 시작 위치를 계산
 void FindLaneStartPositions(const cv::Mat& st_Edge, int32_t& s32_WindowCentorLeft, int32_t& s32_WindowCentorRight, bool& b_NoLaneLeft, bool& b_NoLaneRight) 
@@ -902,7 +925,7 @@ void FindLaneStartPositions(const cv::Mat& st_Edge, int32_t& s32_WindowCentorLef
     delete[] ps32_Histogram; // 동적 할당 해제 
 }
 
-//################################################## load parameter  ##################################################//
+//###################################### Parameter loader ##################################################//
 
 // YAML 카메라 설정을 로드하고 기본 상태를 초기화
 void LoadParam(CAMERA_DATA *CameraData)
