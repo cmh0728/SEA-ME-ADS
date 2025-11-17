@@ -155,7 +155,8 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
                   st_LaneInfoRight,
                   s32_WindowCentorLeft,
                   s32_WindowCentorRight,
-                  g_ResultImage);
+                  g_ResultImage,
+                  camera_data->st_CameraParameter.s32_RemapHeight);
 
     // ======================= Kalman Filter 단계 ========================
 
@@ -506,20 +507,10 @@ void InitializeKalmanObject(LANE_KALMAN& st_KalmanObject)
 
 // 에지 이미지에서 슬라이딩 윈도로 좌/우 차선 포인트를 추출
 void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPosition, CAMERA_LANEINFO& st_LaneInfoLeft, 
-                        CAMERA_LANEINFO& st_LaneInfoRight, int32_t& s32_WindowCentorLeft, int32_t& s32_WindowCentorRight, cv::Mat& st_ResultImage)
+                        CAMERA_LANEINFO& st_LaneInfoRight, int32_t& s32_WindowCentorLeft, int32_t& s32_WindowCentorRight, cv::Mat& st_ResultImage , int32_t ImgHeight)
 {
 
-    /*
-    (WindowMinWidth_Left, WindowMinHeight_Left)        
-                        |------------------------------|--
-                        |   ---- 2*s32_MarginX -----   ||
-                        |                              | s32_MarginY
-                        |                              ||
-                        |------------------------------|--
-                                            
-    */
-
-    int32_t s32_WindowHeight = 640;
+    int32_t s32_WindowHeight = ImgHeight;
     bool b_ValidWindowLeft = true;
     bool b_ValidWindowRight = true;
 
