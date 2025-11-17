@@ -134,14 +134,14 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     cv::Mat st_Tmp;
     cv::findNonZero(g_TempImg, st_Tmp);    // 0이 아닌 Pixel 추출 --> 차선후보픽셀 
 
-    int32_t s32_WindowCentorLeft  = 0;
+    int32_t s32_WindowCentorLeft  = 0; // 인덱스 0으로 초기화 
     int32_t s32_WindowCentorRight = 0;
 
     // (옵션) 아래 영역의 EdgeSum을 보고 디버깅하고 싶으면 사용
     // cv::Mat HalfImage = g_TempImg(cv::Range(700, g_TempImg.rows), cv::Range(0, g_TempImg.cols));
     // double totalSum = cv::sum(HalfImage)[0];
 
-    // =======================  히스토그램 기반 시작 위치 ==================
+    // =======================  히스토그램 기반 시작 위치 ================== --> 중앙과 가까운 인덱스 찾는과정 (차선 시작점 )
     FindLaneStartPositions(g_TempImg,
                            s32_WindowCentorLeft, //0
                            s32_WindowCentorRight, // 0
@@ -519,7 +519,7 @@ void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPositio
                                             
     */
 
-    int32_t s32_WindowHeight = 780;
+    int32_t s32_WindowHeight = 640;
     bool b_ValidWindowLeft = true;
     bool b_ValidWindowRight = true;
 
@@ -840,11 +840,12 @@ void FindTop5MaxIndices(const int32_t* ps32_Histogram, int32_t s32_MidPoint, int
         b_NoLane = true;
 }
 
-// 후보 인덱스 중 중앙선과 가장 가까운 값을 반환
+// 인덱스 중 중앙선과 가장 가까운 값을 반환
 int32_t FindClosestToMidPoint(const int32_t points[5], int32_t s32_MidPoint) 
 {
-    int32_t s32_MinDistance = std::abs(points[0] - s32_MidPoint);
-    int32_t s32_ClosestIndex = points[0],s32_I;
+    int32_t s32_MinDistance = std::abs(points[0] - s32_MidPoint); 
+    int32_t s32_ClosestIndex = points[0];
+    int32_t s32_I;
     
     for (s32_I = 1; s32_I < 5; ++s32_I) {
         if (points[s32_I] == -1) continue; // 유효하지 않은 인덱스 건너뛰기
@@ -883,24 +884,25 @@ void FindLaneStartPositions(const cv::Mat& st_Edge, int32_t& s32_WindowCentorLef
     FindTop5MaxIndices(ps32_Histogram, st_Edge.cols / 2, ars32_LeftCandidate, b_NoLaneLeft);
     if(!b_NoLaneLeft) // 왼쪽 차선이 감지된 경우
     {
+        //가장 가까운 히스토그램 인덱스를 반환  int32_t type
         s32_WindowCentorLeft = FindClosestToMidPoint(ars32_LeftCandidate, st_Edge.cols / 2);
     }
 
-    //오른쪽 차선 시작점
+    //오른쪽 차선 시작점 : 절반 부터 시작 
     FindTop5MaxIndices(ps32_Histogram + st_Edge.cols / 2, st_Edge.cols - st_Edge.cols / 2, ars32_RightCandidate, b_NoLaneRight);
-    if(!b_NoLaneRight)
+    if(!b_NoLaneRight) //오른쪽 차선 감지된 경우 
     {
         // 오른쪽 인덱스 보정
         for (s32_I = 0; s32_I < 5; ++s32_I) {
             if (ars32_RightCandidate[s32_I] != -1) {
-                ars32_RightCandidate[s32_I] += st_Edge.cols / 2;
+                ars32_RightCandidate[s32_I] += st_Edge.cols / 2; // 절반 오프셋 추가 -->원래 좌표계로 보정 
             }
         }
 
         s32_WindowCentorRight = FindClosestToMidPoint(ars32_RightCandidate, st_Edge.cols / 2);
     }
 
-    delete[] ps32_Histogram;
+    delete[] ps32_Histogram; // 동적 할당 해제 
 }
 
 //################################################## load parameter  ##################################################//
