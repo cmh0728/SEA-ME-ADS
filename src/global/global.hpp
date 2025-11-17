@@ -249,11 +249,12 @@ struct KALMAN_STATE
   float64_t f64_DeltaAngle;
 };
 
+// 차선 요소 기울기 
 struct LANE_COEFFICIENT
 {
   float64_t f64_Slope;
   float64_t f64_Intercept;
-  bool b_IsLeft = true;
+  bool b_IsLeft = false;
 };
 
 struct LANE_KALMAN
@@ -293,6 +294,7 @@ struct CAMERA_PARAM
     int32_t s32_RemapWidth;
 };
 
+// 검출한 차선 정보 
 struct CAMERA_LANEINFO
 {
   cv::Point arst_LaneSample[40];

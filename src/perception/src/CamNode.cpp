@@ -6,9 +6,10 @@
 //################################################## Global parameter ##################################################//
 
 
-cv::Mat st_ProcessedImage;
 cv::Mat st_IPMX;
 cv::Mat st_IPMY;
+
+//버퍼 미리 생성 
 cv::Mat g_IpmImg;       // IPM 결과 (컬러)
 cv::Mat g_TempImg;      // 그레이 + 이후 전처리
 cv::Mat g_ResultImage;  // 시각화용
@@ -75,7 +76,10 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
 {
     // kalman filter variables
     CAMERA_LANEINFO st_LaneInfoLeft, st_LaneInfoRight; // sliding window에서 검출된 차선 정보 담는 구조체 
+
+    //왼쪽 차선 구분 
     st_LaneInfoLeft.b_IsLeft = true; // 왼쪽 차선 표시 --> 칼만 객체 생성에서 구분 
+    st_LaneInfoLeft.st_LaneCoefficient.b_IsLeft = true ;
     KALMAN_STATE st_KalmanStateLeft, st_KalmanStateRight; // 새로 계산된 좌우 차선 거리 , 각도 저장 
     int32_t s32_I, s32_J, s32_KalmanStateCnt = 0;
     KALMAN_STATE arst_KalmanState[2] = {0};
@@ -88,7 +92,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     g_IpmImg.create(
         camera_data->st_CameraParameter.s32_RemapHeight,
         camera_data->st_CameraParameter.s32_RemapWidth,
-        img_frame.type()          // 보통 CV_8UC3
+        img_frame.type()          // CV_8UC3
     );
 
     // 2) Temp_Img (gray) 버퍼 준비
@@ -106,31 +110,29 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     );
     g_ResultImage.setTo(cv::Scalar(0,0,0)); // 매 프레임 초기화
 
-    // =======================  (A) 원본 → IPM (탑뷰)  =======================
+    // =======================  원본 → IPM remapping =======================
     cv::remap(img_frame, g_IpmImg, st_IPMX, st_IPMY,
               cv::INTER_NEAREST, cv::BORDER_CONSTANT);
-    // 디버그용: IPM 대신 원본 그대로 쓰고 싶으면 아래 사용
-    // g_IpmImg = img_frame.clone();
 
-    // =======================  (B) IPM → Gray + Blur  =======================
-    cv::cvtColor(g_IpmImg, g_TempImg, cv::COLOR_BGR2GRAY);
+    // =======================  IPM → Gray + Blur  =======================
+    cv::cvtColor(g_IpmImg, g_TempImg, cv::COLOR_BGR2GRAY); //tempImg 사용
     cv::GaussianBlur(g_TempImg, g_TempImg, cv::Size(3,3), 0);
 
-    // =======================  (C) 이진화 + 팽창 + Canny  ===================
+    // =======================  이진화 + 팽창 + Canny  ===================
     cv::Mat st_K = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
 
-    // 1) 이진화
+    // 이진화
     cv::threshold(g_TempImg, g_TempImg, 170, 255, cv::THRESH_BINARY);   // 170 보다 크면 255 아니면 0
 
-    // 2) 팽창
+    // 팽창
     cv::dilate(g_TempImg, g_TempImg, st_K);
 
-    // 3) Canny Edge
+    // Canny Edge
     cv::Canny(g_TempImg, g_TempImg, 100, 360);
 
-    // =======================  (D) 슬라이딩 윈도우 준비  ====================
+    // =======================  슬라이딩 윈도우 준비  ====================
     cv::Mat st_Tmp;
-    cv::findNonZero(g_TempImg, st_Tmp);    // 0이 아닌 Pixel 추출
+    cv::findNonZero(g_TempImg, st_Tmp);    // 0이 아닌 Pixel 추출 --> 차선후보픽셀 
 
     int32_t s32_WindowCentorLeft  = 0;
     int32_t s32_WindowCentorRight = 0;
@@ -139,14 +141,14 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     // cv::Mat HalfImage = g_TempImg(cv::Range(700, g_TempImg.rows), cv::Range(0, g_TempImg.cols));
     // double totalSum = cv::sum(HalfImage)[0];
 
-    // =======================  (E) 히스토그램 기반 시작 위치 ==================
+    // =======================  히스토그램 기반 시작 위치 ==================
     FindLaneStartPositions(g_TempImg,
-                           s32_WindowCentorLeft,
-                           s32_WindowCentorRight,
-                           b_NoLaneLeft,
+                           s32_WindowCentorLeft, //0
+                           s32_WindowCentorRight, // 0
+                           b_NoLaneLeft, // false
                            b_NoLaneRight);
 
-    // =======================  (F) 슬라이딩 윈도우로 좌/우 차선 탐색 ==========
+    // =======================  슬라이딩 윈도우로 좌/우 차선 탐색 ==========
     SlidingWindow(g_TempImg,
                   st_Tmp,
                   st_LaneInfoLeft,
@@ -155,7 +157,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
                   s32_WindowCentorRight,
                   g_ResultImage);
 
-    // =======================  (G) Kalman Filter 단계 ========================
+    // ======================= Kalman Filter 단계 ========================
 
     if (!camera_data->b_ThereIsLeft || !camera_data->b_ThereIsRight)
     {
@@ -499,6 +501,9 @@ void InitializeKalmanObject(LANE_KALMAN& st_KalmanObject)
 
 }
 
+//############################################ sliding window function ##################################################//
+
+
 // 에지 이미지에서 슬라이딩 윈도로 좌/우 차선 포인트를 추출
 void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPosition, CAMERA_LANEINFO& st_LaneInfoLeft, 
                         CAMERA_LANEINFO& st_LaneInfoRight, int32_t& s32_WindowCentorLeft, int32_t& s32_WindowCentorRight, cv::Mat& st_ResultImage)
@@ -737,25 +742,6 @@ void DrawDrivingLane(cv::Mat& st_ResultImage, const LANE_COEFFICIENT st_LaneCoef
     cv::line(st_ResultImage, cv::Point(x0, 780), cv::Point(x1, 0), st_Color, 2);
 }
 
-// YAML 카메라 설정을 로드하고 기본 상태를 초기화
-void LoadParam(CAMERA_DATA *CameraData)
-{
-    YAML::Node st_CameraParam = YAML::LoadFile("src/Params/Camera.yaml");
-    std::cout << "Loading Camera Parameter from YAML File..." << std::endl;
-
-    CameraData->st_CameraParameter.s_IPMParameterX = st_CameraParam["IPMParameterX"].as<std::string>();
-    CameraData->st_CameraParameter.s_IPMParameterY = st_CameraParam["IPMParameterY"].as<std::string>();
-    CameraData->st_CameraParameter.s32_RemapHeight = st_CameraParam["RemapHeight"].as<int32_t>();
-    CameraData->st_CameraParameter.s32_RemapWidth  = st_CameraParam["RemapWidth"].as<int32_t>();
-
-    std::cout << "Sucess to Load Camera Parameter!" << std::endl;
-    // Kalman Object InitialLize
-    CameraData->s32_KalmanObjectNum = 0;
-    CameraData->f32_LastDistanceLeft = 0;
-    CameraData->f32_LastAngleLeft = 0;
-    CameraData->f32_LastDistanceRight = 0;
-    CameraData->f32_LastAngleRight = 0;
-}  
 
 // 두 포인트를 이용해 직선 모델을 구성
 LANE_COEFFICIENT FitModel(const Point& st_Point1, const Point& st_Point2, bool& b_Flag)
@@ -825,31 +811,32 @@ void CalculateLaneCoefficient(CAMERA_LANEINFO& st_LaneInfo, int32_t s32_Iteratio
     // cout<<"y = "<<st_LaneInfo.st_LaneCoefficient.f64_Slope<<" * x + "<<st_LaneInfo.st_LaneCoefficient.f64_Intercept<<endl;
 }
 
-// 히스토그램에서 가장 높은 다섯 개의 열 인덱스를 구한다
-void FindTop5MaxIndices(const int32_t* ps32_Histogram, int32_t s32_MidPoint, int32_t ars32_TopIndices[5], bool& b_NoLane) 
+// 히스토그램에서 가장 누적 픽셀이 높은  다섯 개의 열 인덱스를 구하기 
+void FindTop5MaxIndices(const int32_t* ps32_Histogram, int32_t s32_MidPoint, int32_t ars32_resultIdxs[5], bool& b_NoLane) 
 {
 
     int32_t s32_I, s32_Cnt=0;
     std::pair<int32_t, int32_t> topValues[5];                 // (value, index)
-    std::fill_n(topValues, 5, std::make_pair(0, -1));         // 초기화
+    std::fill_n(topValues, 5, std::make_pair(0, -1));         // 0으로 초기화
 
+    //히스토그램 순회 하면서 픽셀이 가장 높은 5개 
     for (s32_I = 0; s32_I < s32_MidPoint; ++s32_I) {
-        if (ps32_Histogram[s32_I] > topValues[4].first) {
+        if (ps32_Histogram[s32_I] > topValues[4].first) { //0이면 값이 안 들어감 --> lane x
             topValues[4] = std::make_pair(ps32_Histogram[s32_I], s32_I);
             std::sort(topValues, topValues + 5, std::greater<>());
         }
     }
 
+    //결과 인덱스를 복사 
     for (s32_I = 0; s32_I < 5; ++s32_I) {
-        ars32_TopIndices[s32_I] = topValues[s32_I].second;
-        if (topValues[s32_I].second == -1)
+        ars32_resultIdxs[s32_I] = topValues[s32_I].second;
+        if (topValues[s32_I].second == -1) // 초깃값일 경우 
         {
             s32_Cnt += 1;
         }
-        // cout<<"ars32_TopIndices[s32_I] :"<< ars32_TopIndices[s32_I]<<endl;
     }
     
-    if(s32_Cnt == 5)
+    if(s32_Cnt == 5)  //초깃값 5개 --> 차선이 없다
         b_NoLane = true;
 }
 
@@ -872,35 +859,34 @@ int32_t FindClosestToMidPoint(const int32_t points[5], int32_t s32_MidPoint)
     return s32_ClosestIndex;
 }
 
+
 // 히스토그램 분석으로 좌·우 슬라이딩 윈도 시작 위치를 계산
 void FindLaneStartPositions(const cv::Mat& st_Edge, int32_t& s32_WindowCentorLeft, int32_t& s32_WindowCentorRight, bool& b_NoLaneLeft, bool& b_NoLaneRight) 
 {
 
-    int32_t s32_col, s32_row, s32_I;
+    int32_t s32_col, s32_row, s32_I; //col : y , row : x
 
     // Histogram 계산
-    // OpenCV의 Mat객체의 Height, Width는 우리가 생각하는 것과 반대
-    int32_t* ps32_Histogram = new int32_t[st_Edge.cols](); // 동적 할당, 모두 0으로 초기화
+    int32_t* ps32_Histogram = new int32_t[st_Edge.cols](); // 동적 할당, cols는 가로방향 픽셀 개수 만큼 배열 생성 , 모두 0으로 초기화 ; cols가 x
 
-    // 700~780 열에 해당하는 행 데이터들을 각 열별로 다 더한 후 최대가 되는 x좌표(행) 추출 --> height가 700이상이여야 작동한다. 
+    // 이미지 하단 30프로  열에 해당하는 행 데이터들을 각 열별로 다 더한 후 최대가 되는 x좌표(행) 추출 --> height가 700이상이여야 작동한다. 
     for (s32_row = 0; s32_row < st_Edge.cols; ++s32_row) {
-        for (s32_col = 700; s32_col < st_Edge.rows; ++s32_col) {
-            ps32_Histogram[s32_row] += st_Edge.at<uchar>(s32_col, s32_row) > 0 ? 1 : 0;
+        for (s32_col = st_Edge.rows*0.7 ; s32_col < st_Edge.rows; ++s32_col) {
+            ps32_Histogram[s32_row] += st_Edge.at<uchar>(s32_col, s32_row) > 0 ? 1 : 0; //검정색이 아닌 픽셀을 카운트 
         }
     }
 
     int32_t ars32_LeftCandidate[5], ars32_RightCandidate[5];
 
-    // cout<<"Left"<<endl;
+    //왼쪽 차선 시작점 
     // 왼쪽 및 오른쪽 최대 5개 인덱스 찾기
     FindTop5MaxIndices(ps32_Histogram, st_Edge.cols / 2, ars32_LeftCandidate, b_NoLaneLeft);
-    if(!b_NoLaneLeft)
+    if(!b_NoLaneLeft) // 왼쪽 차선이 감지된 경우
     {
         s32_WindowCentorLeft = FindClosestToMidPoint(ars32_LeftCandidate, st_Edge.cols / 2);
     }
 
-    // cout<<"Right"<<endl;
-
+    //오른쪽 차선 시작점
     FindTop5MaxIndices(ps32_Histogram + st_Edge.cols / 2, st_Edge.cols - st_Edge.cols / 2, ars32_RightCandidate, b_NoLaneRight);
     if(!b_NoLaneRight)
     {
@@ -916,6 +902,28 @@ void FindLaneStartPositions(const cv::Mat& st_Edge, int32_t& s32_WindowCentorLef
 
     delete[] ps32_Histogram;
 }
+
+//################################################## load parameter  ##################################################//
+
+// YAML 카메라 설정을 로드하고 기본 상태를 초기화
+void LoadParam(CAMERA_DATA *CameraData)
+{
+    YAML::Node st_CameraParam = YAML::LoadFile("src/Params/Camera.yaml");
+    std::cout << "Loading Camera Parameter from YAML File..." << std::endl;
+
+    CameraData->st_CameraParameter.s_IPMParameterX = st_CameraParam["IPMParameterX"].as<std::string>();
+    CameraData->st_CameraParameter.s_IPMParameterY = st_CameraParam["IPMParameterY"].as<std::string>();
+    CameraData->st_CameraParameter.s32_RemapHeight = st_CameraParam["RemapHeight"].as<int32_t>();
+    CameraData->st_CameraParameter.s32_RemapWidth  = st_CameraParam["RemapWidth"].as<int32_t>();
+
+    std::cout << "Sucess to Load Camera Parameter!" << std::endl;
+    // Kalman Object InitialLize
+    CameraData->s32_KalmanObjectNum = 0;
+    CameraData->f32_LastDistanceLeft = 0;
+    CameraData->f32_LastAngleLeft = 0;
+    CameraData->f32_LastDistanceRight = 0;
+    CameraData->f32_LastAngleRight = 0;
+}  
 
 // IPM 맵핑 테이블을 파일에서 읽어 cv::Mat으로 구성
 void LoadMappingParam(CAMERA_DATA *pst_CameraData) 
