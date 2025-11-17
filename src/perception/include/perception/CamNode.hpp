@@ -42,8 +42,7 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
                    CAMERA_LANEINFO& st_LaneInfoRight,
                    int32_t& s32_LeftWindowCentor,
                    int32_t& s32_RightWindowCentor,
-                   cv::Mat& st_ResultImage,
-                   int32_t s32_ImageHeight);
+                   cv::Mat& st_ResultImage);
 // 모델 핏/차선 계수 계산: 다항식 차수 변경 등의 실험은 아래 부분에서
 LANE_COEFFICIENT FitModel(const Point& st_Point1, const Point& st_Point2, bool& b_Flag);
 void CalculateLaneCoefficient(CAMERA_LANEINFO& st_LaneInfo, int32_t s32_Iteration, int64_t s64_Threshold);

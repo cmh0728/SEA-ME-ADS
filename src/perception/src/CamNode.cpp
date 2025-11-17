@@ -157,8 +157,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
                   st_LaneInfoRight,
                   s32_WindowCentorLeft,
                   s32_WindowCentorRight,
-                  g_ResultImage,
-                  camera_data->st_CameraParameter.s32_RemapHeight);
+                  g_ResultImage);
 
     // ======================= Kalman Filter 단계 ========================
 
@@ -509,7 +508,7 @@ void InitializeKalmanObject(LANE_KALMAN& st_KalmanObject)
 
 // 에지 이미지에서 슬라이딩 윈도로 좌/우 차선 포인트를 추출
 void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPosition, CAMERA_LANEINFO& st_LaneInfoLeft, 
-                        CAMERA_LANEINFO& st_LaneInfoRight, int32_t& s32_WindowCentorLeft, int32_t& s32_WindowCentorRight, cv::Mat& st_ResultImage , int32_t ImgHeight)
+                        CAMERA_LANEINFO& st_LaneInfoRight, int32_t& s32_WindowCentorLeft, int32_t& s32_WindowCentorRight, cv::Mat& st_ResultImage )
 {
     // const cv::Mat& st_EdgeImage,        // Canny까지 끝난 에지 이미지 (이진, 0/255)
     // const cv::Mat& st_NonZeroPosition,  // findNonZero 결과 (non-zero 픽셀들의 좌표 모음)
@@ -520,9 +519,13 @@ void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPositio
     // cv::Mat& st_ResultImage,            // 결과 그릴 이미지 (칼만/RANSAC 선 그릴 때 사용)
     // int32_t ImgHeight                   // 이미지 높이(세로) → 슬라이딩 시작 y
 
-    int32_t s32_WindowHeight = ImgHeight; // 현재 윈도우의 y (이미지 맨 아래 시작 )
+    int32_t s32_WindowHeight = st_EdgeImage.rows; // 현재 윈도우의 y (이미지 맨 아래 시작 )
     bool b_ValidWindowLeft = true; // 처음부터 Valid하다고 가정 , 윈도우를 올리지 말지 여부 판단 
     bool b_ValidWindowRight = true;
+
+    // image size
+    int cols = st_EdgeImage.cols;
+    int rows = st_EdgeImage.rows;
 
     // x : 윈도우 가로 반폭 (50픽셀) , y : 윈도우 세로 높이 (50픽셀)
     int32_t s32_MarginX = 50, s32_MarginY = 50, s32_I,s32_J, s32_ClosestPnt, s32_CentorX, s32_CentorY;
@@ -555,19 +558,25 @@ void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPositio
         // int32_t s32_WindowMaxWidthLeft = s32_WindowCentorLeft + s32_MarginX < 800 ? s32_WindowCentorLeft + s32_MarginX : 799;
         // int32_t s32_WindowMinWidthRight = s32_WindowCentorRight - s32_MarginX >= 0 ? s32_WindowCentorRight - s32_MarginX : 0;
         // int32_t s32_WindowMaxWidthRight = s32_WindowCentorRight + s32_MarginX < 800 ? s32_WindowCentorRight + s32_MarginX : 799;
-        int32_t s32_WindowMinWidthLeft  = max(s32_WindowCentorLeft  - s32_MarginX, 0);
-        int32_t s32_WindowMaxWidthLeft  = min(s32_WindowCentorLeft  + s32_MarginX, 800-1);
-        int32_t s32_WindowMinWidthRight = max(s32_WindowCentorRight - s32_MarginX, 0);
-        int32_t s32_WindowMaxWidthRight = min(s32_WindowCentorRight + s32_MarginX, 800-1);
-        int32_t s32_WindowMinHeight = s32_WindowHeight - s32_MarginY;        // Image의 가장 아래부터 Window 생성
+        int32_t s32_WindowMinWidthLeft  = std::max(s32_WindowCentorLeft  - s32_MarginX, 0);
+        int32_t s32_WindowMaxWidthLeft  = std::min(s32_WindowCentorLeft  + s32_MarginX, cols - 1);
+        int32_t s32_WindowMinWidthRight = std::max(s32_WindowCentorRight - s32_MarginX, 0);
+        int32_t s32_WindowMaxWidthRight = std::min(s32_WindowCentorRight + s32_MarginX, cols - 1);
+        int32_t s32_WindowMinHeight = s32_WindowHeight - s32_MarginY;
+        if (s32_WindowMinHeight < 0) s32_WindowMinHeight = 0;
 
+        int32_t s32_WidthLeft  = s32_WindowMaxWidthLeft  - s32_WindowMinWidthLeft  + 1;
+        int32_t s32_WidthRight = s32_WindowMaxWidthRight - s32_WindowMinWidthRight + 1;
         // ---------------------------- Left Lane Detection ----------------------------------------
         if(!b_NoLaneLeft) //왼쪽 차선이 있을 때 
         {
             if(b_ValidWindowLeft) //윈도우를 올리기로 했을 때 
             {
                 s32_Width = s32_WindowMinWidthLeft + 2*s32_MarginX < 800 ? 2*s32_MarginX : 799-s32_WindowMinWidthLeft;
-                st_LeftWindow = cv::Rect(s32_WindowMinWidthLeft,s32_WindowMinHeight,s32_Width,s32_MarginY);
+                // st_LeftWindow = cv::Rect(s32_WindowMinWidthLeft,s32_WindowMinHeight,s32_Width,s32_MarginY);
+
+                st_LeftWindow  = cv::Rect(s32_WindowMinWidthLeft,  s32_WindowMinHeight,
+                          s32_WidthLeft, s32_MarginY);
 
                 st_WindowMask = st_EdgeImage(st_LeftWindow);
 
@@ -633,7 +642,9 @@ void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPositio
             if(b_ValidWindowRight)
             {
                 s32_Width = s32_WindowMinWidthRight + 2*s32_MarginX < 800 ? 2*s32_MarginX : 799-s32_WindowMinWidthRight;
-                st_RightWindow = cv::Rect(s32_WindowMinWidthRight,s32_WindowMinHeight,s32_Width,s32_MarginY);
+                // st_RightWindow = cv::Rect(s32_WindowMinWidthRight,s32_WindowMinHeight,s32_Width,s32_MarginY);
+                st_RightWindow = cv::Rect(s32_WindowMinWidthRight, s32_WindowMinHeight,
+                          s32_WidthRight, s32_MarginY);
                 st_WindowMask = st_EdgeImage(st_RightWindow);
 
                 cv::findContours(st_WindowMask, st_Contours, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
@@ -712,7 +723,7 @@ void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPositio
         CalculateLaneCoefficient(st_LaneInfoRight,1000,1);
         st_LaneInfoRightMain = st_LaneInfoRight;
     }
-    
+
 }
 
 // 추정된 차선 계수로 결과 영상에 선을 그린다
