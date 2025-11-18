@@ -24,14 +24,14 @@ bool b_NoLaneRight = false;
 CAMERA_LANEINFO st_LaneInfoLeftMain{};
 CAMERA_LANEINFO st_LaneInfoRightMain{};
 bool visualize = true;
-bool track_bar = true;
+bool track_bar = false;
 static CAMERA_DATA static_camera_data;
 
 // ======= 전역 설정값 (트랙바랑 연결할 애들) =======
-int g_thresh      = 170;  // 이진화 임계값
-int g_canny_low   = 100;  // Canny low
-int g_canny_high  = 360;  // Canny high
-int g_dilate_ksize = 5;   // 팽창 커널 크기
+int g_thresh      = 160;  // 이진화 임계값
+int g_canny_low   = 140;  // Canny low
+int g_canny_high  = 330;  // Canny high
+int g_dilate_ksize = 8;   // 팽창 커널 크기
 
 void on_trackbar(int, void*)
 {
@@ -183,7 +183,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
         cv::dilate(g_TempImg, g_TempImg, st_K);
 
         // Canny Edge
-        cv::Canny(g_TempImg, g_TempImg, 100, 360);
+        cv::Canny(g_TempImg, g_TempImg, 140, 330);
     }
 
     // =======================  슬라이딩 윈도우 준비  ====================
