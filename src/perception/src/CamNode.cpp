@@ -64,10 +64,11 @@ CameraProcessing::CameraProcessing() : rclcpp::Node("CameraProcessing_node") // 
     cv::namedWindow("st_ResultImage");
     cv::namedWindow("PreprocessControl");
 
-    cv::createTrackbar("Threshold", "PreprocessControl", &g_thresh, 255, on_trackbar);
-    cv::createTrackbar("CannyLow", "PreprocessControl", &g_canny_low, 500, on_trackbar);
-    cv::createTrackbar("CannyHigh", "PreprocessControl", &g_canny_high, 500, on_trackbar);
-    cv::createTrackbar("DilateK", "PreprocessControl", &g_dilate_ksize, 31, on_trackbar);
+    cv::createTrackbar("Threshold", "PreprocessControl", nullptr, 255, on_trackbar);
+    cv::createTrackbar("CannyLow",  "PreprocessControl", nullptr, 500, on_trackbar);
+    cv::createTrackbar("CannyHigh", "PreprocessControl", nullptr, 500, on_trackbar);
+    cv::createTrackbar("DilateK",   "PreprocessControl", nullptr, 31,  on_trackbar);
+
   }
 }
 
@@ -153,28 +154,21 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     // =======================  이미지 전처리 튜닝  ===================
     if(track_bar)
     {
-        int thresh = g_thresh;
-        int canny_low = g_canny_low;
-        int canny_high = g_canny_high;
-        int ksize = g_dilate_ksize;
+        int thresh     = cv::getTrackbarPos("Threshold", "PreprocessControl");
+        int canny_low  = cv::getTrackbarPos("CannyLow",  "PreprocessControl");
+        int canny_high = cv::getTrackbarPos("CannyHigh", "PreprocessControl");
+        int ksize      = cv::getTrackbarPos("DilateK",   "PreprocessControl");
 
-        // 커널 크기는 홀수 + 최소 1 보장
+        // 커널 크기 보정
         if (ksize < 1) ksize = 1;
         if (ksize % 2 == 0) ksize += 1;
 
-        // Canny 임계값 관계 정리 (low <= high 유지)
         if (canny_low > canny_high) std::swap(canny_low, canny_high);
 
-        // =======================  이진화 + 팽창 + Canny  ===================
         cv::Mat st_K = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(ksize, ksize));
 
-        // 이진화
         cv::threshold(g_TempImg, g_TempImg, thresh, 255, cv::THRESH_BINARY);
-
-        // 팽창
         cv::dilate(g_TempImg, g_TempImg, st_K);
-
-        // Canny Edge
         cv::Canny(g_TempImg, g_TempImg, canny_low, canny_high);
     }
     else
