@@ -151,6 +151,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     //히스토그램 로직에서 중앙에 있는 엉뚱한거를 차선으로 안 잡게 로직 추가하기 
 
     // =======================  슬라이딩 윈도우로 좌/우 차선 탐색 ==========
+    // 결과물 Left/Right Lane Info main에 저장
     SlidingWindow(g_TempImg,
                   st_Tmp,
                   st_LaneInfoLeft,
@@ -158,6 +159,26 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
                   s32_WindowCentorLeft,
                   s32_WindowCentorRight,
                   g_ResultImage);
+    
+    // ======================= RANSAC으로 차선 계수 산출 ====================
+
+    // RANSAC으로 차선 계수 산출 , 셈플 5개 미만이면 차선 없는걸로 간주 
+    if (st_LaneInfoLeft.s32_SampleCount < 5)
+        b_NoLaneLeft = true;
+    if (st_LaneInfoRight.s32_SampleCount < 5)
+        b_NoLaneRight = true;
+
+    // 차선이 있다고 판단한 경우 ransac 수행 
+    if(!b_NoLaneLeft)
+    {
+        CalculateLaneCoefficient(st_LaneInfoLeft,1000,1); // iteration, threshold
+        st_LaneInfoLeftMain = st_LaneInfoLeft; // 관측값 보관용 
+    }
+    if(!b_NoLaneRight)
+    {
+        CalculateLaneCoefficient(st_LaneInfoRight,1000,1);
+        st_LaneInfoRightMain = st_LaneInfoRight;
+    }
 
     // ======================= Kalman Filter 단계 ========================
 
@@ -317,25 +338,28 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
         }
     }
 
-    // 새로 계산한 직선 Coef 저장 (Kalman 이전 RANSAC 결과)
-    if (!b_NoLaneLeft)
+    // =======================  RANSAC 디버그 창 ===========================
+    // RANSAC 직선만 IPM 이미지 복사해서 사용
+    if (visualize)
     {
-        CalculateLaneCoefficient(st_LaneInfoLeft, 1000, 1);
-        st_LaneInfoLeftMain = st_LaneInfoLeft;
-    }
-    if (!b_NoLaneRight)
-    {
-        CalculateLaneCoefficient(st_LaneInfoRight, 1000, 1);
-        st_LaneInfoRightMain = st_LaneInfoRight;
-    }
+        // 1) RANSAC 직선만 보고 싶으면: IPM 이미지 복사해서 사용
+        cv::Mat ransac_debug;
+        g_IpmImg.copyTo(ransac_debug);   // 또는 g_TempImg를 COLOR_GRAY2BGR로 변환해서 써도 됨
 
-    // 필요하면 여기서 그냥 RANSAC 결과만 그릴 수도 있음
-    // if (!b_NoLaneLeft) {
-    //     DrawDrivingLane(g_ResultImage, st_LaneInfoLeftMain.st_LaneCoefficient, cv::Scalar(255, 0, 0));
-    // }
-    // if (!b_NoLaneRight) {
-    //     DrawDrivingLane(g_ResultImage, st_LaneInfoRightMain.st_LaneCoefficient, cv::Scalar(0, 0, 255));
-    // }
+        if (!b_NoLaneLeft) {
+            DrawDrivingLane(ransac_debug,
+                            st_LaneInfoLeftMain.st_LaneCoefficient,
+                            cv::Scalar(255, 0, 0));   // 파란/빨간 아무 색
+        }
+
+        if (!b_NoLaneRight) {
+            DrawDrivingLane(ransac_debug,
+                            st_LaneInfoRightMain.st_LaneCoefficient,
+                            cv::Scalar(0, 0, 255));
+        }
+
+        cv::imshow("RANSAC Debug", ransac_debug);   // RANSAC 전용 창
+    }
 
     // =======================  (H) Debug GUI ================================
     if (visualize)
@@ -718,24 +742,6 @@ void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPositio
         b_CheckValidWindowLeft = false;
         b_CheckValidWindowRight = false;
         st_Contours.clear();
-    }
-
-    // RANSAC으로 차선 계수 산출 , 셈플 5개 미만이면 차선 없는걸로 간주 
-    if (st_LaneInfoLeft.s32_SampleCount < 5)
-        b_NoLaneLeft = true;
-    if (st_LaneInfoRight.s32_SampleCount < 5)
-        b_NoLaneRight = true;
-
-    // 차선이 있다고 판단한 경우 ransac 수행 
-    if(!b_NoLaneLeft)
-    {
-        CalculateLaneCoefficient(st_LaneInfoLeft,1000,1);
-        st_LaneInfoLeftMain = st_LaneInfoLeft;
-    }
-    if(!b_NoLaneRight)
-    {
-        CalculateLaneCoefficient(st_LaneInfoRight,1000,1);
-        st_LaneInfoRightMain = st_LaneInfoRight;
     }
 
 }
