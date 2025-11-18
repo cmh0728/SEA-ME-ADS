@@ -10,7 +10,7 @@ BOARD_COLS, BOARD_ROWS = 9, 7
 SQUARE_SIZE_M = 0.011  # 1.1 cm
 
 # IPM 영역/스케일 (체커보드 평면 기준 [X(앞), Y(좌/우)])
-X_MIN, X_MAX = -0.4 , 0.1 # max가 차량 뒤쪽, min이 앞쪽
+X_MIN, X_MAX = -0.15 , 0.1 # max가 차량 뒤쪽, min이 앞쪽
 Y_MIN, Y_MAX = -0.28 , 0.21   # max가 차량 왼쪽 
 W_target, H_target = 1280, 720  # 목표 IPM 크기 (픽셀)
 INTERVAL_X = (X_MAX - X_MIN) / W_target
