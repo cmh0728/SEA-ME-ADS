@@ -39,7 +39,7 @@ class LaneDetectorNode(Node):
         self.declare_parameter('publish_offset_topic', '/lane/center_offset')
         self.declare_parameter('publish_heading_topic', '/lane/heading_offset')
         self.declare_parameter('use_birdeye', True)
-        self.declare_parameter('enable_visualization', True) # 디버깅용 시각화 여부 파라미터 , 기본값 False
+        self.declare_parameter('enable_visualization', False) # 디버깅용 시각화 여부 파라미터 , 기본값 False
         self.declare_parameter('lane_width_px', 650.0) # 차폭 650px 기본 설정 
         self.declare_parameter('vehicle_center_bias_px', -40.0)  # 이미지 중심 대비 차량 중심 보정값
         self.crop_size = (860, 480)
