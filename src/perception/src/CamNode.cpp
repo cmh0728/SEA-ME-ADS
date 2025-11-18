@@ -183,7 +183,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
         cv::dilate(g_TempImg, g_TempImg, st_K);
 
         // Canny Edge
-        // cv::Canny(g_TempImg, g_TempImg, 140, 330);
+        cv::Canny(g_TempImg, g_TempImg, 140, 330); // non zero 스캔 때문에 canny가 더 빠름 
     }
 
     // =======================  슬라이딩 윈도우 준비  ====================
