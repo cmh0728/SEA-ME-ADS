@@ -3,6 +3,12 @@
 
 #include "perception/CamNode.hpp"
 
+// ransac 난수 초기화 전역설정
+
+struct RansacRandomInit {
+    RansacRandomInit() { std::srand(static_cast<unsigned int>(std::time(nullptr))); }
+} g_ransacRandomInit;
+
 //################################################## Global parameter ##################################################//
 
 
@@ -18,7 +24,19 @@ bool b_NoLaneRight = false;
 CAMERA_LANEINFO st_LaneInfoLeftMain{};
 CAMERA_LANEINFO st_LaneInfoRightMain{};
 bool visualize = true;
+bool track_bar = true;
 static CAMERA_DATA static_camera_data;
+
+// ======= 전역 설정값 (트랙바랑 연결할 애들) =======
+int g_thresh      = 170;  // 이진화 임계값
+int g_canny_low   = 100;  // Canny low
+int g_canny_high  = 360;  // Canny high
+int g_dilate_ksize = 5;   // 팽창 커널 크기
+
+void on_trackbar(int, void*)
+{
+    // 트랙바 콜백은 안 써도 됨. 값은 전역 변수에 자동으로 들어감.
+}
 
 //################################################## CameraProcessing class functions ##################################################//
 
@@ -37,6 +55,20 @@ CameraProcessing::CameraProcessing() : rclcpp::Node("CameraProcessing_node") // 
 
 
   RCLCPP_INFO(get_logger(), "Perception node subscribing to %s", image_topic.c_str()); //debug msg
+
+  if (track_bar)
+  {
+    // 디버그용 윈도우 + 트랙바 컨트롤 창
+    cv::namedWindow("IPM");
+    cv::namedWindow("Temp_Img");
+    cv::namedWindow("st_ResultImage");
+    cv::namedWindow("PreprocessControl");
+
+    cv::createTrackbar("Threshold", "PreprocessControl", &g_thresh, 255, on_trackbar);
+    cv::createTrackbar("CannyLow", "PreprocessControl", &g_canny_low, 500, on_trackbar);
+    cv::createTrackbar("CannyHigh", "PreprocessControl", &g_canny_high, 500, on_trackbar);
+    cv::createTrackbar("DilateK", "PreprocessControl", &g_dilate_ksize, 31, on_trackbar);
+  }
 }
 
 // OpenCV 창을 정리하는 소멸자
@@ -118,17 +150,47 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     cv::cvtColor(g_IpmImg, g_TempImg, cv::COLOR_BGR2GRAY); //tempImg 사용
     cv::GaussianBlur(g_TempImg, g_TempImg, cv::Size(3,3), 0);
 
+    // =======================  이미지 전처리 튜닝  ===================
+    if(track_bar)
+    {
+        int thresh = g_thresh;
+        int canny_low = g_canny_low;
+        int canny_high = g_canny_high;
+        int ksize = g_dilate_ksize;
+
+        // 커널 크기는 홀수 + 최소 1 보장
+        if (ksize < 1) ksize = 1;
+        if (ksize % 2 == 0) ksize += 1;
+
+        // Canny 임계값 관계 정리 (low <= high 유지)
+        if (canny_low > canny_high) std::swap(canny_low, canny_high);
+
+        // =======================  이진화 + 팽창 + Canny  ===================
+        cv::Mat st_K = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(ksize, ksize));
+
+        // 이진화
+        cv::threshold(g_TempImg, g_TempImg, thresh, 255, cv::THRESH_BINARY);
+
+        // 팽창
+        cv::dilate(g_TempImg, g_TempImg, st_K);
+
+        // Canny Edge
+        cv::Canny(g_TempImg, g_TempImg, canny_low, canny_high);
+    }
+    else
+    {
     // =======================  이진화 + 팽창 + Canny  ===================
-    cv::Mat st_K = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
+        cv::Mat st_K = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
 
-    // 이진화
-    cv::threshold(g_TempImg, g_TempImg, 170, 255, cv::THRESH_BINARY);   // 170 보다 크면 255 아니면 0
+        // 이진화
+        cv::threshold(g_TempImg, g_TempImg, 170, 255, cv::THRESH_BINARY);   // 170 보다 크면 255 아니면 0
 
-    // 팽창
-    cv::dilate(g_TempImg, g_TempImg, st_K);
+        // 팽창
+        cv::dilate(g_TempImg, g_TempImg, st_K);
 
-    // Canny Edge
-    cv::Canny(g_TempImg, g_TempImg, 100, 360);
+        // Canny Edge
+        cv::Canny(g_TempImg, g_TempImg, 100, 360);
+    }
 
     // =======================  슬라이딩 윈도우 준비  ====================
     cv::Mat st_Tmp;
@@ -571,7 +633,7 @@ void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPositio
     // 왼쪽 차선중에 최종적으로 Valid한 차선임이 판단된 Pixel Point 저장 
     std::vector<cv::Point> st_LeftWindowInds; //x,y의 포인트 
     std::vector<cv::Point> st_LeftLanePoint;
-    cv::Mat st_DetectedLane(st_EdgeImage.size(), CV_8UC3, Scalar(0,0,0));
+    cv::Mat st_DetectedLane(st_EdgeImage.size(), CV_8UC3, cv::Scalar(0,0,0));
 
     // Lane Data reset
     st_LaneInfoLeft.s32_SampleCount = 0;
@@ -581,7 +643,7 @@ void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPositio
     std::vector<vector<cv::Point>> st_Contours;
     bool b_CheckValidWindowLeft = false; // 이번 윈도우에서 Valid한 차선이 검출되었는지 여부
     bool b_CheckValidWindowRight = false;
-    int32_t s32_CountAnvalidLeft = 0; // 연속으로 Valid하지 않은 윈도우 카운트
+    int32_t s32_CountAnvalidLeft = 0; // 연속으로 Valid하지 e않은 윈도우 카운트
     int32_t s32_CountAnvalidRight = 0;
     int32_t s32_Width;
     cv::Mat st_WindowMask;
@@ -652,22 +714,26 @@ void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPositio
             {
                 s32_CountAnvalidLeft = 0;
                 s32_ClosestPnt = INT_MAX;
-                for(s32_I = 0; s32_I<st_NonZeroPosition.total();s32_I++)
+                for (s32_I = 0; s32_I < st_NonZeroPosition.total(); s32_I++)
                 {
-                    cv::Point st_Position = st_NonZeroPosition.at<Point>(s32_I);
-                    if(st_Position.y >= s32_WindowMinHeight && st_Position.y <= s32_WindowHeight &&
-                        st_Position.x >=  s32_WindowMinWidthLeft && st_Position.x <= s32_WindowMaxWidthLeft)
+                    cv::Point st_Position = st_NonZeroPosition.at<cv::Point>(s32_I);
+                    if (st_Position.y >= s32_WindowMinHeight && st_Position.y <= s32_WindowHeight &&
+                        st_Position.x >= s32_WindowMinWidthLeft && st_Position.x <= s32_WindowMaxWidthLeft)
                     {
-                        // st_LeftWindowInds.push_back(st_Position);
-                        st_DetectedLane.at<Vec3b>(st_Position.y, st_Position.x) = Vec3b(255,0,0);
-                        if(s32_ClosestPnt>cols/2-st_Position.x)
+                        st_DetectedLane.at<cv::Vec3b>(st_Position.y, st_Position.x) = cv::Vec3b(255,0,0);
+
+                        int dist_to_center = std::abs(cols/2 - st_Position.x);
+                        if (dist_to_center < s32_ClosestPnt)
                         {
-                            st_Position.y = ImgHeight + st_Position.y*(-1);
-                            st_LaneInfoLeft.arst_LaneSample[st_LaneInfoLeft.s32_SampleCount] = st_Position;
+                            s32_ClosestPnt = dist_to_center;
+                            cv::Point ipmPt = st_Position;
+                            ipmPt.y = ImgHeight - ipmPt.y; // 네가 쓰던 좌표 보정 로직
+                            st_LaneInfoLeft.arst_LaneSample[st_LaneInfoLeft.s32_SampleCount] = ipmPt;
                         }
                     }
                 }
-                st_LaneInfoLeft.s32_SampleCount += 1;
+                if (s32_ClosestPnt != INT_MAX)
+                    st_LaneInfoLeft.s32_SampleCount += 1;
             }
             st_Contours.clear();
         }
@@ -751,13 +817,17 @@ void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPositio
 // 추정된 차선 계수로 결과 영상에 선을 그린다
 void DrawDrivingLane(cv::Mat& st_ResultImage, const LANE_COEFFICIENT st_LaneCoef, cv::Scalar st_Color)
 {
+    if (std::abs(st_LaneCoef.f64_Slope) < 1e-6)
+        return; // 혹은 x = const 직선 방식으로 따로 처리
+
     int rows = st_ResultImage.rows;
     int32_t x0 = int(-st_LaneCoef.f64_Intercept / st_LaneCoef.f64_Slope);
     int32_t x1 = int(((rows - 1) - st_LaneCoef.f64_Intercept) / st_LaneCoef.f64_Slope);
+
     cv::line(st_ResultImage,
-            cv::Point(x0, rows - 1),
-            cv::Point(x1, 0),
-            st_Color, 2);    
+             cv::Point(x0, rows - 1),
+             cv::Point(x1, 0),
+             st_Color, 2);
 }
 
 //###################################### FitModel func ##################################################//
@@ -769,8 +839,17 @@ LANE_COEFFICIENT FitModel(const Point& st_Point1, const Point& st_Point2, bool& 
     
     if((st_Point2.x != st_Point1.x))
     {
-        st_TmpModel.f64_Slope = float((st_Point2.y - st_Point1.y) / (st_Point2.x - st_Point1.x));
-        st_TmpModel.f64_Intercept = int32_t(st_Point1.y - st_TmpModel.f64_Slope * st_Point1.x);
+        // 기존 --> 정수로 떨어짐
+        // st_TmpModel.f64_Slope = float((st_Point2.y - st_Point1.y) / (st_Point2.x - st_Point1.x));
+        // st_TmpModel.f64_Intercept = int32_t(st_Point1.y - st_TmpModel.f64_Slope * st_Point1.x);
+
+        // 수정 --> 실수로 계산 
+        st_TmpModel.f64_Slope =
+            static_cast<double>(st_Point2.y - st_Point1.y) /
+            static_cast<double>(st_Point2.x - st_Point1.x);
+        st_TmpModel.f64_Intercept =
+            static_cast<double>(st_Point1.y) - st_TmpModel.f64_Slope * st_Point1.x;
+
     }
     else
         b_Flag = false;
@@ -784,7 +863,7 @@ LANE_COEFFICIENT FitModel(const Point& st_Point1, const Point& st_Point2, bool& 
 void CalculateLaneCoefficient(CAMERA_LANEINFO& st_LaneInfo, int32_t s32_Iteration, int64_t s64_Threshold)
 {
     // 양쪽 차선 데이터 중 중앙선에 가장 가까운 안촉 차선 기준으로 RANSAC을 활용한 기울기 계산
-    srand(time(0)); // 난수 초기화
+    // srand(time(0)); // 난수 초기화
     int32_t s32_BestInlierCount = 0, s32_I, s32_Idx1, s32_Idx2, s32_InlierCount, s32_J;
     bool b_Flag = true;
     LANE_COEFFICIENT st_Temp;
