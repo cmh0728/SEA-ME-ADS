@@ -24,7 +24,7 @@ bool b_NoLaneRight = false;
 CAMERA_LANEINFO st_LaneInfoLeftMain{};
 CAMERA_LANEINFO st_LaneInfoRightMain{};
 bool visualize = true;
-bool track_bar = true;
+bool track_bar = false;
 static CAMERA_DATA static_camera_data;
 
 // ======= 전역 설정값 (트랙바랑 연결할 애들) =======
