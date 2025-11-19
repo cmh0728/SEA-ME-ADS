@@ -30,7 +30,7 @@ static CAMERA_DATA static_camera_data;
 
 namespace
 {
-Perception::msg::Lane build_lane_message(const CAMERA_LANEINFO & lane_info)
+perception::msg::Lane build_lane_message(const CAMERA_LANEINFO & lane_info)
 {
     perception::msg::Lane lane_msg;
     const int32_t max_samples = static_cast<int32_t>(sizeof(lane_info.arst_LaneSample) /
@@ -49,7 +49,7 @@ Perception::msg::Lane build_lane_message(const CAMERA_LANEINFO & lane_info)
 
     return lane_msg;
 }
-}  // namespace
+ // namespace
 
 // ======= 전역 설정값 (트랙바랑 연결할 애들) =======
 int g_thresh      = 160;  // 이진화 임계값
