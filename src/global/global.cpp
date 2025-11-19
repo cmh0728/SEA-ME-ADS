@@ -13,21 +13,7 @@ float64_t c_ORIGIN_REFERENCE_Z = 0.0;
 int32_t s32_FileNum = 0;
 
 
-// extern int32_t s32_Obj_Cnt;
-// extern vector<vector<float64_t>> st_Lidar_XYZ;
-// extern vector<vector<float64_t>> st_Lidar_ENU;
-// extern st_Ego_ENU;
-float64_t DegtoRad()
-{
-    return M_PI/180;
-}
-
-float64_t RadtoDeg()
-{
-    return 180/M_PI;
-}
-
-
+// 현재 시간 밀리초 단위 반환
 uint64_t getMillisecond()
 {
     auto st_Now = std::chrono::steady_clock::now();
@@ -36,12 +22,13 @@ uint64_t getMillisecond()
     return st_Millisecond.count();
 }
 
+// degree --> radian
 float32_t deg2rad(float32_t f32_Degree)
 {
     return f32_Degree * M_PI / 180.f;
 }
 
-
+// radian --> degree
 float32_t rad2deg(float32_t f32_Radian)
 {
     return f32_Radian * 180.f / M_PI;
@@ -671,8 +658,4 @@ void rotationMatrix(float32_t f32_Roll, float32_t f32_Pitch, float32_t f32_Yaw, 
     f32_matrix[2][0] = -f32_sin_pitch;
     f32_matrix[2][1] = f32_cos_pitch * f32_sin_roll;
     f32_matrix[2][2] = f32_cos_pitch * f32_cos_roll;
-}
-
-// 3차원 포인트 회전 함수
-void rotatePoint(float32_t f32_X, float32_t f32_Y, float32_t f32_Z, float32_t f32_Roll, float32_t f32_Pitch, float32_t f32_Yaw, float32_t &f32_RX, float32_t &f32_RY, float32_t &f32_RZ) {
 }

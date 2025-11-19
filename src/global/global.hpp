@@ -51,47 +51,11 @@ using namespace cv;
 
 const int32_t c_PARSING_UDP = 0;
 const int32_t c_PARSING_ROS = 1;
-const int32_t c_PARSING_SERIAL = 2;
-const int32_t c_PARSING_CAN = 3;
 
-const int32_t c_LIDAR_BUFFER_SIZE = 2000000;
 const int32_t c_CAMERA_BUFFER_SIZE = 2000000;
-const int32_t c_GPSINS_BUFFER_SIZE = 100;
 const int32_t c_IMU_BUFFER_SIZE = 100;
-const int32_t c_CAN_BUFFER_SIZE = 100;
 const int32_t c_MAX_FRAME_SIZE = 5000;
 
-
-
-
-
-const int32_t c_VIEWER_NULL = -1;
-const int32_t c_VIEWER_MENU = 0;
-const int32_t c_VIEWER_LOCAL = 1;
-const int32_t c_VIEWER_GLOBAL = 2;
-const int32_t c_VIEWER_FRAME = 3;
-const int32_t c_VIEWER_CAMERA = 4;
-
-const int32_t c_VIEWER_SIMUL_MODE = 0;
-const int32_t c_VIEWER_REAL_MODE = 1;
-
-const int32_t c_VIEWER_BUTTON_NUM_SIMUL = 5;
-const int32_t c_VIEWER_BUTTON_NUM_REAL = 3;
-
-const int32_t c_VIEWER_BUTTON_NULL = -1;
-
-const int32_t c_VIEWER_BUTTON_SIMUL_MODE = 0;
-const int32_t c_VIEWER_BUTTON_SIMUL_SENSOR_STATE = 1;
-const int32_t c_VIEWER_BUTTON_SIMUL_EGO_STATE = 2;
-const int32_t c_VIEWER_BUTTON_SIMUL_LOGGING = 3;
-const int32_t c_VIEWER_BUTTON_SIMUL_PLAY = 4;
-
-
-const int32_t c_VIEWER_BUTTON_REAL_MODE = 0;
-const int32_t c_VIEWER_BUTTON_REAL_LOGGING = 1;
-const int32_t c_VIEWER_BUTTON_REAL_AUTOMODE_ON = 2;
-
-const int32_t c_VIEWER_BUTTON_EXIT = 6;
 
 const int32_t c_STATE_MODE_LOGGING_ON = 0;
 const int32_t c_STATE_MODE_LOGGING_OFF = 1;
@@ -183,64 +147,6 @@ struct RAW_IMU_DATA
   int32_t s32_IMUHeader;
 };
 
-struct VIEWER_PARAMETER
-{
-  int32_t s32_ScreenX = 0;
-  int32_t s32_ScreenY = 0;
-  int32_t s32_ScreenWidth = 0;
-  int32_t s32_ScreenHeight = 0;
-
-  int32_t s32_LocalX = 0;
-  int32_t s32_LocalY = 0;
-  int32_t s32_LocalWidth = 0;
-  int32_t s32_LocalHeight = 0;
-
-  int32_t s32_GlobalX = 0;
-  int32_t s32_GlobalY = 0;
-  int32_t s32_GlobalWidth = 0;
-  int32_t s32_GlobalHeight = 0;
-
-  int32_t s32_MenuX = 0;
-  int32_t s32_MenuY = 0;
-  int32_t s32_MenuWidth = 0;
-  int32_t s32_MenuHeight = 0;
-
-  int32_t s32_LoggingX = 0;
-  int32_t s32_LoggingY = 0; //constant
-  int32_t s32_LoggingWidth = 0;
-  int32_t s32_LoggingHeight = 0;
-
-  int32_t s32_CameraX = 0;
-  int32_t s32_CameraY = 0;
-  int32_t s32_CameraWidth = 0;
-  int32_t s32_CameraHeight = 0;
-
-  int32_t s32_FrameX = 0;
-  int32_t s32_FrameY = 0;
-  int32_t s32_FrameWidth = 0;
-  int32_t s32_FrameHeight = 0;
-  int32_t s32_FrameBarX = 0;
-  
-  float32_t f32_GlobalZoomFactor = 3.4f;
-  float32_t f32_LocalZoomFactor = 3.4f;
-
-  bool b_MoveFrame = false;
-  bool b_TransLocalMap = false;
-  bool b_TransGlobalMap = false;
-  bool b_RotateLocalMap = false;
-  bool b_RotateGlobalMap = false;
-
-  float32_t f32_PrevX;
-  float32_t f32_PrevY;
-
-  int32_t s32_CurrentMode;
-  int32_t s32_CurrentWindow = c_VIEWER_NULL;
-  int32_t s32_CurrentButton = c_VIEWER_BUTTON_NULL;
-
-  int32_t s32_State = c_STATE_MODE_NULL;
-  int32_t s32_ZoomFactorState = c_STATE_1XZOOMFACTOR;
-  int32_t s32_GlobalWindowState = 0;
-};
 struct KALMAN_STATE
 {
   float64_t f64_Distance;
@@ -345,22 +251,6 @@ struct IMU_DATA
 
 };
 
-
-
-
-
-
-
-// typedef struct _CAN_DATA
-// {
-//     float32_t f32_Speed_kph;
-//     float32_t f32_Speed_m_s;
-//     float32_t f32_SteerAngle_deg;
-//     float32_t f32_SteerAngle_rad;
-//     float32_t f32_Heading_deg;
-//     float32_t f32_Heading_rad;
-
-// } CAN_DATA_t;
 
 typedef struct FILE_INFO
 {
@@ -472,120 +362,6 @@ typedef struct _QUARTIC{
     float32_t CalcThirdDerivative(float32_t f32_T);
 
 } QUARTIC_t;
-
-
-
-
-
-
-
-typedef struct _SPLINE_PARAM
-{
-  // y = a*x^3 + b*x^2 + c*x + d 
-
-  float32_t arf32_A[c_PLANNING_MAX_SPLINE_NUM];
-  float32_t arf32_B[c_PLANNING_MAX_SPLINE_NUM];
-  float32_t arf32_C[c_PLANNING_MAX_SPLINE_NUM];
-  float32_t arf32_D[c_PLANNING_MAX_SPLINE_NUM];
-
-  float32_t arf32_X[c_PLANNING_MAX_SPLINE_NUM];
-  float32_t arf32_Y[c_PLANNING_MAX_SPLINE_NUM];
-
-  int32_t s32_NX;  
-
-
-  void Init(float32_t *pf32_X, float32_t *pf32_Y, int32_t s32_Num);
-  int32_t SearchNearestIndex(float32_t f32_P);
-  Eigen::MatrixXd CalcA(float32_t* pf32_H);
-  Eigen::MatrixXd CalcB(float32_t* pf32_H);
-  float32_t Calc(float32_t f32_T);
-  float32_t CalcD(float32_t f32_T);
-  float32_t CalcDD(float32_t f32_T);
-
-
-} SPLINE_PARAM_t;
-
-
-
-
-
-
-typedef struct _SPLINE2D_PARAM
-{
-  SPLINE_PARAM_t st_SplineX;
-  SPLINE_PARAM_t st_SplineY;
-
-  float32_t arf32_X[c_PLANNING_MAX_SPLINE_NUM];
-  float32_t arf32_Y[c_PLANNING_MAX_SPLINE_NUM];
-  float32_t arf32_S[c_PLANNING_MAX_SPLINE_NUM];
-  float32_t arf32_DS[c_PLANNING_MAX_SPLINE_NUM];
-
-  int32_t s32_NX;
-
-  void Init(PATH_t *pst_Path);
-  void CalcS();
-  void CalcPosition(float32_t f32_T, float32_t &f32_X, float32_t &f32_Y);
-  float32_t CalcCurvature(float32_t f32_T);
-  float32_t CalcYawRad(float32_t f32_T);
-  float32_t GetLastS();
-
-} SPLINE2D_PARAM_t;
-
-
-
-
-
-
-typedef struct _SPLINE_PATH
-{
-    float32_t arf32_X[c_PLANNING_MAX_SPLINE_NUM];
-    float32_t arf32_Y[c_PLANNING_MAX_SPLINE_NUM];
-    float32_t arf32_Yaw_rad_ENU[c_PLANNING_MAX_SPLINE_NUM];
-    float32_t arf32_Yaw_rad_NED[c_PLANNING_MAX_SPLINE_NUM];    
-    float32_t arf32_Curvature[c_PLANNING_MAX_SPLINE_NUM];
-    float32_t arf32_Speed_kph[c_PLANNING_MAX_SPLINE_NUM];
-    float32_t arf32_S[c_PLANNING_MAX_SPLINE_NUM];
-    float32_t arf32_D[c_PLANNING_MAX_SPLINE_NUM];
-    int32_t s32_Num;
-    int32_t s32_NearestIndex=0; 
-
-    int32_t GetNearestIndex(float32_t f32_X, float32_t f32_Y);
-
-} SPLINE_PATH_t;
-
-
-
-
-typedef struct _FRENET_PATH {
-    
-    float32_t arf32_T[c_PLANNING_MAX_FRENET_NUM];
-    
-    float32_t arf32_D0[c_PLANNING_MAX_FRENET_NUM];
-    float32_t arf32_D1[c_PLANNING_MAX_FRENET_NUM];
-    float32_t arf32_D2[c_PLANNING_MAX_FRENET_NUM];
-    float32_t arf32_D3[c_PLANNING_MAX_FRENET_NUM];
-
-    float32_t arf32_S0[c_PLANNING_MAX_FRENET_NUM];
-    float32_t arf32_S1[c_PLANNING_MAX_FRENET_NUM];
-    float32_t arf32_S2[c_PLANNING_MAX_FRENET_NUM];
-    float32_t arf32_S3[c_PLANNING_MAX_FRENET_NUM];
-    
-    float32_t f32_CostD;
-    float32_t f32_CostV;
-    float32_t f32_CostF;
-    
-    float32_t arf32_X[c_PLANNING_MAX_FRENET_NUM];
-    float32_t arf32_Y[c_PLANNING_MAX_FRENET_NUM];
-    float32_t arf32_Yaw_rad_ENU[c_PLANNING_MAX_FRENET_NUM];
-    float32_t arf32_Yaw_rad_NED[c_PLANNING_MAX_FRENET_NUM];
-    float32_t arf32_DS[c_PLANNING_MAX_FRENET_NUM];
-    float32_t arf32_C[c_PLANNING_MAX_FRENET_NUM];
-    int32_t s32_CurrentLane;
-    int32_t s32_Num;
-
-} FRENET_PATH_t;
-
-
 
 
 
@@ -861,7 +637,6 @@ void LoggingFirstRead();
 bool CompareFilenames(const std::string& a, const std::string& b);
 int extractNumberFromFilename(const std::string& filename);
 void rotationMatrix(float32_t roll, float32_t pitch, float32_t yaw, float32_t matrix[3][3]);
-void rotatePoint(float32_t f32_X, float32_t f32_Y, float32_t f32_Z, float32_t roll, float32_t pitch, float32_t yaw, float32_t &f32_RX, float32_t &f32_RY, float32_t &f32_RZ);
 
 
 #endif

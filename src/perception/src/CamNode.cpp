@@ -4,7 +4,6 @@
 #include "perception/msg/lane_pnt.hpp"
 
 // ransac 난수 초기화 전역설정
-
 struct RansacRandomInit {
     RansacRandomInit() { std::srand(static_cast<unsigned int>(std::time(nullptr))); }
 } g_ransacRandomInit;
@@ -26,6 +25,8 @@ CAMERA_LANEINFO st_LaneInfoRightMain{};
 bool visualize = true;
 bool track_bar = false;
 static CAMERA_DATA static_camera_data;
+
+//################################################## helper function ##################################################//
 
 namespace
 {
@@ -714,11 +715,7 @@ void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPositio
     // 슬라이딩 윈도우 반복 (한층당 한번 반복 )
     while(s32_WindowHeight>0) 
     {
-        //윈도우 좌우 경계 계산 이미지 폭 800 기준 
-        // int32_t s32_WindowMinWidthLeft = s32_WindowCentorLeft - s32_MarginX >= 0 ? s32_WindowCentorLeft - s32_MarginX : 0;
-        // int32_t s32_WindowMaxWidthLeft = s32_WindowCentorLeft + s32_MarginX < 800 ? s32_WindowCentorLeft + s32_MarginX : 799;
-        // int32_t s32_WindowMinWidthRight = s32_WindowCentorRight - s32_MarginX >= 0 ? s32_WindowCentorRight - s32_MarginX : 0;
-        // int32_t s32_WindowMaxWidthRight = s32_WindowCentorRight + s32_MarginX < 800 ? s32_WindowCentorRight + s32_MarginX : 799;
+        // 윈도우 좌우 경계 계산 이미지 폭 자동 맞춤
         int32_t s32_WindowMinWidthLeft  = std::max(s32_WindowCentorLeft  - s32_MarginX, 0);
         int32_t s32_WindowMaxWidthLeft  = std::min(s32_WindowCentorLeft  + s32_MarginX, cols - 1);
         int32_t s32_WindowMinWidthRight = std::max(s32_WindowCentorRight - s32_MarginX, 0);
