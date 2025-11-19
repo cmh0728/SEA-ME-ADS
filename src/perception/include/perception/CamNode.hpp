@@ -8,6 +8,7 @@
 #include "rclcpp/qos.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/compressed_image.hpp"
+#include "sea_interfaces/msg/lane.hpp"
 
 
 
@@ -20,9 +21,12 @@ public:
 
 private:
   void on_image(const sensor_msgs::msg::CompressedImage::ConstSharedPtr msg);
+  void publish_lane_messages();
 
   std::string window_name_;
   rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr image_subscription_;
+  rclcpp::Publisher<sea_interfaces::msg::Lane>::SharedPtr lane_left_pub_;
+  rclcpp::Publisher<sea_interfaces::msg::Lane>::SharedPtr lane_right_pub_;
 };
 
 // 메인 파이프라인: CV:Mat → 차선 Kalman 업데이트까지 전체 흐름 제어

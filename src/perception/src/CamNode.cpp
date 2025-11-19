@@ -2,6 +2,7 @@
 // main flow : 
 
 #include "perception/CamNode.hpp"
+#include "sea_interfaces/msg/lane_pnt.hpp"
 
 // ransac 난수 초기화 전역설정
 
@@ -26,6 +27,29 @@ CAMERA_LANEINFO st_LaneInfoRightMain{};
 bool visualize = true;
 bool track_bar = false;
 static CAMERA_DATA static_camera_data;
+
+namespace
+{
+sea_interfaces::msg::Lane build_lane_message(const CAMERA_LANEINFO & lane_info)
+{
+    sea_interfaces::msg::Lane lane_msg;
+    const int32_t max_samples = static_cast<int32_t>(sizeof(lane_info.arst_LaneSample) /
+                                                    sizeof(lane_info.arst_LaneSample[0]));
+    const int32_t clamped_samples = std::min(lane_info.s32_SampleCount, max_samples);
+    lane_msg.arf32_Lane.reserve(clamped_samples);
+
+    for (int32_t i = 0; i < clamped_samples; ++i)
+    {
+        const cv::Point & sample = lane_info.arst_LaneSample[i];
+        sea_interfaces::msg::LanePnt point_msg;
+        point_msg.x = static_cast<float>(sample.x);
+        point_msg.y = static_cast<float>(sample.y);
+        lane_msg.arf32_Lane.push_back(point_msg);
+    }
+
+    return lane_msg;
+}
+}  // namespace
 
 // ======= 전역 설정값 (트랙바랑 연결할 애들) =======
 int g_thresh      = 160;  // 이진화 임계값
@@ -52,6 +76,9 @@ CameraProcessing::CameraProcessing() : rclcpp::Node("CameraProcessing_node") // 
   //img subscriber
   image_subscription_ = create_subscription<sensor_msgs::msg::CompressedImage>(image_topic, rclcpp::SensorDataQoS(),
     std::bind(&CameraProcessing::on_image, this, std::placeholders::_1)); // 콜백 함수 바인딩 : on_image
+
+  lane_left_pub_ = create_publisher<sea_interfaces::msg::Lane>("/lane/left", rclcpp::QoS(10));
+  lane_right_pub_ = create_publisher<sea_interfaces::msg::Lane>("/lane/right", rclcpp::QoS(10));
 
 
   RCLCPP_INFO(get_logger(), "Perception node subscribing to %s", image_topic.c_str()); //debug msg
@@ -93,6 +120,7 @@ void CameraProcessing::on_image(const sensor_msgs::msg::CompressedImage::ConstSh
     cv::Mat img = cv::imdecode(msg->data, cv::IMREAD_COLOR); // cv:Mat 형식 디코딩 
 
     ImgProcessing(img,&static_camera_data); // img processing main pipeline function
+    publish_lane_messages();
     
   }
   catch (const cv::Exception & e) // cv에러 예외처리 
@@ -100,6 +128,30 @@ void CameraProcessing::on_image(const sensor_msgs::msg::CompressedImage::ConstSh
     RCLCPP_ERROR_THROTTLE(
       get_logger(), *get_clock(), 2000, "OpenCV exception during decode: %s", e.what());
   }
+}
+
+void CameraProcessing::publish_lane_messages()
+{
+  auto publish_single_lane = [](const CAMERA_LANEINFO & lane_info,
+                                bool lane_missing,
+                                const rclcpp::Publisher<sea_interfaces::msg::Lane>::SharedPtr & publisher)
+  {
+    if (!publisher || lane_missing)
+    {
+      return;
+    }
+
+    auto lane_msg = build_lane_message(lane_info);
+    if (lane_msg.arf32_Lane.empty())
+    {
+      return;
+    }
+
+    publisher->publish(lane_msg);
+  };
+
+  publish_single_lane(st_LaneInfoLeftMain, b_NoLaneLeft, lane_left_pub_);
+  publish_single_lane(st_LaneInfoRightMain, b_NoLaneRight, lane_right_pub_);
 }
 
 
