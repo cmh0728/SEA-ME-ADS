@@ -113,9 +113,10 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     //왼쪽 차선 구분 
     st_LaneInfoLeft.b_IsLeft = true; // 왼쪽 차선 표시 --> 칼만 객체 생성에서 구분 
     st_LaneInfoLeft.st_LaneCoefficient.b_IsLeft = true ;
-    KALMAN_STATE st_KalmanStateLeft, st_KalmanStateRight; // 새로 계산된 좌우 차선 거리 , 각도 저장 
-    int32_t s32_I, s32_J, s32_KalmanStateCnt = 0;
-    KALMAN_STATE arst_KalmanState[2] = {0};
+    // KALMAN_STATE st_KalmanStateLeft, st_KalmanStateRight; // 새로 계산된 좌우 차선 거리 , 각도 저장 
+    int32_t s32_I, s32_J;
+    // int32_t s32_KalmanStateCnt = 0;
+    // KALMAN_STATE arst_KalmanState[2] = {0};
 
     // 매 프레임마다 초기화
     b_NoLaneLeft  = false;
