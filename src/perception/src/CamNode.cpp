@@ -1,5 +1,4 @@
-// lane detection v2 with cpp 
-// main flow : 
+// lane detection v2
 
 #include "perception/CamNode.hpp"
 #include "perception/msg/lane_pnt.hpp"
