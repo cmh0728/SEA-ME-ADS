@@ -36,7 +36,7 @@ perception::msg::Lane build_lane_message(const CAMERA_LANEINFO & lane_info)
     const int32_t max_samples = static_cast<int32_t>(sizeof(lane_info.arst_LaneSample) /
                                                     sizeof(lane_info.arst_LaneSample[0]));
     const int32_t clamped_samples = std::min(lane_info.s32_SampleCount, max_samples);
-    lane_msg.arf32_Lane.reserve(clamped_samples);
+    lane_msg.lane_points.reserve(clamped_samples);
 
     for (int32_t i = 0; i < clamped_samples; ++i)
     {
@@ -44,7 +44,7 @@ perception::msg::Lane build_lane_message(const CAMERA_LANEINFO & lane_info)
         perception::msg::LanePnt point_msg;
         point_msg.x = static_cast<float>(sample.x);
         point_msg.y = static_cast<float>(sample.y);
-        lane_msg.arf32_Lane.push_back(point_msg);
+        lane_msg.lane_points.push_back(point_msg);
     }
 
     return lane_msg;
@@ -142,7 +142,7 @@ void CameraProcessing::publish_lane_messages()
     }
 
     auto lane_msg = build_lane_message(lane_info);
-    if (lane_msg.arf32_Lane.empty())
+    if (lane_msg.lane_points.empty())
     {
       return;
     }
