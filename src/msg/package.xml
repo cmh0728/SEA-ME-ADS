@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>perception_interfaces</name>
+  <name>msg</name>
   <version>0.0.1</version>
-  <description>Lane-related ROS 2 interfaces consumed by the perception stack.</description>
+  <description>Lane and perception-related message definitions for SEA-ME ADS.</description>
   <maintainer email="todo@example.com">SEA:ME Team</maintainer>
   <license>Apache-2.0</license>
 

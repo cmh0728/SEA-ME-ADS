@@ -13,14 +13,14 @@
   <build_depend>OpenCV</build_depend>
   <build_depend>Eigen3</build_depend>
   <build_depend>yaml-cpp</build_depend>
-  <build_depend>perception_interfaces</build_depend>
+  <build_depend>msg</build_depend>
   <exec_depend>rclcpp</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>cv_bridge</exec_depend>
   <exec_depend>OpenCV</exec_depend>
   <exec_depend>Eigen3</exec_depend>
   <exec_depend>yaml-cpp</exec_depend>
-  <exec_depend>perception_interfaces</exec_depend>
+  <exec_depend>msg</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

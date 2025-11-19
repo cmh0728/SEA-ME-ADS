@@ -2,7 +2,7 @@
 // main flow : 
 
 #include "perception/CamNode.hpp"
-#include "perception_interfaces/msg/lane_pnt.hpp"
+#include "msg/msg/lane_pnt.hpp"
 
 // ransac 난수 초기화 전역설정
 
@@ -30,9 +30,9 @@ static CAMERA_DATA static_camera_data;
 
 namespace
 {
-perception_interfaces::msg::Lane build_lane_message(const CAMERA_LANEINFO & lane_info)
+msg::msg::Lane build_lane_message(const CAMERA_LANEINFO & lane_info)
 {
-    perception_interfaces::msg::Lane lane_msg;
+    msg::msg::Lane lane_msg;
     const int32_t max_samples = static_cast<int32_t>(sizeof(lane_info.arst_LaneSample) /
                                                     sizeof(lane_info.arst_LaneSample[0]));
     const int32_t clamped_samples = std::min(lane_info.s32_SampleCount, max_samples);
@@ -41,7 +41,7 @@ perception_interfaces::msg::Lane build_lane_message(const CAMERA_LANEINFO & lane
     for (int32_t i = 0; i < clamped_samples; ++i)
     {
         const cv::Point & sample = lane_info.arst_LaneSample[i];
-        perception_interfaces::msg::LanePnt point_msg;
+        msg::msg::LanePnt point_msg;
         point_msg.x = static_cast<float>(sample.x);
         point_msg.y = static_cast<float>(sample.y);
         lane_msg.lane_points.push_back(point_msg);
@@ -77,8 +77,8 @@ CameraProcessing::CameraProcessing() : rclcpp::Node("CameraProcessing_node") // 
   image_subscription_ = create_subscription<sensor_msgs::msg::CompressedImage>(image_topic, rclcpp::SensorDataQoS(),
     std::bind(&CameraProcessing::on_image, this, std::placeholders::_1)); // 콜백 함수 바인딩 : on_image
 
-  lane_left_pub_ = create_publisher<perception_interfaces::msg::Lane>("/lane/left", rclcpp::QoS(10));
-  lane_right_pub_ = create_publisher<perception_interfaces::msg::Lane>("/lane/right", rclcpp::QoS(10));
+  lane_left_pub_ = create_publisher<msg::msg::Lane>("/lane/left", rclcpp::QoS(10));
+  lane_right_pub_ = create_publisher<msg::msg::Lane>("/lane/right", rclcpp::QoS(10));
 
 
   RCLCPP_INFO(get_logger(), "Perception node subscribing to %s", image_topic.c_str()); //debug msg
@@ -134,7 +134,7 @@ void CameraProcessing::publish_lane_messages()
 {
   auto publish_single_lane = [](const CAMERA_LANEINFO & lane_info,
                                 bool lane_missing,
-                                const rclcpp::Publisher<perception_interfaces::msg::Lane>::SharedPtr & publisher)
+                                const rclcpp::Publisher<msg::msg::Lane>::SharedPtr & publisher)
   {
     if (!publisher || lane_missing)
     {
