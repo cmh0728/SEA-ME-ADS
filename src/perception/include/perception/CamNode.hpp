@@ -25,8 +25,8 @@ private:
 
   std::string window_name_;
   rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr image_subscription_;
-  rclcpp::Publisher<msg::msg::Lane>::SharedPtr lane_left_pub_;
-  rclcpp::Publisher<msg::msg::Lane>::SharedPtr lane_right_pub_;
+  rclcpp::Publisher<perception::msg::Lane>::SharedPtr lane_left_pub_;
+  rclcpp::Publisher<perception::msg::Lane>::SharedPtr lane_right_pub_;
 };
 
 // 메인 파이프라인: CV:Mat → 차선 Kalman 업데이트까지 전체 흐름 제어
