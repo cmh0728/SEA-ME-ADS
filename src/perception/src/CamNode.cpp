@@ -113,10 +113,9 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     //왼쪽 차선 구분 
     st_LaneInfoLeft.b_IsLeft = true; // 왼쪽 차선 표시 --> 칼만 객체 생성에서 구분 
     st_LaneInfoLeft.st_LaneCoefficient.b_IsLeft = true ;
-    // KALMAN_STATE st_KalmanStateLeft, st_KalmanStateRight; // 새로 계산된 좌우 차선 거리 , 각도 저장 
-    int32_t s32_I, s32_J;
-    // int32_t s32_KalmanStateCnt = 0;
-    // KALMAN_STATE arst_KalmanState[2] = {0};
+    KALMAN_STATE st_KalmanStateLeft, st_KalmanStateRight; // 새로 계산된 좌우 차선 거리 , 각도 저장 
+    int32_t s32_I, s32_J, s32_KalmanStateCnt = 0;
+    KALMAN_STATE arst_KalmanState[2] = {0};
 
     // 매 프레임마다 초기화
     b_NoLaneLeft  = false;
@@ -239,174 +238,177 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
 
     // ======================= Kalman Filter 단계 ========================
 
-        // ======================= Kalman Filter 단계 ========================
-    //
-    // 목표:
-    //  - 현재 프레임에서 관측된 차선(왼/오)을 Kalman 상태(KALMAN_STATE)로 변환
-    //  - 이미 존재하는 Kalman 객체들은:
-    //      · 관측이 있으면 → 업데이트 + 예측 + 그리기
-    //      · 관측이 없으면 → 예측만으로 추적 + 그리기
-    //  - 아직 Kalman 객체가 없는 쪽(왼/오)은, 관측이 있을 때만 새로 생성
-
-    // 1) 현재 프레임에서 얻은 관측값을 Kalman 상태로 변환
-    KALMAN_STATE arst_KalmanState[2];
-    bool hasState[2] = {false, false};   // 0: left, 1: right
-    bool measUsed[2] = {false, false};   // 해당 관측이 이미 어느 Kalman 객체에 매칭됐는지
-
-    // 왼쪽 차선 관측 → Kalman 상태
-    if (!b_NoLaneLeft)
+    if (!camera_data->b_ThereIsLeft || !camera_data->b_ThereIsRight) // 왼쪽 or 오른쪽 칼만 객체 모두 없는 경우 
     {
-        arst_KalmanState[0] = CalculateKalmanState(
-            st_LaneInfoLeft.st_LaneCoefficient,
-            camera_data->f32_LastDistanceLeft,
-            camera_data->f32_LastAngleLeft
-        );
-        hasState[0] = true;
-    }
-
-    // 오른쪽 차선 관측 → Kalman 상태
-    if (!b_NoLaneRight)
-    {
-        arst_KalmanState[1] = CalculateKalmanState(
-            st_LaneInfoRight.st_LaneCoefficient,
-            camera_data->f32_LastDistanceRight,
-            camera_data->f32_LastAngleRight
-        );
-        hasState[1] = true;
-    }
-
-    // 2) 이미 존재하는 Kalman 객체들 업데이트 / 예측
-    if (camera_data->s32_KalmanObjectNum > 0)
-    {
-        for (s32_I = 0; s32_I < camera_data->s32_KalmanObjectNum; ++s32_I)
+        int margin = 50 ; // b_IsLeft 판단용 마진
+        // ---- 왼쪽 칼만 객체 새로 생성 ----
+        if (!camera_data->b_ThereIsLeft && !b_NoLaneLeft) // 왼쪽 칼만 객체 없고, 왼쪽 차선 감지된 경우
         {
-            LANE_KALMAN &obj = camera_data->arst_KalmanObject[s32_I];
+            // Kalman state structure 계산
+            st_KalmanStateLeft = CalculateKalmanState(
+                st_LaneInfoLeft.st_LaneCoefficient,
+                camera_data->f32_LastDistanceLeft,
+                camera_data->f32_LastAngleLeft
+            );
+
+            LANE_KALMAN st_KalmanObject;
+            InitializeKalmanObject(st_KalmanObject);
+            UpdateObservation(st_KalmanObject, st_KalmanStateLeft);
+            SetInitialX(st_KalmanObject);
+            st_KalmanObject.st_LaneCoefficient = st_LaneInfoLeft.st_LaneCoefficient;
+
+            // x 절편 로직 새로 구성 
+            int center_x = camera_data->st_CameraParameter.s32_RemapWidth / 2;
+            double x_intercept = -st_KalmanObject.st_LaneCoefficient.f64_Intercept /
+                     st_KalmanObject.st_LaneCoefficient.f64_Slope;
+            
+            st_KalmanObject.b_IsLeft = (x_intercept < center_x - margin);
+
+            // 좌/우 판단 (x절편 계산)
+            // if (-(st_KalmanObject.st_LaneCoefficient.f64_Intercept /
+            //       st_KalmanObject.st_LaneCoefficient.f64_Slope) < 300)
+            //     st_KalmanObject.b_IsLeft = true;
+            // else
+            //     st_KalmanObject.b_IsLeft = false;
+
+            st_KalmanObject.st_LaneState = st_KalmanStateLeft;
+            camera_data->b_ThereIsLeft = true;
+            camera_data->arst_KalmanObject[camera_data->s32_KalmanObjectNum] = st_KalmanObject;
+            camera_data->s32_KalmanObjectNum += 1;
+
+            DrawDrivingLane(g_ResultImage,
+                            st_KalmanObject.st_LaneCoefficient,
+                            cv::Scalar(255, 0, 255));
+        }
+
+        // ---- 오른쪽 칼만 객체 새로 생성 ----
+        if (!camera_data->b_ThereIsRight && !b_NoLaneRight) // 오른쪽 칼만 객체 없고, 오른쪽 차선 감지된 경우
+        {
+            st_KalmanStateRight = CalculateKalmanState(
+                st_LaneInfoRight.st_LaneCoefficient,
+                camera_data->f32_LastDistanceRight,
+                camera_data->f32_LastAngleRight
+            );
+
+            LANE_KALMAN st_KalmanObject;
+            InitializeKalmanObject(st_KalmanObject);
+            UpdateObservation(st_KalmanObject, st_KalmanStateRight);
+            SetInitialX(st_KalmanObject);
+            st_KalmanObject.st_LaneCoefficient = st_LaneInfoRight.st_LaneCoefficient;
+
+            // b_IsLeft 판단 : false --> 오 / true --> 왼
+            int center_x = camera_data->st_CameraParameter.s32_RemapWidth / 2;
+            double x_intercept = -st_KalmanObject.st_LaneCoefficient.f64_Intercept /
+                     st_KalmanObject.st_LaneCoefficient.f64_Slope;
+            
+            st_KalmanObject.b_IsLeft = (x_intercept < center_x + margin);
+
+            // if (-(st_KalmanObject.st_LaneCoefficient.f64_Intercept /
+            //       st_KalmanObject.st_LaneCoefficient.f64_Slope) < 300)
+            //     st_KalmanObject.b_IsLeft = true;
+            // else
+            //     st_KalmanObject.b_IsLeft = false;
+
+            st_KalmanObject.st_LaneState = st_KalmanStateRight;
+            camera_data->b_ThereIsRight = true;
+            camera_data->arst_KalmanObject[camera_data->s32_KalmanObjectNum] = st_KalmanObject;
+            camera_data->s32_KalmanObjectNum += 1;
+
+            DrawDrivingLane(g_ResultImage,
+                            st_KalmanObject.st_LaneCoefficient,
+                            cv::Scalar(255, 255, 255));
+        }
+
+    }
+
+    else // 하나 이상의 칼만 객체가 이미 있는 경우
+    {
+        // ---- 이미 Kalman Object가 있는 경우: 업데이트 ----
+        // 감지된 왼쪽 차선이 있는 경우 상태 업데이트
+        if (!b_NoLaneLeft)
+        {
+            arst_KalmanState[0] = CalculateKalmanState(
+                st_LaneInfoLeft.st_LaneCoefficient,
+                camera_data->f32_LastDistanceLeft,
+                camera_data->f32_LastAngleLeft
+            );
+        }
+
+        if (!b_NoLaneRight)
+        {
+            arst_KalmanState[1] = CalculateKalmanState(
+                st_LaneInfoRight.st_LaneCoefficient,
+                camera_data->f32_LastDistanceRight,
+                camera_data->f32_LastAngleRight
+            );
+        }
+
+        for (s32_I = 0; s32_I < camera_data->s32_KalmanObjectNum; s32_I++)
+        {
             bool b_SameObj = false;
-
-            // 현재 Kalman 객체와 가장 잘 맞는 관측(왼/오 중 1개)을 찾아본다
-            for (s32_J = 0; s32_J < 2; ++s32_J)
+            // 칼만 객체와 새 관측을 비교해 동일 차선인지 판별
+            for (s32_J = 0; s32_J < 2; s32_J++)
             {
-                if (!hasState[s32_J] || measUsed[s32_J])
-                    continue; // 이쪽 관측은 없거나 이미 다른 객체가 가져감
+                CheckSameKalmanObject(camera_data->arst_KalmanObject[s32_I],
+                                      arst_KalmanState[s32_J]);  // 동일 차선인지 비교
 
-                CheckSameKalmanObject(obj, arst_KalmanState[s32_J]);
-
-                if (obj.b_MeasurementUpdateFlag)
+                if (camera_data->arst_KalmanObject[s32_I].b_MeasurementUpdateFlag)
                 {
-                    // ---- 관측 기반 업데이트 + 예측 ----
-                    UpdateObservation(obj, arst_KalmanState[s32_J]);
-                    PredictState(obj);
+                    UpdateObservation(camera_data->arst_KalmanObject[s32_I],
+                                      arst_KalmanState[s32_J]);
+                    PredictState(camera_data->arst_KalmanObject[s32_I]);
 
                     if (s32_J == 0)
-                        obj.st_LaneCoefficient = st_LaneInfoLeft.st_LaneCoefficient;
-                    else
-                        obj.st_LaneCoefficient = st_LaneInfoRight.st_LaneCoefficient;
+                        camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient =
+                            st_LaneInfoLeft.st_LaneCoefficient;
+                    else if (s32_J == 1)
+                        camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient =
+                            st_LaneInfoRight.st_LaneCoefficient;
 
-                    UpdateMeasurement(obj);
-                    MakeKalmanStateBasedLaneCoef(obj, obj.st_LaneCoefficient);
+                    UpdateMeasurement(camera_data->arst_KalmanObject[s32_I]);
+                    MakeKalmanStateBasedLaneCoef(
+                        camera_data->arst_KalmanObject[s32_I],
+                        camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient
+                    );
 
-                    // 색상: 왼쪽/오른쪽에 따라
-                    cv::Scalar color = obj.b_IsLeft
-                        ? cv::Scalar(255, 0, 255)    // Left lane: 보라
-                        : cv::Scalar(255, 255, 255); // Right lane: 흰색
+                    if (s32_J == 0)
+                        DrawDrivingLane(g_ResultImage,
+                                        camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient,
+                                        cv::Scalar(255, 0, 255));
+                    else if (s32_J == 1)
+                        DrawDrivingLane(g_ResultImage,
+                                        camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient,
+                                        cv::Scalar(255, 255, 255));
 
-                    DrawDrivingLane(g_ResultImage, obj.st_LaneCoefficient, color);
-
-                    obj.st_LaneState = arst_KalmanState[s32_J];
-                    obj.s32_CntNoMatching = 0;
-                    obj.b_MeasurementUpdateFlag = false;
-
-                    measUsed[s32_J] = true;  // 이 관측은 이 객체가 사용함
                     b_SameObj = true;
-                    break; // 이 Kalman 객체는 한 개 관측에만 매칭
+                    break;
                 }
             }
 
-            // ---- 이번 프레임에서 매칭된 관측이 없는 경우: 예측만으로 추적 ----
             if (!b_SameObj)
             {
-                if (obj.s32_CntNoMatching < 20)
+                if (camera_data->arst_KalmanObject[s32_I].s32_CntNoMatching < 20)
                 {
-                    obj.s32_CntNoMatching += 1;
+                    camera_data->arst_KalmanObject[s32_I].s32_CntNoMatching += 1;
 
-                    PredictState(obj);
-                    MakeKalmanStateBasedLaneCoef(obj, obj.st_LaneCoefficient);
-
-                    // 관측 없는 예측 결과는 노란색으로 표시
+                    PredictState(camera_data->arst_KalmanObject[s32_I]);
+                    MakeKalmanStateBasedLaneCoef(
+                        camera_data->arst_KalmanObject[s32_I],
+                        camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient
+                    );
                     DrawDrivingLane(g_ResultImage,
-                                    obj.st_LaneCoefficient,
+                                    camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient,
                                     cv::Scalar(255, 255, 0));
                 }
                 else
                 {
-                    // 너무 오래 관측이 안 되면 해당 Kalman 객체 삭제
                     DeleteKalmanObject(*camera_data,
                                        camera_data->s32_KalmanObjectNum,
                                        s32_I);
-                    // 하나 지웠으니까 인덱스 한 칸 당겨주기
-                    --s32_I;
                 }
             }
         }
     }
-
-    // 3) 아직 Kalman 객체가 없는 쪽(왼/오)에 대해, 새 관측이 있으면 새로 생성
-    int margin = 50;  // b_IsLeft 판단용 마진
-
-    // ---- 왼쪽 Kalman 객체 없고, 이번 프레임에 왼쪽 차선이 관측된 경우 ----
-    if (!camera_data->b_ThereIsLeft && hasState[0])
-    {
-        LANE_KALMAN st_KalmanObject;
-        InitializeKalmanObject(st_KalmanObject);
-        UpdateObservation(st_KalmanObject, arst_KalmanState[0]);
-        SetInitialX(st_KalmanObject);
-
-        st_KalmanObject.st_LaneCoefficient = st_LaneInfoLeft.st_LaneCoefficient;
-
-        int center_x = camera_data->st_CameraParameter.s32_RemapWidth / 2;
-        double x_intercept =
-            -st_KalmanObject.st_LaneCoefficient.f64_Intercept /
-             st_KalmanObject.st_LaneCoefficient.f64_Slope;
-        st_KalmanObject.b_IsLeft = (x_intercept < center_x - margin);
-
-        st_KalmanObject.st_LaneState = arst_KalmanState[0];
-
-        camera_data->b_ThereIsLeft = true;
-        camera_data->arst_KalmanObject[camera_data->s32_KalmanObjectNum] = st_KalmanObject;
-        camera_data->s32_KalmanObjectNum += 1;
-
-        DrawDrivingLane(g_ResultImage,
-                        st_KalmanObject.st_LaneCoefficient,
-                        cv::Scalar(255, 0, 255)); // 보라색
-    }
-
-    // ---- 오른쪽 Kalman 객체 없고, 이번 프레임에 오른쪽 차선이 관측된 경우 ----
-    if (!camera_data->b_ThereIsRight && hasState[1])
-    {
-        LANE_KALMAN st_KalmanObject;
-        InitializeKalmanObject(st_KalmanObject);
-        UpdateObservation(st_KalmanObject, arst_KalmanState[1]);
-        SetInitialX(st_KalmanObject);
-
-        st_KalmanObject.st_LaneCoefficient = st_LaneInfoRight.st_LaneCoefficient;
-
-        int center_x = camera_data->st_CameraParameter.s32_RemapWidth / 2;
-        double x_intercept =
-            -st_KalmanObject.st_LaneCoefficient.f64_Intercept /
-             st_KalmanObject.st_LaneCoefficient.f64_Slope;
-        st_KalmanObject.b_IsLeft = (x_intercept < center_x - margin);
-
-        st_KalmanObject.st_LaneState = arst_KalmanState[1];
-
-        camera_data->b_ThereIsRight = true;
-        camera_data->arst_KalmanObject[camera_data->s32_KalmanObjectNum] = st_KalmanObject;
-        camera_data->s32_KalmanObjectNum += 1;
-
-        DrawDrivingLane(g_ResultImage,
-                        st_KalmanObject.st_LaneCoefficient,
-                        cv::Scalar(255, 255, 255)); // 흰색
-    }
-
 
     // =======================  RANSAC 디버그 창 ===========================
     // RANSAC 직선만 IPM 이미지 복사해서 사용
