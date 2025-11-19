@@ -2,7 +2,7 @@
 // main flow : 
 
 #include "perception/CamNode.hpp"
-#include "msg/msg/lane_pnt.hpp"
+#include "perception/msg/lane_pnt.hpp"
 
 // ransac 난수 초기화 전역설정
 
