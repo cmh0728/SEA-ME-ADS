@@ -182,7 +182,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
         // 팽창
         cv::dilate(g_TempImg, g_TempImg, st_K);
 
-        // Canny Edge
+        // Canny Edge , 140보다 낮으면 무시, 330보다 높으면 엣지 
         cv::Canny(g_TempImg, g_TempImg, 140, 330); // non zero 스캔 때문에 canny가 더 빠름 
     }
 
@@ -238,10 +238,11 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
 
     // ======================= Kalman Filter 단계 ========================
 
-    if (!camera_data->b_ThereIsLeft || !camera_data->b_ThereIsRight)
+    if (!camera_data->b_ThereIsLeft || !camera_data->b_ThereIsRight) // 왼쪽 or 오른쪽 칼만 객체 모두 없는 경우 
     {
+        int margin = 80 ; // b_IsLeft 판단용 마진
         // ---- 왼쪽 칼만 객체 새로 생성 ----
-        if (!camera_data->b_ThereIsLeft && !b_NoLaneLeft)
+        if (!camera_data->b_ThereIsLeft && !b_NoLaneLeft) // 왼쪽 칼만 객체 없고, 왼쪽 차선 감지된 경우
         {
             st_KalmanStateLeft = CalculateKalmanState(
                 st_LaneInfoLeft.st_LaneCoefficient,
@@ -255,12 +256,19 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             SetInitialX(st_KalmanObject);
             st_KalmanObject.st_LaneCoefficient = st_LaneInfoLeft.st_LaneCoefficient;
 
-            // 좌/우 판단
-            if (-(st_KalmanObject.st_LaneCoefficient.f64_Intercept /
-                  st_KalmanObject.st_LaneCoefficient.f64_Slope) < 300)
-                st_KalmanObject.b_IsLeft = true;
-            else
-                st_KalmanObject.b_IsLeft = false;
+            // x 절편 로직 새로 구성 
+            int center_x = camera_data->st_CameraParameter.s32_RemapWidth / 2;
+            double x_intercept = -st_KalmanObject.st_LaneCoefficient.f64_Intercept /
+                     st_KalmanObject.st_LaneCoefficient.f64_Slope;
+            
+            st_KalmanObject.b_IsLeft = (x_intercept < center_x - margin);
+
+            // 좌/우 판단 (x절편 계산)
+            // if (-(st_KalmanObject.st_LaneCoefficient.f64_Intercept /
+            //       st_KalmanObject.st_LaneCoefficient.f64_Slope) < 300)
+            //     st_KalmanObject.b_IsLeft = true;
+            // else
+            //     st_KalmanObject.b_IsLeft = false;
 
             st_KalmanObject.st_LaneState = st_KalmanStateLeft;
             camera_data->b_ThereIsLeft = true;
@@ -273,7 +281,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
         }
 
         // ---- 오른쪽 칼만 객체 새로 생성 ----
-        if (!camera_data->b_ThereIsRight && !b_NoLaneRight)
+        if (!camera_data->b_ThereIsRight && !b_NoLaneRight) // 오른쪽 칼만 객체 없고, 오른쪽 차선 감지된 경우
         {
             st_KalmanStateRight = CalculateKalmanState(
                 st_LaneInfoRight.st_LaneCoefficient,
@@ -287,11 +295,18 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             SetInitialX(st_KalmanObject);
             st_KalmanObject.st_LaneCoefficient = st_LaneInfoRight.st_LaneCoefficient;
 
-            if (-(st_KalmanObject.st_LaneCoefficient.f64_Intercept /
-                  st_KalmanObject.st_LaneCoefficient.f64_Slope) < 300)
-                st_KalmanObject.b_IsLeft = true;
-            else
-                st_KalmanObject.b_IsLeft = false;
+            // b_IsLeft 판단 : false --> 오 / true --> 왼
+            int center_x = camera_data->st_CameraParameter.s32_RemapWidth / 2;
+            double x_intercept = -st_KalmanObject.st_LaneCoefficient.f64_Intercept /
+                     st_KalmanObject.st_LaneCoefficient.f64_Slope;
+            
+            st_KalmanObject.b_IsLeft = (x_intercept < center_x + margin);
+
+            // if (-(st_KalmanObject.st_LaneCoefficient.f64_Intercept /
+            //       st_KalmanObject.st_LaneCoefficient.f64_Slope) < 300)
+            //     st_KalmanObject.b_IsLeft = true;
+            // else
+            //     st_KalmanObject.b_IsLeft = false;
 
             st_KalmanObject.st_LaneState = st_KalmanStateRight;
             camera_data->b_ThereIsRight = true;
@@ -303,9 +318,9 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
                             cv::Scalar(255, 255, 255));
         }
 
-        // 둘 다 없는 경우는 여기서 끝
     }
-    else
+
+    else // 하나 이상의 칼만 객체가 이미 있는 경우
     {
         // ---- 이미 Kalman Object가 있는 경우: 업데이트 ----
         // 감지된 왼쪽 차선이 있는 경우 상태 업데이트
