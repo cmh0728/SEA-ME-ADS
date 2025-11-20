@@ -974,6 +974,7 @@ void CalculateLaneCoefficient(CAMERA_LANEINFO& st_LaneInfo, int32_t s32_Iteratio
     int32_t s32_BestInlierCount = 0 ;
     int32_t s32_I, s32_J;
     int32_t s32_Idx1, s32_Idx2, s32_InlierCount ;
+    int32_t N = st_LaneInfo.s32_SampleCount; // point의 개수 
 
     bool b_Flag = true ; // 수직선 판별 flag (flase : 수직선 )
     LANE_COEFFICIENT st_Temp ; // 기울기 , 절편 정보 저장 
@@ -985,10 +986,10 @@ void CalculateLaneCoefficient(CAMERA_LANEINFO& st_LaneInfo, int32_t s32_Iteratio
     for(s32_I=0;s32_I<s32_Iteration;s32_I++) // Iteration 횟수만큼 반복 --> 적당한 값 찾기 
     {
         // 두 점 랜덤으로 선택 
-        int32_t N = st_LaneInfo.s32_SampleCount;
         int32_t s32_Idx1 = rand() % N;
         int32_t s32_Idx2 = rand() % (N - 1);
-        if (s32_Idx2 >= s32_Idx1) s32_Idx2 += 1; // 같은 점 선택 방지 
+        if (s32_Idx2 >= s32_Idx1) 
+            s32_Idx2 += 1; // 같은 점 선택 방지 
 
         // 두개 랜덤포인트로 모델 피팅 
         st_Temp = FitModel(st_LaneInfo.arst_LaneSample[s32_Idx1],st_LaneInfo.arst_LaneSample[s32_Idx2], b_Flag);
@@ -997,11 +998,12 @@ void CalculateLaneCoefficient(CAMERA_LANEINFO& st_LaneInfo, int32_t s32_Iteratio
         {
             // 모든 점에 대해서 inlinear count 계산 
             s32_InlierCount = 0;
+            double denom = std::sqrt(st_Temp.f64_Slope * st_Temp.f64_Slope + 1.0); // 매번 sqrt하지 않게 
 
             for(s32_J = 0; s32_J < st_LaneInfo.s32_SampleCount; s32_J++)
             {
                 if(abs(-st_Temp.f64_Slope * st_LaneInfo.arst_LaneSample[s32_J].x + st_LaneInfo.arst_LaneSample[s32_J].y - st_Temp.f64_Intercept)
-                        / sqrt(st_Temp.f64_Slope*st_Temp.f64_Slope + 1) < s64_Threshold)
+                        / denom < s64_Threshold)
                 {
                     s32_InlierCount += 1;
                 } 
@@ -1014,7 +1016,7 @@ void CalculateLaneCoefficient(CAMERA_LANEINFO& st_LaneInfo, int32_t s32_Iteratio
                 st_LaneInfo.st_LaneCoefficient = st_Temp;
             }
         }
-        // else //수직선인 경우
+        // else //수직선인 경우 어떻게 할지 생각하기 
         // {
         //     continue;
         // }
