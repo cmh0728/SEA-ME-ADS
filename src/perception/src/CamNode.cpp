@@ -271,21 +271,23 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     
     // ======================= RANSAC으로 차선 계수 산출 ====================
 
-    // RANSAC으로 차선 계수 산출 , 셈플 5개 미만이면 차선 없는걸로 간주 
-    if (st_LaneInfoLeft.s32_SampleCount < 5)
+    // RANSAC으로 차선 계수 산출 , 셈플 4개 미만이면 차선 없는걸로 간주  --> sample count는 윈도우당 1개 
+    if (st_LaneInfoLeft.s32_SampleCount < 4)
         b_NoLaneLeft = true;
-    if (st_LaneInfoRight.s32_SampleCount < 5)
+    if (st_LaneInfoRight.s32_SampleCount < 4)
         b_NoLaneRight = true;
 
-    // 차선이 있다고 판단한 경우 ransac 수행 
+    // 차선이 있다고 판단한 경우 ransac 수행 (sample point를 이용해 ransac)
+    int32_t max_combinations = N * (N - 1) / 2; // 가능한 최대 조합의 수 
+    int32_t iterations = std::min(s32_Iteration, max_combinations);
     if(!b_NoLaneLeft)
     {
-        CalculateLaneCoefficient(st_LaneInfoLeft,1000,1); // iteration, threshold
+        CalculateLaneCoefficient(st_LaneInfoLeft,iterations,1); // iteration, threshold
         st_LaneInfoLeftMain = st_LaneInfoLeft; // 관측값 보관용 
     }
     if(!b_NoLaneRight)
     {
-        CalculateLaneCoefficient(st_LaneInfoRight,1000,1);
+        CalculateLaneCoefficient(st_LaneInfoRight,iterations,1);
         st_LaneInfoRightMain = st_LaneInfoRight;
     }
 
@@ -489,8 +491,8 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     // =======================  (H) Debug GUI ================================
     if (visualize)
     {
-        cv::imshow("IPM", g_IpmImg);          // 탑뷰
-        cv::imshow("Temp_Img", g_TempImg);    // 현재는 Edge 결과
+        // cv::imshow("IPM", g_IpmImg);          // 탑뷰
+        cv::imshow("Temp_Img", g_TempImg);    // 현재는 ransac 결과
         cv::imshow("st_ResultImage", g_ResultImage); // 차선 + Kalman 결과
         cv::waitKey(1);
     }
@@ -667,7 +669,7 @@ void InitializeKalmanObject(LANE_KALMAN& st_KalmanObject)
 
 //######################################### SlidingWindow func ##################################################//
 
-// 에지 이미지에서 슬라이딩 윈도로 좌/우 차선 포인트를 추출
+// edge에서 슬라이딩 윈도로 좌/우 차선 포인트를 추출
 void SlidingWindow(const cv::Mat& st_EdgeImage,
                    const cv::Mat& st_NonZeroPosition,
                    CAMERA_LANEINFO& st_LaneInfoLeft,
@@ -684,7 +686,7 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
     // 윈도우 파라미터
     int32_t s32_WindowHeight = rows - 1;        // 현재 윈도우의 "아래쪽" y (맨 아래에서 시작)
     const int32_t s32_MarginX = 30;             // 윈도우 가로 반폭
-    const int32_t s32_MarginY = 70;             // 윈도우 세로 높이
+    const int32_t s32_MarginY = 70;             // 윈도우 세로 높이 --> 일단 70으로 사용 
     int32_t s32_I, s32_CentorX, s32_CentorY;
 
     // 유효 윈도우 유지 여부
@@ -890,7 +892,7 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
                         double d_global = std::abs(st_Position.x - img_center_x);
                         double score    = 0.7 * d_window + 0.3 * d_global;
 
-                        if (score < best_score)
+                        if (score < best_score) // 한번은 무조건 들어감 
                         {
                             best_score = score;
                             cv::Point ipmPt = st_Position;
@@ -938,23 +940,20 @@ void DrawDrivingLane(cv::Mat& st_ResultImage, const LANE_COEFFICIENT st_LaneCoef
 // 두 포인트를 이용해 직선 모델을 구성
 LANE_COEFFICIENT FitModel(const Point& st_Point1, const Point& st_Point2, bool& b_Flag)
 {
-    LANE_COEFFICIENT st_TmpModel;
+    LANE_COEFFICIENT st_TmpModel; // return value
     
-    if((st_Point2.x != st_Point1.x))
+    if((st_Point2.x != st_Point1.x)) // 수직선이 아닌경우 == 기울기가 있는 경우 
     {
-        // 기존 --> 정수로 떨어짐
-        // st_TmpModel.f64_Slope = float((st_Point2.y - st_Point1.y) / (st_Point2.x - st_Point1.x));
-        // st_TmpModel.f64_Intercept = int32_t(st_Point1.y - st_TmpModel.f64_Slope * st_Point1.x);
-
-        // 수정 --> 실수로 계산 
+        // float64_t slope 계산 --> 로직 확인필요 
         st_TmpModel.f64_Slope = 
-            static_cast<double>(st_Point2.y - st_Point1.y) / static_cast<double>(st_Point2.x - st_Point1.x);
+            static_cast<float64_t>(st_Point2.y - st_Point1.y) / static_cast<float64_t>(st_Point2.x - st_Point1.x);
 
+        // y절편 계산 
         st_TmpModel.f64_Intercept = 
-            static_cast<double>(st_Point1.y) - st_TmpModel.f64_Slope * st_Point1.x;
+            static_cast<float64_t>(st_Point1.y) - st_TmpModel.f64_Slope * st_Point1.x;
     }
     else 
-        b_Flag = false;
+        b_Flag = false; // 수직선 
 
     return st_TmpModel;
 }
@@ -964,30 +963,32 @@ LANE_COEFFICIENT FitModel(const Point& st_Point1, const Point& st_Point2, bool& 
 // 슬라이딩 윈도우로 수집한 점들에서 RANSAC으로 차선 계수를 산출
 void CalculateLaneCoefficient(CAMERA_LANEINFO& st_LaneInfo, int32_t s32_Iteration, int64_t s64_Threshold)
 {
-    // 양쪽 차선 데이터 중 중앙선에 가장 가까운 안촉 차선 기준으로 RANSAC을 활용한 기울기 계산
-    // srand(time(0)); // 난수 초기화
-    int32_t s32_BestInlierCount = 0, s32_I, s32_Idx1, s32_Idx2, s32_InlierCount, s32_J;
-    bool b_Flag = true;
-    LANE_COEFFICIENT st_Temp;
+    // 양쪽 차선 데이터 중 중앙선에 가장 가까운 안촉 포인트 기준으로 RANSAC을 활용한 기울기 계산
+    int32_t s32_BestInlierCount = 0 ;
+    inte2_t s32_I, s32_J;
+    int32_t s32_Idx1, s32_Idx2, s32_InlierCount ;
 
-    // Coef Reset
+    bool b_Flag = true ; // 수직선 판별 flag (flase : 수직선 )
+    LANE_COEFFICIENT st_Temp ; // 기울기 , 절편 정보 저장 
+
+    // Coef Reset (camera_laneinfo struct)
     st_LaneInfo.st_LaneCoefficient.f64_Slope = 0;
     st_LaneInfo.st_LaneCoefficient.f64_Intercept = 0;
 
-    for(s32_I=0;s32_I<s32_Iteration;s32_I++)
+    for(s32_I=0;s32_I<s32_Iteration;s32_I++) // Iteration 횟수만큼 반복 --> 적당한 값 찾기 
     {
-        s32_Idx1 = rand() % st_LaneInfo.s32_SampleCount;
-        s32_Idx2 = rand() % st_LaneInfo.s32_SampleCount;
-        while(s32_Idx1 == s32_Idx2)
-        {
-            s32_Idx2 = rand() % st_LaneInfo.s32_SampleCount;
-        }
+        // 두 점 랜덤으로 선택 
+        int32_t N = st_LaneInfo.s32_SampleCount;
+        int32_t s32_Idx1 = rand() % N;
+        int32_t s32_Idx2 = rand() % (N - 1);
+        if (s32_Idx2 >= s32_Idx1) s32_Idx2 += 1; // 같은 점 선택 방지 
 
+        // 두개 랜덤포인트로 모델 피팅 
         st_Temp = FitModel(st_LaneInfo.arst_LaneSample[s32_Idx1],st_LaneInfo.arst_LaneSample[s32_Idx2], b_Flag);
 
-        if (b_Flag)
+        if (b_Flag) // 수직선이 아닌 경우 (기울기가 있는 경우)
         {
-            // Calculate Inlier
+            // 모든 점에 대해서 inlinear count 계산 
             s32_InlierCount = 0;
 
             for(s32_J = 0; s32_J < st_LaneInfo.s32_SampleCount; s32_J++)
@@ -999,18 +1000,21 @@ void CalculateLaneCoefficient(CAMERA_LANEINFO& st_LaneInfo, int32_t s32_Iteratio
                 } 
             }
 
-            // Best Model
+            // Best Model 갱신 
             if (s32_InlierCount > s32_BestInlierCount)
             {
                 s32_BestInlierCount = s32_InlierCount;
                 st_LaneInfo.st_LaneCoefficient = st_Temp;
             }
         }
+        // else //수직선인 경우
+        // {
+        //     continue;
+        // }
 
         b_Flag = true;
     }
 
-    // cout<<"y = "<<st_LaneInfo.st_LaneCoefficient.f64_Slope<<" * x + "<<st_LaneInfo.st_LaneCoefficient.f64_Intercept<<endl;
 }
 
 //###################################### FindTop5MaxIndices func ##################################################//

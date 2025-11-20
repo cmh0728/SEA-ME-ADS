@@ -205,9 +205,9 @@ struct CAMERA_PARAM
 // 검출한 차선 정보 
 struct CAMERA_LANEINFO
 {
-  cv::Point arst_LaneSample[40];
+  cv::Point arst_LaneSample[40]; // 최대 40개의 차선 샘플 포인트
   int32_t s32_SampleCount;
-  LANE_COEFFICIENT st_LaneCoefficient;
+  LANE_COEFFICIENT st_LaneCoefficient; // 차선 정보 (기울기)
   bool b_IsLeft = false;
 };
 
