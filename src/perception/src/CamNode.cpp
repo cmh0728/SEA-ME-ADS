@@ -24,7 +24,7 @@ CAMERA_LANEINFO st_LaneInfoLeftMain{};
 CAMERA_LANEINFO st_LaneInfoRightMain{};
 bool visualize = true;
 bool track_bar = false;
-bool b_IsprevHistogram = false ;
+bool b_IsprevHistogram = false;
 static CAMERA_DATA static_camera_data;
 
 //################################################## helper function ##################################################//
@@ -684,7 +684,7 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
     // 윈도우 파라미터
     int32_t s32_WindowHeight = rows - 1;        // 현재 윈도우의 "아래쪽" y (맨 아래에서 시작)
     const int32_t s32_MarginX = 30;             // 윈도우 가로 반폭
-    const int32_t s32_MarginY = 60;             // 윈도우 세로 높이
+    const int32_t s32_MarginY = 80;             // 윈도우 세로 높이
     int32_t s32_I, s32_CentorX, s32_CentorY;
 
     // 유효 윈도우 유지 여부
@@ -1022,7 +1022,6 @@ void FindTop5MaxIndices(const int32_t* ps32_Histogram, int32_t s32_MidPoint, int
     int32_t s32_I, s32_Cnt=0;
     std::pair<int32_t, int32_t> topValues[5];                 // (value, index)
     std::fill_n(topValues, 5, std::make_pair(0, -1));         // 0으로 초기화
-    
 
     //히스토그램 순회 하면서 픽셀이 가장 높은 5개 
     for (s32_I = 0; s32_I < s32_MidPoint; ++s32_I) {
@@ -1069,7 +1068,7 @@ int32_t FindClosestToMidPoint(const int32_t points[5], int32_t s32_MidPoint)
 
 //###################################### FindLaneStartPositions func ##################################################//
 
-// 히스토그램 분석으로 좌·우 슬라이딩 윈도 시작 위치를 계산 
+// 히스토그램 분석으로 좌·우 슬라이딩 윈도 시작 위치를 계산
 void FindLaneStartPositions(const cv::Mat& st_Edge, int32_t& s32_WindowCentorLeft, int32_t& s32_WindowCentorRight, bool& b_NoLaneLeft, bool& b_NoLaneRight) 
 {
 
