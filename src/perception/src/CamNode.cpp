@@ -286,6 +286,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
         int32_t max_combinations = N * (N - 1) / 2; // 가능한 최대 조합의 수 
         int32_t iterations = std::min(BASE_ITER, max_combinations);
         CalculateLaneCoefficient(st_LaneInfoLeft,iterations,1); // iteration, threshold
+        st_LaneInfoLeft.st_LaneCoefficient.b_IsLeft = true; // 왼쪽차선 정보 저장 (기본값 false)
         st_LaneInfoLeftMain = st_LaneInfoLeft; // 관측값 보관용 
     }
     if(!b_NoLaneRight)
@@ -983,7 +984,7 @@ void CalculateLaneCoefficient(CAMERA_LANEINFO& st_LaneInfo, int32_t s32_Iteratio
     st_LaneInfo.st_LaneCoefficient.f64_Slope = 0;
     st_LaneInfo.st_LaneCoefficient.f64_Intercept = 0;
 
-    for(s32_I=0;s32_I<s32_Iteration;s32_I++) // Iteration 횟수만큼 반복 --> 적당한 값 찾기 
+    for(s32_I=0;s32_I<s32_Iteration;s32_I++) // Iteration 횟수만큼 반복 --> 적당한 값 찾기(위에 조합으로 최대 횟수 있음)
     {
         // 두 점 랜덤으로 선택 
         int32_t s32_Idx1 = rand() % N;
@@ -1000,28 +1001,25 @@ void CalculateLaneCoefficient(CAMERA_LANEINFO& st_LaneInfo, int32_t s32_Iteratio
             s32_InlierCount = 0;
             double denom = std::sqrt(st_Temp.f64_Slope * st_Temp.f64_Slope + 1.0); // 매번 sqrt하지 않게 
 
+            // 모든 샘플포인트에 대해서 직선과의 거리 계산 
             for(s32_J = 0; s32_J < st_LaneInfo.s32_SampleCount; s32_J++)
             {
                 if(abs(-st_Temp.f64_Slope * st_LaneInfo.arst_LaneSample[s32_J].x + st_LaneInfo.arst_LaneSample[s32_J].y - st_Temp.f64_Intercept)
-                        / denom < s64_Threshold)
+                        / denom < s64_Threshold) // threshold 이내이면 inlinear로 간주(1픽셀)
                 {
                     s32_InlierCount += 1;
                 } 
             }
 
-            // Best Model 갱신 
+            // Best Model 갱신 (초깃값 0이라 무조건 갱신)
             if (s32_InlierCount > s32_BestInlierCount)
             {
-                s32_BestInlierCount = s32_InlierCount;
-                st_LaneInfo.st_LaneCoefficient = st_Temp;
+                s32_BestInlierCount = s32_InlierCount; //베스트 모델 갱신 
+                st_LaneInfo.st_LaneCoefficient = st_Temp; //기울기 절편 갱신 
             }
         }
-        // else //수직선인 경우 어떻게 할지 생각하기 
-        // {
-        //     continue;
-        // }
 
-        b_Flag = true;
+        b_Flag = true; // 다음 계산을 위해 초기화
     }
 
 }
