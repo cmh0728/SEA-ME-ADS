@@ -1094,131 +1094,43 @@ void FindLaneStartPositions(const cv::Mat& st_Edge, int32_t& s32_WindowCentorLef
     int32_t ars32_LeftCandidate[5];
     int32_t ars32_RightCandidate[5];
 
-     // 왼쪽 / 오른쪽에서 Top-5 피크 후보 얻기
-    FindTop5MaxIndices(ps32_Histogram, img_mid, ars32_LeftCandidate, b_NoLaneLeft);
-
-    // 오른쪽은 히스토그램 포인터를 가운데부터로 옮긴 후 top-5 찾고, 나중에 x 인덱스 보정
-    FindTop5MaxIndices(
-        ps32_Histogram + img_mid,
-        st_Edge.cols - img_mid,
-        ars32_RightCandidate,
-        b_NoLaneRight);
-
-    // 오른쪽 후보 인덱스 보정 (0 기반 → 전체 이미지 기준으로 옮김)
-    for (s32_I = 0; s32_I < 5; ++s32_I) {
-        if (ars32_RightCandidate[s32_I] != -1) {
-            ars32_RightCandidate[s32_I] += img_mid;
-        }
-    }
-
-    // ====================== 이전 히스토그램이 없는 첫 프레임 ======================
-    if (!b_IsprevHistogram)
+    if(b_IsprevHistogram == false) // 이전 히스토그램 결과값이 없는 경우
     {
-        // 왼쪽: 단순히 이미지 중앙 기준으로 가장 가까운 피크 선택
-        if (!b_NoLaneLeft) {
-            s32_WindowCentorLeft = FindClosestToMidPoint(ars32_LeftCandidate, img_mid);
-            g_PrevWindowCenterLeft = s32_WindowCentorLeft;
+        //왼쪽 차선 시작점 
+        // 왼쪽 및 오른쪽 최대 5개 인덱스 찾기
+        FindTop5MaxIndices(ps32_Histogram, st_Edge.cols / 2, ars32_LeftCandidate, b_NoLaneLeft);
+        if(!b_NoLaneLeft) // 왼쪽 차선이 감지된 경우
+        {
+            //가장 가까운 히스토그램 인덱스를 반환  int32_t type
+            s32_WindowCentorLeft = FindClosestToMidPoint(ars32_LeftCandidate, st_Edge.cols / 2);
         }
 
-        // 오른쪽: 마찬가지
-        if (!b_NoLaneRight) {
-            s32_WindowCentorRight = FindClosestToMidPoint(ars32_RightCandidate, img_mid);
-            g_PrevWindowCenterRight = s32_WindowCentorRight;
+        //오른쪽 차선 시작점 : 절반 부터 시작 
+        FindTop5MaxIndices(ps32_Histogram + st_Edge.cols / 2, st_Edge.cols - st_Edge.cols / 2, ars32_RightCandidate, b_NoLaneRight);
+        if(!b_NoLaneRight) //오른쪽 차선 감지된 경우 
+        {
+            // 오른쪽 인덱스 보정
+            for (s32_I = 0; s32_I < 5; ++s32_I) {
+                if (ars32_RightCandidate[s32_I] != -1) {
+                    ars32_RightCandidate[s32_I] += st_Edge.cols / 2; // 절반 오프셋 추가 -->원래 좌표계로 보정 
+                }
+            }
+
+            s32_WindowCentorRight = FindClosestToMidPoint(ars32_RightCandidate, st_Edge.cols / 2);
         }
 
+        // 결과값 저장
+        // 불값 초기화
         b_IsprevHistogram = true;
-        delete[] ps32_Histogram;
-        return;
     }
-
-    // ====================== 이전 히스토그램이 있는 경우 ======================
-    // 프레임 간 허용 이동량, 너무 약한 피크 필터링용 threshold
-    const int32_t MAX_SHIFT   = 80;   // 프레임 간 최대 이동 허용(px)
-    const int32_t MIN_HISTVAL = 15;   // 이 값보다 작은 피크는 노이즈로 간주
-
-    // ---- 왼쪽 차선 시작점 선택 ----
-    if (!b_NoLaneLeft)
+    else // 이전 히스토그램 결과값이 있는 경우
     {
-        double best_score = std::numeric_limits<double>::max();
-        int32_t best_idx  = -1;
-
-        for (int i = 0; i < 5; ++i)
-        {
-            int idx = ars32_LeftCandidate[i];
-            if (idx < 0) continue;
-
-            int hval = ps32_Histogram[idx];
-            if (hval < MIN_HISTVAL) continue;  // 너무 약한 피크는 스킵
-
-            if (g_PrevWindowCenterLeft >= 0 &&
-                std::abs(idx - g_PrevWindowCenterLeft) > MAX_SHIFT)
-            {
-                // 이전 프레임 위치에서 너무 멀리 튀면 노이즈로 봄
-                continue;
-            }
-
-            double d_prev   = (g_PrevWindowCenterLeft >= 0)
-                                ? std::abs(idx - g_PrevWindowCenterLeft) : 0.0;
-            double d_center = std::abs(idx - img_mid);
-            double score    = 0.7 * d_prev + 0.3 * d_center; // 가중합
-
-            if (score < best_score)
-            {
-                best_score = score;
-                best_idx   = idx;
-            }
-        }
-
-        if (best_idx >= 0) {
-            s32_WindowCentorLeft  = best_idx;
-            g_PrevWindowCenterLeft = best_idx;
-        } else {
-            // 이번 프레임에는 믿을 만한 왼쪽 차선 피크가 없다
-            b_NoLaneLeft = true;
-        }
+        //이전 차선 시작점 기준으로 비교해서 가장 가까운 인덱스 선택
     }
 
-    // ---- 오른쪽 차선 시작점 선택 ----
-    if (!b_NoLaneRight)
-    {
-        double best_score = std::numeric_limits<double>::max();
-        int32_t best_idx  = -1;
+    
 
-        for (int i = 0; i < 5; ++i)
-        {
-            int idx = ars32_RightCandidate[i];
-            if (idx < 0) continue;
-
-            int hval = ps32_Histogram[idx];
-            if (hval < MIN_HISTVAL) continue;
-
-            if (g_PrevWindowCenterRight >= 0 &&
-                std::abs(idx - g_PrevWindowCenterRight) > MAX_SHIFT)
-            {
-                continue;
-            }
-
-            double d_prev   = (g_PrevWindowCenterRight >= 0)
-                                ? std::abs(idx - g_PrevWindowCenterRight) : 0.0;
-            double d_center = std::abs(idx - img_mid);
-            double score    = 0.7 * d_prev + 0.3 * d_center;
-
-            if (score < best_score)
-            {
-                best_score = score;
-                best_idx   = idx;
-            }
-        }
-
-        if (best_idx >= 0) {
-            s32_WindowCentorRight  = best_idx;
-            g_PrevWindowCenterRight = best_idx;
-        } else {
-            b_NoLaneRight = true;
-        }
-    }
-
-    delete[] ps32_Histogram;
+    delete[] ps32_Histogram; // 동적 할당 해제 
 }
 
 //###################################### Parameter loader ##################################################//
