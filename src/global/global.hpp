@@ -21,6 +21,8 @@
 #include <Eigen/Eigen>
 #include <Eigen/Dense>
 
+#include <limits>  // std::numeric_limits
+
 #include "opencv2/opencv.hpp"       
 
 // 제어 최적화 라이브러리 casadi
