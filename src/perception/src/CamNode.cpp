@@ -666,172 +666,205 @@ void InitializeKalmanObject(LANE_KALMAN& st_KalmanObject)
 
 //######################################### SlidingWindow func ##################################################//
 
-
 // 에지 이미지에서 슬라이딩 윈도로 좌/우 차선 포인트를 추출
-void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPosition, CAMERA_LANEINFO& st_LaneInfoLeft, 
-                        CAMERA_LANEINFO& st_LaneInfoRight, int32_t& s32_WindowCentorLeft, int32_t& s32_WindowCentorRight, cv::Mat& st_ResultImage )
+void SlidingWindow(const cv::Mat& st_EdgeImage,
+                   const cv::Mat& st_NonZeroPosition,
+                   CAMERA_LANEINFO& st_LaneInfoLeft,
+                   CAMERA_LANEINFO& st_LaneInfoRight,
+                   int32_t& s32_WindowCentorLeft,
+                   int32_t& s32_WindowCentorRight,
+                   cv::Mat& st_ResultImage)
 {
-    // const cv::Mat& st_EdgeImage,        // Canny까지 끝난 에지 이미지 (이진, 0/255)
-    // const cv::Mat& st_NonZeroPosition,  // findNonZero 결과 (non-zero 픽셀들의 좌표 모음)
-    // CAMERA_LANEINFO& st_LaneInfoLeft,   // 왼쪽 차선 샘플/계수 저장용 구조체 (출력)
-    // CAMERA_LANEINFO& st_LaneInfoRight,  // 오른쪽 차선 샘플/계수 저장용 구조체 (출력)
-    // int32_t& s32_WindowCentorLeft,      // 왼쪽 슬라이딩 윈도우의 초기 x중심 (입력 + 갱신)
-    // int32_t& s32_WindowCentorRight,     // 오른쪽 슬라이딩 윈도우의 초기 x중심 (입력 + 갱신)
-    // cv::Mat& st_ResultImage,            // 결과 그릴 이미지 (칼만/RANSAC 선 그릴 때 사용)
-    // int32_t ImgHeight                   // 이미지 높이(세로) → 슬라이딩 시작 y
+    // 이미지 크기
+    const int cols = st_EdgeImage.cols; // x
+    const int rows = st_EdgeImage.rows; // y
+    const int32_t ImgHeight = rows - 1; // IPM 좌표계 맞추기용
 
-    int32_t s32_WindowHeight = st_EdgeImage.rows; // 현재 윈도우의 y (이미지 맨 아래 시작 )
-    bool b_ValidWindowLeft = true; // 처음부터 Valid하다고 가정 , 윈도우를 올리지 말지 여부 판단 
+    // 윈도우 파라미터
+    int32_t s32_WindowHeight = rows - 1;        // 현재 윈도우의 "아래쪽" y (맨 아래에서 시작)
+    const int32_t s32_MarginX = 30;             // 윈도우 가로 반폭
+    const int32_t s32_MarginY = 60;             // 윈도우 세로 높이
+    int32_t s32_I, s32_CentorX, s32_CentorY;
+
+    // 유효 윈도우 유지 여부
+    bool b_ValidWindowLeft  = true;
     bool b_ValidWindowRight = true;
 
-    // image size
-    int cols = st_EdgeImage.cols;
-    int rows = st_EdgeImage.rows;
-    int32_t ImgHeight = rows - 1; 
+    // 디버그용 이미지 (선택 포인트를 색칠)
+    cv::Mat st_DetectedLane(st_EdgeImage.size(), CV_8UC3, cv::Scalar(0, 0, 0));
 
-    // x : 윈도우 가로 반폭 (50픽셀) , y : 윈도우 세로 높이 (50픽셀)
-    int32_t s32_MarginX = 50, s32_MarginY = 50, s32_I,s32_J, s32_ClosestPnt, s32_CentorX, s32_CentorY;
-
-    // 왼쪽 차선중에 최종적으로 Valid한 차선임이 판단된 Pixel Point 저장 
-    std::vector<cv::Point> st_LeftWindowInds; //x,y의 포인트 
-    std::vector<cv::Point> st_LeftLanePoint;
-    cv::Mat st_DetectedLane(st_EdgeImage.size(), CV_8UC3, cv::Scalar(0,0,0));
-
-    // Lane Data reset
-    st_LaneInfoLeft.s32_SampleCount = 0;
+    // RANSAC용 샘플 개수 초기화
+    st_LaneInfoLeft.s32_SampleCount  = 0;
     st_LaneInfoRight.s32_SampleCount = 0;
 
-    // Sliding Window Search 과정에서 매번 재할당. 비효율적이긴 한데 일단 구현부터. 상태관리용 변수 
-    std::vector<vector<cv::Point>> st_Contours;
-    bool b_CheckValidWindowLeft = false; // 이번 윈도우에서 Valid한 차선이 검출되었는지 여부
+    // 컨투어 버퍼
+    std::vector<std::vector<cv::Point>> st_Contours;
+
+    // 윈도우 유효 여부 플래그
+    bool b_CheckValidWindowLeft  = false;
     bool b_CheckValidWindowRight = false;
-    int32_t s32_CountAnvalidLeft = 0; // 연속으로 Valid하지 e않은 윈도우 카운트
+
+    // 연속으로 실패한 윈도우 카운트
+    int32_t s32_CountAnvalidLeft  = 0;
     int32_t s32_CountAnvalidRight = 0;
-    int32_t s32_Width;
+
     cv::Mat st_WindowMask;
     cv::Rect st_LeftWindow;
     cv::Rect st_RightWindow;
 
-    // 슬라이딩 윈도우 반복 (한층당 한번 반복 )
-    while(s32_WindowHeight>0) 
+    const int img_center_x = cols / 2; // 이미지 전체 중앙
+
+    // ====================== 슬라이딩 윈도우 루프 ======================
+    while (s32_WindowHeight > 0)
     {
-        // 윈도우 좌우 경계 계산 이미지 폭 자동 맞춤
+        // 윈도우 세로(높이) 방향 경계
+        int32_t s32_WindowMinHeight = s32_WindowHeight - s32_MarginY;
+        if (s32_WindowMinHeight < 0) s32_WindowMinHeight = 0;
+
+        // ---- 현재 Left/Right 윈도우의 좌우 경계 계산 ----
         int32_t s32_WindowMinWidthLeft  = std::max(s32_WindowCentorLeft  - s32_MarginX, 0);
         int32_t s32_WindowMaxWidthLeft  = std::min(s32_WindowCentorLeft  + s32_MarginX, cols - 1);
         int32_t s32_WindowMinWidthRight = std::max(s32_WindowCentorRight - s32_MarginX, 0);
         int32_t s32_WindowMaxWidthRight = std::min(s32_WindowCentorRight + s32_MarginX, cols - 1);
-        int32_t s32_WindowMinHeight = s32_WindowHeight - s32_MarginY;
-        if (s32_WindowMinHeight < 0) s32_WindowMinHeight = 0;
 
         int32_t s32_WidthLeft  = s32_WindowMaxWidthLeft  - s32_WindowMinWidthLeft  + 1;
         int32_t s32_WidthRight = s32_WindowMaxWidthRight - s32_WindowMinWidthRight + 1;
-        // ---------------------------- Left Lane Detection ----------------------------------------
-        if(!b_NoLaneLeft) //왼쪽 차선이 있을 때 
+
+        // --- 윈도우 유효 플래그 초기화 (이번 루프에서 다시 세팅) ---
+        b_CheckValidWindowLeft  = false;
+        b_CheckValidWindowRight = false;
+
+        // ======================= Left Lane =======================
+        if (!b_NoLaneLeft)
         {
-            if(b_ValidWindowLeft) //윈도우를 올리기로 했을 때 
+            if (b_ValidWindowLeft)
             {
-                s32_Width = s32_WindowMinWidthLeft + 2*s32_MarginX < 800 ? 2*s32_MarginX : 799-s32_WindowMinWidthLeft;
-                // st_LeftWindow = cv::Rect(s32_WindowMinWidthLeft,s32_WindowMinHeight,s32_Width,s32_MarginY);
+                // 현재 윈도우 영역(Rect) 정의
+                st_LeftWindow = cv::Rect(
+                    s32_WindowMinWidthLeft,
+                    s32_WindowMinHeight,
+                    s32_WidthLeft,
+                    s32_MarginY);
 
-                st_LeftWindow  = cv::Rect(s32_WindowMinWidthLeft,  s32_WindowMinHeight,
-                          s32_WidthLeft, s32_MarginY);
-
+                // 해당 영역만 잘라서 컨투어 검출
                 st_WindowMask = st_EdgeImage(st_LeftWindow);
-
-                //차선 조각 검출 
                 cv::findContours(st_WindowMask, st_Contours, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
 
-                // Calculate Next Window Position
-                for (s32_I = 0; s32_I < st_Contours.size(); s32_I++) {
-                    double m00, m10, m01;
+                // 모멘트 기반 윈도우 내부 중심 계산 → 다음 윈도우 x 중심 갱신
+                for (s32_I = 0; s32_I < (int)st_Contours.size(); ++s32_I)
+                {
                     cv::Moments M = cv::moments(st_Contours[s32_I]);
-                    m00 = M.m00; m10 = M.m10; m01 = M.m01;
-                    if (m00 != 0) {
-                        s32_CentorX = int(m10 / m00);
-                        s32_CentorY = int(m01 / m00);
-                        s32_WindowCentorLeft = s32_WindowMinWidthLeft + s32_CentorX;
-                        b_CheckValidWindowLeft = true; //이번 윈도우에서 Valid한 차선 검출됨
+                    double m00 = M.m00, m10 = M.m10, m01 = M.m01;
+                    if (m00 != 0.0)
+                    {
+                        s32_CentorX = static_cast<int>(m10 / m00);
+                        s32_CentorY = static_cast<int>(m01 / m00);
+                        s32_WindowCentorLeft = s32_WindowMinWidthLeft + s32_CentorX; // 로컬→글로벌 x
+                        b_CheckValidWindowLeft = true;
                     }
                 }
 
-                // Draw Window 
-                cv::rectangle(st_EdgeImage, cv::Point(s32_WindowMinWidthLeft, s32_WindowHeight), 
-                                        cv::Point(s32_WindowMaxWidthLeft, s32_WindowMinHeight), cv::Scalar(255, 255, 255), 2);
+                // 디버그용 윈도우 시각화
+                cv::rectangle(
+                    st_EdgeImage,
+                    cv::Point(s32_WindowMinWidthLeft,  s32_WindowMinHeight),
+                    cv::Point(s32_WindowMaxWidthLeft,  s32_WindowHeight),
+                    cv::Scalar(255, 255, 255),
+                    2);
             }
 
-            // Check Valid Window
-            if (b_CheckValidWindowLeft == false)
+            // ---- 이번 윈도우에서 유효한 차선 조각을 못 찾은 경우 ----
+            if (!b_CheckValidWindowLeft)
             {
-                s32_CountAnvalidLeft += 1;
-                if (s32_CountAnvalidLeft == 7) // 7개 연속으로 Valid하지 않으면 윈도우 올리기 중지
+                ++s32_CountAnvalidLeft;
+                if (s32_CountAnvalidLeft >= 7)
                 {
-                    b_ValidWindowLeft = false;
+                    b_ValidWindowLeft = false; // 더 이상 윈도우 올리지 않음
                 }
             }
             else
             {
+                // 유효 윈도우 → 샘플 픽셀 선택
                 s32_CountAnvalidLeft = 0;
-                s32_ClosestPnt = INT_MAX;
-                for (s32_I = 0; s32_I < st_NonZeroPosition.total(); s32_I++)
+                double best_score = std::numeric_limits<double>::max();
+
+                // 새로 갱신된 윈도우 중심
+                const int window_center_x_left = s32_WindowCentorLeft;
+
+                for (int idx = 0; idx < st_NonZeroPosition.total(); ++idx)
                 {
-                    cv::Point st_Position = st_NonZeroPosition.at<cv::Point>(s32_I);
+                    cv::Point st_Position = st_NonZeroPosition.at<cv::Point>(idx);
+
+                    // 현재 윈도우 영역 내의 픽셀만 사용
                     if (st_Position.y >= s32_WindowMinHeight && st_Position.y <= s32_WindowHeight &&
                         st_Position.x >= s32_WindowMinWidthLeft && st_Position.x <= s32_WindowMaxWidthLeft)
                     {
-                        st_DetectedLane.at<cv::Vec3b>(st_Position.y, st_Position.x) = cv::Vec3b(255,0,0);
+                        // 디버깅용 색칠
+                        st_DetectedLane.at<cv::Vec3b>(st_Position.y, st_Position.x) = cv::Vec3b(255, 0, 0);
 
-                        int dist_to_center = std::abs(cols/2 - st_Position.x);
-                        if (dist_to_center < s32_ClosestPnt)
+                        // 윈도우 중심 + 이미지 중심 복합 스코어
+                        double d_window = std::abs(st_Position.x - window_center_x_left);
+                        double d_global = std::abs(st_Position.x - img_center_x);
+                        double score    = 0.7 * d_window + 0.3 * d_global;
+
+                        if (score < best_score)
                         {
-                            s32_ClosestPnt = dist_to_center;
+                            best_score = score;
                             cv::Point ipmPt = st_Position;
-                            ipmPt.y = ImgHeight - ipmPt.y; // 네가 쓰던 좌표 보정 로직
+                            ipmPt.y = ImgHeight - ipmPt.y; // 좌표계 반전(IPM 기준)
                             st_LaneInfoLeft.arst_LaneSample[st_LaneInfoLeft.s32_SampleCount] = ipmPt;
                         }
                     }
                 }
-                if (s32_ClosestPnt != INT_MAX)
-                    st_LaneInfoLeft.s32_SampleCount += 1;
+
+                if (best_score < std::numeric_limits<double>::max())
+                {
+                    ++st_LaneInfoLeft.s32_SampleCount;
+                }
             }
+
             st_Contours.clear();
         }
 
-        
-
-        // ---------------------------- Right Lane Detection ----------------------------------------
-        if(!b_NoLaneRight) // 오른쪽 차선이 있을 때
+        // ======================= Right Lane =======================
+        if (!b_NoLaneRight)
         {
-            if(b_ValidWindowRight)
+            if (b_ValidWindowRight)
             {
-                s32_Width = s32_WindowMinWidthRight + 2*s32_MarginX < 800 ? 2*s32_MarginX : 799-s32_WindowMinWidthRight;
-                // st_RightWindow = cv::Rect(s32_WindowMinWidthRight,s32_WindowMinHeight,s32_Width,s32_MarginY);
-                st_RightWindow = cv::Rect(s32_WindowMinWidthRight, s32_WindowMinHeight,
-                          s32_WidthRight, s32_MarginY);
-                st_WindowMask = st_EdgeImage(st_RightWindow);
+                st_RightWindow = cv::Rect(
+                    s32_WindowMinWidthRight,
+                    s32_WindowMinHeight,
+                    s32_WidthRight,
+                    s32_MarginY);
 
+                st_WindowMask = st_EdgeImage(st_RightWindow);
                 cv::findContours(st_WindowMask, st_Contours, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
 
-                // Calculate Next Window Position
-                for (s32_I = 0; s32_I < st_Contours.size(); s32_I++) {
-                    double m00, m10, m01;
+                for (s32_I = 0; s32_I < (int)st_Contours.size(); ++s32_I)
+                {
                     cv::Moments M = cv::moments(st_Contours[s32_I]);
-                    m00 = M.m00; m10 = M.m10; m01 = M.m01;
-                    if (m00 != 0) {
-                        s32_CentorX = int(m10 / m00);
-                        s32_CentorY = int(m01 / m00);
+                    double m00 = M.m00, m10 = M.m10, m01 = M.m01;
+                    if (m00 != 0.0)
+                    {
+                        s32_CentorX = static_cast<int>(m10 / m00);
+                        s32_CentorY = static_cast<int>(m01 / m00);
                         s32_WindowCentorRight = s32_WindowMinWidthRight + s32_CentorX;
                         b_CheckValidWindowRight = true;
                     }
                 }
 
-                // Draw Window 
-                cv::rectangle(st_EdgeImage, cv::Point(s32_WindowMinWidthRight, s32_WindowHeight), cv::Point(s32_WindowMaxWidthRight, s32_WindowMinHeight), cv::Scalar(255, 255, 255), 2);
+                cv::rectangle(
+                    st_EdgeImage,
+                    cv::Point(s32_WindowMinWidthRight,  s32_WindowMinHeight),
+                    cv::Point(s32_WindowMaxWidthRight,  s32_WindowHeight),
+                    cv::Scalar(255, 255, 255),
+                    2);
             }
-            // Check Valid Window
-            if (b_CheckValidWindowRight == false)
+
+            if (!b_CheckValidWindowRight)
             {
-                s32_CountAnvalidRight += 1;
-                if (s32_CountAnvalidRight == 7)
+                ++s32_CountAnvalidRight;
+                if (s32_CountAnvalidRight >= 7)
                 {
                     b_ValidWindowRight = false;
                 }
@@ -839,40 +872,51 @@ void SlidingWindow(const cv::Mat& st_EdgeImage, const cv::Mat& st_NonZeroPositio
             else
             {
                 s32_CountAnvalidRight = 0;
-                s32_ClosestPnt = INT_MAX;
-                for(s32_I = 0; s32_I<st_NonZeroPosition.total();s32_I++)
+                double best_score = std::numeric_limits<double>::max();
+
+                const int window_center_x_right = s32_WindowCentorRight;
+
+                for (int idx = 0; idx < st_NonZeroPosition.total(); ++idx)
                 {
-                    cv::Point st_Position = st_NonZeroPosition.at<Point>(s32_I);
-                    if(st_Position.y >= s32_WindowMinHeight && st_Position.y <= s32_WindowHeight &&
-                        st_Position.x >=  s32_WindowMinWidthRight && st_Position.x <= s32_WindowMaxWidthRight)
+                    cv::Point st_Position = st_NonZeroPosition.at<cv::Point>(idx);
+
+                    if (st_Position.y >= s32_WindowMinHeight && st_Position.y <= s32_WindowHeight &&
+                        st_Position.x >= s32_WindowMinWidthRight && st_Position.x <= s32_WindowMaxWidthRight)
                     {
-                        // st_LeftWindowInds.push_back(st_Position);
-                        st_DetectedLane.at<Vec3b>(st_Position.y, st_Position.x) = Vec3b(0,0,255);
-                        if(s32_ClosestPnt>st_Position.x)
+                        st_DetectedLane.at<cv::Vec3b>(st_Position.y, st_Position.x) = cv::Vec3b(0, 0, 255);
+
+                        double d_window = std::abs(st_Position.x - window_center_x_right);
+                        double d_global = std::abs(st_Position.x - img_center_x);
+                        double score    = 0.7 * d_window + 0.3 * d_global;
+
+                        if (score < best_score)
                         {
-                            st_Position.y = ImgHeight + st_Position.y*(-1);
-                            st_LaneInfoRight.arst_LaneSample[st_LaneInfoRight.s32_SampleCount] = st_Position;
-                            s32_ClosestPnt = st_Position.x;
+                            best_score = score;
+                            cv::Point ipmPt = st_Position;
+                            ipmPt.y = ImgHeight - ipmPt.y;
+                            st_LaneInfoRight.arst_LaneSample[st_LaneInfoRight.s32_SampleCount] = ipmPt;
                         }
                     }
                 }
-                st_LaneInfoRight.s32_SampleCount += 1;
+
+                if (best_score < std::numeric_limits<double>::max())
+                {
+                    ++st_LaneInfoRight.s32_SampleCount;
+                }
             }
+
+            st_Contours.clear();
         }
 
-
-        // // Reset Parameter
-        s32_WindowHeight -= s32_MarginY; // Move to Next Window Height
-        b_CheckValidWindowLeft = false;
-        b_CheckValidWindowRight = false;
-        st_Contours.clear();
+        // ======================= 다음 윈도우로 이동 =======================
+        s32_WindowHeight -= s32_MarginY;
     }
 
 }
 
 //###################################### DrawDrivingLane func ##################################################//
 
-// 추정된 차선 계수로 결과 영상에 선을 그린다
+// 추정된 차선 계수로 결과 영상에 선을 그린다(직선)
 void DrawDrivingLane(cv::Mat& st_ResultImage, const LANE_COEFFICIENT st_LaneCoef, cv::Scalar st_Color)
 {
     if (std::abs(st_LaneCoef.f64_Slope) < 1e-6)
@@ -902,14 +946,13 @@ LANE_COEFFICIENT FitModel(const Point& st_Point1, const Point& st_Point2, bool& 
         // st_TmpModel.f64_Intercept = int32_t(st_Point1.y - st_TmpModel.f64_Slope * st_Point1.x);
 
         // 수정 --> 실수로 계산 
-        st_TmpModel.f64_Slope =
-            static_cast<double>(st_Point2.y - st_Point1.y) /
-            static_cast<double>(st_Point2.x - st_Point1.x);
-        st_TmpModel.f64_Intercept =
-            static_cast<double>(st_Point1.y) - st_TmpModel.f64_Slope * st_Point1.x;
+        st_TmpModel.f64_Slope = 
+            static_cast<double>(st_Point2.y - st_Point1.y) / static_cast<double>(st_Point2.x - st_Point1.x);
 
+        st_TmpModel.f64_Intercept = 
+            static_cast<double>(st_Point1.y) - st_TmpModel.f64_Slope * st_Point1.x;
     }
-    else
+    else 
         b_Flag = false;
 
     return st_TmpModel;
