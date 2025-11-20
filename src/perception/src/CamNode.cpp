@@ -22,7 +22,7 @@ bool b_NoLaneLeft = false;
 bool b_NoLaneRight = false;
 CAMERA_LANEINFO st_LaneInfoLeftMain{};
 CAMERA_LANEINFO st_LaneInfoRightMain{};
-bool visualize = true;
+bool visualize = false;
 bool track_bar = false;
 bool b_IsprevHistogram = false;
 static CAMERA_DATA static_camera_data;
@@ -339,9 +339,13 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             camera_data->arst_KalmanObject[camera_data->s32_KalmanObjectNum] = st_KalmanObject;
             camera_data->s32_KalmanObjectNum += 1;
 
-            DrawDrivingLane(g_ResultImage,
+            if(visualize)
+            {
+                DrawDrivingLane(g_ResultImage,
                             st_KalmanObject.st_LaneCoefficient,
                             cv::Scalar(255, 0, 255));
+            }
+            
         }
 
         // ---- 오른쪽 칼만 객체 새로 생성 ----
@@ -377,9 +381,13 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             camera_data->arst_KalmanObject[camera_data->s32_KalmanObjectNum] = st_KalmanObject;
             camera_data->s32_KalmanObjectNum += 1;
 
-            DrawDrivingLane(g_ResultImage,
+            if(visualize)
+            {
+                DrawDrivingLane(g_ResultImage,
                             st_KalmanObject.st_LaneCoefficient,
                             cv::Scalar(255, 255, 255));
+            }
+            
         }
 
     }
@@ -433,16 +441,17 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
                         camera_data->arst_KalmanObject[s32_I],
                         camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient
                     );
-
-                    if (s32_J == 0)
+                    if(visualize)
+                    {
+                        if (s32_J == 0)
                         DrawDrivingLane(g_ResultImage,
                                         camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient,
                                         cv::Scalar(255, 0, 255));
-                    else if (s32_J == 1)
+                        else if (s32_J == 1)
                         DrawDrivingLane(g_ResultImage,
                                         camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient,
                                         cv::Scalar(255, 255, 255));
-
+                    }
                     b_SameObj = true;
                     break;
                 }
@@ -459,9 +468,13 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
                         camera_data->arst_KalmanObject[s32_I],
                         camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient
                     );
-                    DrawDrivingLane(g_ResultImage,
+                    if(visualize)
+                    {
+                        DrawDrivingLane(g_ResultImage,
                                     camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient,
                                     cv::Scalar(255, 255, 0));
+                    }
+                    
                 }
                 else
                 {
@@ -473,34 +486,33 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
         }
     }
 
-    // =======================  RANSAC 디버그 창 ===========================
-    // RANSAC 직선만 IPM 이미지 복사해서 사용
-    if (visualize)
-    {
-        // 1) RANSAC 직선만 보고 싶으면: IPM 이미지 복사해서 사용
-        cv::Mat ransac_debug;
-        g_IpmImg.copyTo(ransac_debug);   // 또는 g_TempImg를 COLOR_GRAY2BGR로 변환해서 써도 됨
-
-        if (!b_NoLaneLeft) {
-            DrawDrivingLane(ransac_debug,
-                            st_LaneInfoLeftMain.st_LaneCoefficient,
-                            cv::Scalar(255, 0, 0));   // 파란/빨간 아무 색
-        }
-
-        if (!b_NoLaneRight) {
-            DrawDrivingLane(ransac_debug,
-                            st_LaneInfoRightMain.st_LaneCoefficient,
-                            cv::Scalar(0, 0, 255));
-        }
-
-        cv::imshow("RANSAC Debug", ransac_debug);   // RANSAC 전용 창
-    }
-
     // =======================  (H) Debug GUI ================================
     if (visualize)
     {
         // cv::imshow("IPM", g_IpmImg);          // 탑뷰
-        cv::imshow("Temp_Img", g_TempImg);    // 현재는 ransac 결과
+        // cv::imshow("Temp_Img", g_TempImg);    // 현재는 sliding window 결과
+
+        // =======================  RANSAC 디버그 창 ===========================
+
+        // cv::Mat ransac_debug;
+        // g_IpmImg.copyTo(ransac_debug);   // 또는 g_TempImg를 COLOR_GRAY2BGR로 변환해서 써도 됨
+
+        // if (!b_NoLaneLeft) {
+        //     DrawDrivingLane(ransac_debug,
+        //                     st_LaneInfoLeftMain.st_LaneCoefficient,
+        //                     cv::Scalar(255, 0, 0));   // 파란/빨간 아무 색
+        // }
+
+        // if (!b_NoLaneRight) {
+        //     DrawDrivingLane(ransac_debug,
+        //                     st_LaneInfoRightMain.st_LaneCoefficient,
+        //                     cv::Scalar(0, 0, 255));
+        // }
+
+        // cv::imshow("RANSAC Debug", ransac_debug);   // RANSAC 전용 창
+
+        // =======================  RANSAC 디버그 창 ===========================
+
         cv::imshow("st_ResultImage", g_ResultImage); // 차선 + Kalman 결과
         cv::waitKey(1);
     }
@@ -776,12 +788,16 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
                 }
 
                 // 디버그용 윈도우 시각화
-                cv::rectangle(
+                if(visualize)
+                {
+                    cv::rectangle(
                     st_EdgeImage,
                     cv::Point(s32_WindowMinWidthLeft,  s32_WindowMinHeight),
                     cv::Point(s32_WindowMaxWidthLeft,  s32_WindowHeight),
                     cv::Scalar(255, 255, 255),
                     2);
+                }
+                
             }
 
             // ---- 이번 윈도우에서 유효한 차선 조각을 못 찾은 경우 ----
@@ -863,13 +879,17 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
                         b_CheckValidWindowRight = true;
                     }
                 }
-
-                cv::rectangle(
+                
+                if(visualize)
+                {
+                    cv::rectangle(
                     st_EdgeImage,
                     cv::Point(s32_WindowMinWidthRight,  s32_WindowMinHeight),
                     cv::Point(s32_WindowMaxWidthRight,  s32_WindowHeight),
                     cv::Scalar(255, 255, 255),
                     2);
+                }
+                
             }
 
             if (!b_CheckValidWindowRight)
