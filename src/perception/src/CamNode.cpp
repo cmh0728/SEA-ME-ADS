@@ -972,7 +972,7 @@ void CalculateLaneCoefficient(CAMERA_LANEINFO& st_LaneInfo, int32_t s32_Iteratio
 {
     // 양쪽 차선 데이터 중 중앙선에 가장 가까운 안촉 포인트 기준으로 RANSAC을 활용한 기울기 계산
     int32_t s32_BestInlierCount = 0 ;
-    inte2_t s32_I, s32_J;
+    int32_t s32_I, s32_J;
     int32_t s32_Idx1, s32_Idx2, s32_InlierCount ;
 
     bool b_Flag = true ; // 수직선 판별 flag (flase : 수직선 )
