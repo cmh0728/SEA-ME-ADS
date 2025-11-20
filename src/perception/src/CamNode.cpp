@@ -24,12 +24,7 @@ CAMERA_LANEINFO st_LaneInfoLeftMain{};
 CAMERA_LANEINFO st_LaneInfoRightMain{};
 bool visualize = true;
 bool track_bar = false;
-
-// histogram param
 bool b_IsprevHistogram = false ;
-int32_t g_PrevWindowCenterLeft  = -1;
-int32_t g_PrevWindowCenterRight = -1;
-
 static CAMERA_DATA static_camera_data;
 
 //################################################## helper function ##################################################//
@@ -1082,7 +1077,6 @@ void FindLaneStartPositions(const cv::Mat& st_Edge, int32_t& s32_WindowCentorLef
 
     // Histogram 계산
     int32_t* ps32_Histogram = new int32_t[st_Edge.cols](); // 동적 할당, cols는 가로방향 픽셀 개수 만큼 배열 생성 , 모두 0으로 초기화 ; cols가 x
-    int32_t img_mid = st_Edge.cols / 2;
 
     // 이미지 하단 30프로  열에 해당하는 행 데이터들을 각 열별로 다 더한 후 최대가 되는 x좌표(행) 추출 --> height가 700이상이여야 작동한다. 
     for (s32_row = 0; s32_row < st_Edge.cols; ++s32_row) {
@@ -1091,44 +1085,30 @@ void FindLaneStartPositions(const cv::Mat& st_Edge, int32_t& s32_WindowCentorLef
         }
     }
 
-    int32_t ars32_LeftCandidate[5];
-    int32_t ars32_RightCandidate[5];
+    int32_t ars32_LeftCandidate[5], ars32_RightCandidate[5];
 
-    if(b_IsprevHistogram == false) // 이전 히스토그램 결과값이 없는 경우
+    //왼쪽 차선 시작점 
+    // 왼쪽 및 오른쪽 최대 5개 인덱스 찾기
+    FindTop5MaxIndices(ps32_Histogram, st_Edge.cols / 2, ars32_LeftCandidate, b_NoLaneLeft);
+    if(!b_NoLaneLeft) // 왼쪽 차선이 감지된 경우
     {
-        //왼쪽 차선 시작점 
-        // 왼쪽 및 오른쪽 최대 5개 인덱스 찾기
-        FindTop5MaxIndices(ps32_Histogram, st_Edge.cols / 2, ars32_LeftCandidate, b_NoLaneLeft);
-        if(!b_NoLaneLeft) // 왼쪽 차선이 감지된 경우
-        {
-            //가장 가까운 히스토그램 인덱스를 반환  int32_t type
-            s32_WindowCentorLeft = FindClosestToMidPoint(ars32_LeftCandidate, st_Edge.cols / 2);
-        }
+        //가장 가까운 히스토그램 인덱스를 반환  int32_t type
+        s32_WindowCentorLeft = FindClosestToMidPoint(ars32_LeftCandidate, st_Edge.cols / 2);
+    }
 
-        //오른쪽 차선 시작점 : 절반 부터 시작 
-        FindTop5MaxIndices(ps32_Histogram + st_Edge.cols / 2, st_Edge.cols - st_Edge.cols / 2, ars32_RightCandidate, b_NoLaneRight);
-        if(!b_NoLaneRight) //오른쪽 차선 감지된 경우 
-        {
-            // 오른쪽 인덱스 보정
-            for (s32_I = 0; s32_I < 5; ++s32_I) {
-                if (ars32_RightCandidate[s32_I] != -1) {
-                    ars32_RightCandidate[s32_I] += st_Edge.cols / 2; // 절반 오프셋 추가 -->원래 좌표계로 보정 
-                }
+    //오른쪽 차선 시작점 : 절반 부터 시작 
+    FindTop5MaxIndices(ps32_Histogram + st_Edge.cols / 2, st_Edge.cols - st_Edge.cols / 2, ars32_RightCandidate, b_NoLaneRight);
+    if(!b_NoLaneRight) //오른쪽 차선 감지된 경우 
+    {
+        // 오른쪽 인덱스 보정
+        for (s32_I = 0; s32_I < 5; ++s32_I) {
+            if (ars32_RightCandidate[s32_I] != -1) {
+                ars32_RightCandidate[s32_I] += st_Edge.cols / 2; // 절반 오프셋 추가 -->원래 좌표계로 보정 
             }
-
-            s32_WindowCentorRight = FindClosestToMidPoint(ars32_RightCandidate, st_Edge.cols / 2);
         }
 
-        // 결과값 저장
-        // 불값 초기화
-        b_IsprevHistogram = true;
+        s32_WindowCentorRight = FindClosestToMidPoint(ars32_RightCandidate, st_Edge.cols / 2);
     }
-    else // 이전 히스토그램 결과값이 있는 경우
-    {
-        //이전 차선 시작점 기준으로 비교해서 가장 가까운 인덱스 선택
-    }
-
-    
 
     delete[] ps32_Histogram; // 동적 할당 해제 
 }
