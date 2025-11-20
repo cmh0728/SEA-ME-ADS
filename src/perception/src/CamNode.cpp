@@ -278,17 +278,22 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
         b_NoLaneRight = true;
 
 
-    int32_t N = st_LaneInfo.s32_SampleCount;
-    // 차선이 있다고 판단한 경우 ransac 수행 (sample point를 이용해 ransac)
-    int32_t max_combinations = N * (N - 1) / 2; // 가능한 최대 조합의 수 
-    int32_t iterations = std::min(s32_Iteration, max_combinations);
+    
     if(!b_NoLaneLeft)
     {
+        int32_t N = st_LaneInfoLeft.s32_SampleCount;
+        // 차선이 있다고 판단한 경우 ransac 수행 (sample point를 이용해 ransac)
+        int32_t max_combinations = N * (N - 1) / 2; // 가능한 최대 조합의 수 
+        int32_t iterations = std::min(s32_Iteration, max_combinations);
         CalculateLaneCoefficient(st_LaneInfoLeft,iterations,1); // iteration, threshold
         st_LaneInfoLeftMain = st_LaneInfoLeft; // 관측값 보관용 
     }
     if(!b_NoLaneRight)
     {
+        int32_t N = st_LaneInfoRight.s32_SampleCount;
+        // 차선이 있다고 판단한 경우 ransac 수행 (sample point를 이용해 ransac)
+        int32_t max_combinations = N * (N - 1) / 2; // 가능한 최대 조합의 수 
+        int32_t iterations = std::min(s32_Iteration, max_combinations);
         CalculateLaneCoefficient(st_LaneInfoRight,iterations,1);
         st_LaneInfoRightMain = st_LaneInfoRight;
     }
