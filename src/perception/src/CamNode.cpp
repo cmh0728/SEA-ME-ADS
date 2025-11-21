@@ -472,6 +472,12 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             {
                 if(!has_obs[s32_J]) // 해당 관측값 없는 경우 스킵 
                     continue;
+
+                bool is_left_meas = (s32_J == 0);
+
+                // 좌/우 매칭 안되면 스킵
+                if (camera_data->arst_KalmanObject[s32_I].b_IsLeft != is_left_meas)
+                    continue;
     
                 //같은 선인지 확인
                 CheckSameKalmanObject(camera_data->arst_KalmanObject[s32_I],
