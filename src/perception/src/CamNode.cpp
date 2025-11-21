@@ -166,7 +166,7 @@ void CameraProcessing::publish_lane_messages()
 
 perception::msg::Lane build_lane_msg_from_coef(const LANE_COEFFICIENT& coef,
                                                int img_height,
-                                               int num_samples = 20)
+                                               int num_samples )
 {
     perception::msg::Lane lane_msg;
 
