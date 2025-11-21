@@ -828,9 +828,8 @@ void InitializeKalmanObject(LANE_KALMAN& st_KalmanObject)
 //######################################### SlidingWindow func ##################################################//
 
 // edge에서 슬라이딩 윈도로 좌/우 차선 포인트를 추출
-// edge에서 슬라이딩 윈도로 좌/우 차선 포인트를 추출
 void SlidingWindow(const cv::Mat& st_EdgeImage,
-                   const cv::Mat& st_NonZeroPosition,  // 더 이상 사용하지 않지만 시그니처 유지
+                   const cv::Mat& st_NonZeroPosition,
                    CAMERA_LANEINFO& st_LaneInfoLeft,
                    CAMERA_LANEINFO& st_LaneInfoRight,
                    int32_t& s32_WindowCentorLeft,
@@ -845,14 +844,14 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
     // 윈도우 파라미터
     int32_t s32_WindowHeight = rows - 1;        // 현재 윈도우의 "아래쪽" y (맨 아래에서 시작)
     const int32_t s32_MarginX = 30;             // 윈도우 가로 반폭
-    const int32_t s32_MarginY = 70;             // 윈도우 세로 높이
-    int32_t s32_I;
+    const int32_t s32_MarginY = 70;             // 윈도우 세로 높이 --> 일단 70으로 사용 
+    int32_t s32_I, s32_CentorX, s32_CentorY;
 
     // 유효 윈도우 유지 여부
     bool b_ValidWindowLeft  = true;
     bool b_ValidWindowRight = true;
 
-    // 디버그용 이미지 (선택 포인트를 색칠 - 필요 없으면 나중에 제거 가능)
+    // 디버그용 이미지 (선택 포인트를 색칠)
     cv::Mat st_DetectedLane(st_EdgeImage.size(), CV_8UC3, cv::Scalar(0, 0, 0));
 
     // RANSAC용 샘플 개수 초기화
@@ -910,95 +909,29 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
 
                 // 해당 영역만 잘라서 컨투어 검출
                 st_WindowMask = st_EdgeImage(st_LeftWindow);
-                cv::findContours(st_WindowMask, st_Contours,
-                                 cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
+                cv::findContours(st_WindowMask, st_Contours, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
 
-                // 컨투어들의 무게중심(centroid) 평균 계산
-                double sum_x = 0.0;
-                double sum_y = 0.0;
-                int valid_cnt = 0;
-
+                // 모멘트 기반 윈도우 내부 중심 계산 → 다음 윈도우 x 중심 갱신
                 for (s32_I = 0; s32_I < (int)st_Contours.size(); ++s32_I)
                 {
                     cv::Moments M = cv::moments(st_Contours[s32_I]);
                     double m00 = M.m00, m10 = M.m10, m01 = M.m01;
                     if (m00 != 0.0)
                     {
-                        double cx = m10 / m00; // window local x
-                        double cy = m01 / m00; // window local y
-                        sum_x += cx;
-                        sum_y += cy;
-                        ++valid_cnt;
+                        s32_CentorX = static_cast<int>(m10 / m00);
+                        s32_CentorY = static_cast<int>(m01 / m00);
+                        s32_WindowCentorLeft = s32_WindowMinWidthLeft + s32_CentorX; // 로컬→글로벌 x
+                        b_CheckValidWindowLeft = true;
                     }
                 }
 
-                if (valid_cnt > 0)
-                {
-                    double mean_x = sum_x / valid_cnt;
-                    double mean_y = sum_y / valid_cnt;
-
-                    // --- 주변 탐색: centroid 근처에서 실제 edge 픽셀 평균 위치 구하기 ---
-                    int y_local = static_cast<int>(std::round(mean_y));
-                    int x_local = static_cast<int>(std::round(mean_x));
-
-                    // y 범위 보정
-                    y_local = std::clamp(y_local, 0, st_WindowMask.rows - 1);
-
-                    int x_sum = 0;
-                    int x_cnt = 0;
-                    const int search_radius = 5;
-
-                    for (int dx = -search_radius; dx <= search_radius; ++dx)
-                    {
-                        int x = x_local + dx;
-                        if (x < 0 || x >= st_WindowMask.cols) continue;
-
-                        if (st_WindowMask.at<uchar>(y_local, x) > 0)
-                        {
-                            x_sum += x;
-                            ++x_cnt;
-                        }
-                    }
-
-                    if (x_cnt > 0)
-                    {
-                        x_local = x_sum / x_cnt;
-                    }
-
-                    // 윈도우 local → 전체 이미지 좌표
-                    int sample_x = s32_WindowMinWidthLeft + x_local;
-                    int sample_y = s32_WindowMinHeight + y_local;
-
-                    // 다음 윈도우 센터는 이 샘플 x 좌표로 업데이트
-                    s32_WindowCentorLeft = sample_x;
-
-                    // IPM 좌표계로 변환 (y 위로 증가)
-                    cv::Point ipmPt;
-                    ipmPt.x = sample_x;
-                    ipmPt.y = ImgHeight - sample_y;
-
-                    // 샘플 저장 (배열 overflow 방지)
-                    if (st_LaneInfoLeft.s32_SampleCount <
-                        static_cast<int32_t>(sizeof(st_LaneInfoLeft.arst_LaneSample) /
-                                             sizeof(st_LaneInfoLeft.arst_LaneSample[0])))
-                    {
-                        st_LaneInfoLeft.arst_LaneSample[st_LaneInfoLeft.s32_SampleCount] = ipmPt;
-                        ++st_LaneInfoLeft.s32_SampleCount;
-                    }
-
-                    // 디버그 시각화용
-                    st_DetectedLane.at<cv::Vec3b>(sample_y, sample_x) = cv::Vec3b(255, 0, 0);
-
-                    b_CheckValidWindowLeft = true;
-
-                    // 윈도우 박스 그리기 (디버그)
-                    cv::rectangle(
-                        st_EdgeImage,
-                        cv::Point(s32_WindowMinWidthLeft,  s32_WindowMinHeight),
-                        cv::Point(s32_WindowMaxWidthLeft,  s32_WindowHeight),
-                        cv::Scalar(255, 255, 255),
-                        2);
-                }
+                // 디버그용 윈도우 시각화
+                cv::rectangle(
+                    st_EdgeImage,
+                    cv::Point(s32_WindowMinWidthLeft,  s32_WindowMinHeight),
+                    cv::Point(s32_WindowMaxWidthLeft,  s32_WindowHeight),
+                    cv::Scalar(255, 255, 255),
+                    2);
             }
 
             // ---- 이번 윈도우에서 유효한 차선 조각을 못 찾은 경우 ----
@@ -1012,7 +945,43 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
             }
             else
             {
+                // 유효 윈도우 → 샘플 픽셀 선택
                 s32_CountAnvalidLeft = 0;
+                double best_score = std::numeric_limits<double>::max();
+
+                // 새로 갱신된 윈도우 중심
+                const int window_center_x_left = s32_WindowCentorLeft;
+
+                for (int idx = 0; idx < st_NonZeroPosition.total(); ++idx)
+                {
+                    cv::Point st_Position = st_NonZeroPosition.at<cv::Point>(idx);
+
+                    // 현재 윈도우 영역 내의 픽셀만 사용
+                    if (st_Position.y >= s32_WindowMinHeight && st_Position.y <= s32_WindowHeight &&
+                        st_Position.x >= s32_WindowMinWidthLeft && st_Position.x <= s32_WindowMaxWidthLeft)
+                    {
+                        // 디버깅용 색칠
+                        st_DetectedLane.at<cv::Vec3b>(st_Position.y, st_Position.x) = cv::Vec3b(255, 0, 0);
+
+                        // 윈도우 중심 + 이미지 중심 복합 스코어
+                        double d_window = std::abs(st_Position.x - window_center_x_left);
+                        double d_global = std::abs(st_Position.x - img_center_x);
+                        double score    = 0.7 * d_window + 0.3 * d_global;
+
+                        if (score < best_score)
+                        {
+                            best_score = score;
+                            cv::Point ipmPt = st_Position;
+                            ipmPt.y = ImgHeight - ipmPt.y; // 좌표계 반전(IPM 기준)
+                            st_LaneInfoLeft.arst_LaneSample[st_LaneInfoLeft.s32_SampleCount] = ipmPt;
+                        }
+                    }
+                }
+
+                if (best_score < std::numeric_limits<double>::max())
+                {
+                    ++st_LaneInfoLeft.s32_SampleCount;
+                }
             }
 
             st_Contours.clear();
@@ -1030,12 +999,7 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
                     s32_MarginY);
 
                 st_WindowMask = st_EdgeImage(st_RightWindow);
-                cv::findContours(st_WindowMask, st_Contours,
-                                 cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
-
-                double sum_x = 0.0;
-                double sum_y = 0.0;
-                int valid_cnt = 0;
+                cv::findContours(st_WindowMask, st_Contours, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
 
                 for (s32_I = 0; s32_I < (int)st_Contours.size(); ++s32_I)
                 {
@@ -1043,73 +1007,19 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
                     double m00 = M.m00, m10 = M.m10, m01 = M.m01;
                     if (m00 != 0.0)
                     {
-                        double cx = m10 / m00;
-                        double cy = m01 / m00;
-                        sum_x += cx;
-                        sum_y += cy;
-                        ++valid_cnt;
+                        s32_CentorX = static_cast<int>(m10 / m00);
+                        s32_CentorY = static_cast<int>(m01 / m00);
+                        s32_WindowCentorRight = s32_WindowMinWidthRight + s32_CentorX;
+                        b_CheckValidWindowRight = true;
                     }
                 }
 
-                if (valid_cnt > 0)
-                {
-                    double mean_x = sum_x / valid_cnt;
-                    double mean_y = sum_y / valid_cnt;
-
-                    int y_local = static_cast<int>(std::round(mean_y));
-                    int x_local = static_cast<int>(std::round(mean_x));
-
-                    y_local = std::clamp(y_local, 0, st_WindowMask.rows - 1);
-
-                    int x_sum = 0;
-                    int x_cnt = 0;
-                    const int search_radius = 5;
-
-                    for (int dx = -search_radius; dx <= search_radius; ++dx)
-                    {
-                        int x = x_local + dx;
-                        if (x < 0 || x >= st_WindowMask.cols) continue;
-
-                        if (st_WindowMask.at<uchar>(y_local, x) > 0)
-                        {
-                            x_sum += x;
-                            ++x_cnt;
-                        }
-                    }
-
-                    if (x_cnt > 0)
-                    {
-                        x_local = x_sum / x_cnt;
-                    }
-
-                    int sample_x = s32_WindowMinWidthRight + x_local;
-                    int sample_y = s32_WindowMinHeight + y_local;
-
-                    s32_WindowCentorRight = sample_x;
-
-                    cv::Point ipmPt;
-                    ipmPt.x = sample_x;
-                    ipmPt.y = ImgHeight - sample_y;
-
-                    if (st_LaneInfoRight.s32_SampleCount <
-                        static_cast<int32_t>(sizeof(st_LaneInfoRight.arst_LaneSample) /
-                                             sizeof(st_LaneInfoRight.arst_LaneSample[0])))
-                    {
-                        st_LaneInfoRight.arst_LaneSample[st_LaneInfoRight.s32_SampleCount] = ipmPt;
-                        ++st_LaneInfoRight.s32_SampleCount;
-                    }
-
-                    st_DetectedLane.at<cv::Vec3b>(sample_y, sample_x) = cv::Vec3b(0, 0, 255);
-
-                    b_CheckValidWindowRight = true;
-
-                    cv::rectangle(
-                        st_EdgeImage,
-                        cv::Point(s32_WindowMinWidthRight,  s32_WindowMinHeight),
-                        cv::Point(s32_WindowMaxWidthRight,  s32_WindowHeight),
-                        cv::Scalar(255, 255, 255),
-                        2);
-                }
+                cv::rectangle(
+                    st_EdgeImage,
+                    cv::Point(s32_WindowMinWidthRight,  s32_WindowMinHeight),
+                    cv::Point(s32_WindowMaxWidthRight,  s32_WindowHeight),
+                    cv::Scalar(255, 255, 255),
+                    2);
             }
 
             if (!b_CheckValidWindowRight)
@@ -1123,6 +1033,37 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
             else
             {
                 s32_CountAnvalidRight = 0;
+                double best_score = std::numeric_limits<double>::max();
+
+                const int window_center_x_right = s32_WindowCentorRight;
+
+                for (int idx = 0; idx < st_NonZeroPosition.total(); ++idx)
+                {
+                    cv::Point st_Position = st_NonZeroPosition.at<cv::Point>(idx);
+
+                    if (st_Position.y >= s32_WindowMinHeight && st_Position.y <= s32_WindowHeight &&
+                        st_Position.x >= s32_WindowMinWidthRight && st_Position.x <= s32_WindowMaxWidthRight)
+                    {
+                        st_DetectedLane.at<cv::Vec3b>(st_Position.y, st_Position.x) = cv::Vec3b(0, 0, 255);
+
+                        double d_window = std::abs(st_Position.x - window_center_x_right);
+                        double d_global = std::abs(st_Position.x - img_center_x);
+                        double score    = 0.7 * d_window + 0.3 * d_global;
+
+                        if (score < best_score) // 한번은 무조건 들어감 
+                        {
+                            best_score = score;
+                            cv::Point ipmPt = st_Position;
+                            ipmPt.y = ImgHeight - ipmPt.y;
+                            st_LaneInfoRight.arst_LaneSample[st_LaneInfoRight.s32_SampleCount] = ipmPt;
+                        }
+                    }
+                }
+
+                if (best_score < std::numeric_limits<double>::max())
+                {
+                    ++st_LaneInfoRight.s32_SampleCount;
+                }
             }
 
             st_Contours.clear();
@@ -1132,10 +1073,6 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
         s32_WindowHeight -= s32_MarginY;
     }
 
-    // st_DetectedLane를 디버그로 보고 싶으면 여기서 imshow 가능
-    // if (visualize) {
-    //     cv::imshow("DetectedLane", st_DetectedLane);
-    // }
 }
 
 //###################################### DrawDrivingLane func ##################################################//
