@@ -190,32 +190,6 @@ void lla2enu(float64_t f64_Lat_deg, float64_t f64_Lon_deg, float64_t f64_Alt, fl
     f32_U = (float32_t)(cos(c_ORIGIN_LATITUDE_RAD) * cos(c_ORIGIN_LONGITUDE_RAD) * f64_dX + cos(c_ORIGIN_LATITUDE_RAD) * sin(c_ORIGIN_LONGITUDE_RAD) * f64_dY + sin(c_ORIGIN_LATITUDE_RAD) * f64_dZ);
 }
 
-void CreateBagFileName(char* datetime)
-{
-    time_t timer;
-    struct tm* t;
-    timer = time(NULL);
-    t = localtime(&timer);
-    sprintf(datetime, "%d_%02d%02d_%d.bin", 
-            t->tm_year + 1900, t->tm_mon + 1, t->tm_mday,s32_FileNum);
-
-}
-int extractNumberFromFilename(const std::string& filename) {
-    size_t pos = filename.find_last_of('_'); // '_' 문자를 기준으로 분리
-    if (pos != std::string::npos) {
-        try {
-            return std::stoi(filename.substr(pos + 1)); // 분리된 숫자 부분을 정수로 변환하여 반환
-        } catch (const std::invalid_argument& e) {
-            std::cerr << "Invalid number format in filename: " << filename << std::endl;
-        }
-    }
-    return 0; // 숫자를 추출할 수 없을 경우 0을 반환
-}
-bool CompareFilenames(const std::string& filename1, const std::string& filename2) {
-    int number1 = extractNumberFromFilename(filename1);
-    int number2 = extractNumberFromFilename(filename2);
-    return number1 < number2;
-}
 void rotationMatrix(float32_t f32_Roll, float32_t f32_Pitch, float32_t f32_Yaw, float32_t f32_matrix[3][3]) {
     float32_t f32_cos_roll = cos(deg2rad(f32_Roll));
     float32_t f32_sin_roll = sin(deg2rad(f32_Roll));

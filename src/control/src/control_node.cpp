@@ -4,6 +4,13 @@
 #include <cmath>
 #include <functional>
 
+// =======================================
+// ControlNode main flow
+// 1) /planning/path 로 전달된 중앙 경로를 Pure Pursuit 로 추종하여 조향각(ang.z)을 계산한다.
+// 2) 경로 기울기를 이용해 속도 PID 보정을 수행하고 곡선에서는 감속한다.
+// 3) 최종 Twist(/cmd_vel)를 발행해 차량 조향 + 속도 제어를 수행한다.
+// =======================================
+
 namespace control
 {
 namespace
@@ -38,6 +45,7 @@ ControlNode::ControlNode()
   prev_slope_(0.0),
   last_update_time_(this->now())
 {
+  // ---- 플래닝 경로 구독 ----
   const std::string path_topic = declare_parameter("path_topic", std::string("/planning/path"));
   auto qos = rclcpp::QoS(rclcpp::KeepLast(10));
   path_sub_ = create_subscription<nav_msgs::msg::Path>(
@@ -62,6 +70,7 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   const double dt = std::max(1e-3, (now - last_update_time_).seconds());
   last_update_time_ = now;
 
+  // Path 메시지를 Pure Pursuit 계산에 쓰기 위해 (x=횡, y=종) 포맷으로 변환
   std::vector<Point2D> path_points;
   path_points.reserve(msg->poses.size());
   for (const auto & pose : msg->poses)

@@ -387,11 +387,6 @@ void CalcNearestDistIdx(float32_t f32_X, float32_t f32_Y, float32_t* f32_MapX, f
 
 void lla2enu(float64_t f64_Lat_deg, float64_t f64_Lon_deg, float64_t f64_Alt, float32_t &f32_E, float32_t &f32_N, float32_t &f32_U);
 
-void CreateBagFileName(char* datetime);
-void CreateFile();
-void LoggingFirstRead();
-bool CompareFilenames(const std::string& a, const std::string& b);
-int extractNumberFromFilename(const std::string& filename);
 void rotationMatrix(float32_t roll, float32_t pitch, float32_t yaw, float32_t matrix[3][3]);
 
 
