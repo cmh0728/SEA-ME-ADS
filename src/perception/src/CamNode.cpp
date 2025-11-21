@@ -299,33 +299,39 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
         st_LaneInfoRightMain = st_LaneInfoRight;
     }
 
-    // ======================= Kalman Filter 단계 ========================
+    // ======================= Kalman Filter  ========================
+    
+    // b_ThereIsLeft / b_ThereIsRight : 추적중인 kalman 객체의 유무 여부 
+    // arst_KalmanObject[] : kalman 객체 배열 --> 0 : 이번 프레임 왼쪽, 1 : 이번 프레임 오른쪽 
+    // s32_KalmanObjectNum : 현재 kalman 객체 개수
 
-    if (!camera_data->b_ThereIsLeft || !camera_data->b_ThereIsRight) // 왼쪽 or 오른쪽 칼만 객체 모두 없는 경우 
+    if (!camera_data->b_ThereIsLeft || !camera_data->b_ThereIsRight) // 둘 중 하나라도 없는 경우 
     {
-        int margin = 50 ; // b_IsLeft 판단용 마진
-        // ---- 왼쪽 칼만 객체 새로 생성 ----
+        int margin = 50 ; // b_IsLeft 판단용 마진 --> ?
+
+        // ---- 왼쪽 차선 kalman 객체 새로 생성 ----
         if (!camera_data->b_ThereIsLeft && !b_NoLaneLeft) // 왼쪽 칼만 객체 없고, 왼쪽 차선 감지된 경우
         {
-            // Kalman state structure 계산
+            // Kalman state structure 계산 --> 이전 프레임과의 차이 계산하는 로직 
             st_KalmanStateLeft = CalculateKalmanState(
-                st_LaneInfoLeft.st_LaneCoefficient,
-                camera_data->f32_LastDistanceLeft,
-                camera_data->f32_LastAngleLeft
+                st_LaneInfoLeft.st_LaneCoefficient, // ransac로 구한 차선 계수
+                camera_data->f32_LastDistanceLeft, // 이전 프레임 왼쪽 차선 거리 (초깃값 : 0)
+                camera_data->f32_LastAngleLeft // 이전 프레임 왼쪽 차선 각도
             );
 
-            LANE_KALMAN st_KalmanObject;
-            InitializeKalmanObject(st_KalmanObject);
-            UpdateObservation(st_KalmanObject, st_KalmanStateLeft);
-            SetInitialX(st_KalmanObject);
+            // kalman 객체 생성 및 초기화 
+            LANE_KALMAN st_KalmanObject; 
+            InitializeKalmanObject(st_KalmanObject); // A,P,Q,R 세팅
+            UpdateObservation(st_KalmanObject, st_KalmanStateLeft); // Z 관측값 업데이트 
+            SetInitialX(st_KalmanObject); // X <- Z 로 초기화
             st_KalmanObject.st_LaneCoefficient = st_LaneInfoLeft.st_LaneCoefficient;
 
-            // x 절편 로직 새로 구성 
+            // 좌우 판단 로직 
             int center_x = camera_data->st_CameraParameter.s32_RemapWidth / 2;
             double x_intercept = -st_KalmanObject.st_LaneCoefficient.f64_Intercept /
                      st_KalmanObject.st_LaneCoefficient.f64_Slope;
             
-            st_KalmanObject.b_IsLeft = (x_intercept < center_x - margin);
+            st_KalmanObject.b_IsLeft = (x_intercept < center_x - margin); // 아래쪽 차선이 센터-마진이면 왼쪽 
 
             // 좌/우 판단 (x절편 계산)
             // if (-(st_KalmanObject.st_LaneCoefficient.f64_Intercept /
@@ -334,17 +340,19 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             // else
             //     st_KalmanObject.b_IsLeft = false;
 
+            // 전역 상태에 등록  + 결과 이미지에 그리기 
             st_KalmanObject.st_LaneState = st_KalmanStateLeft;
             camera_data->b_ThereIsLeft = true;
-            camera_data->arst_KalmanObject[camera_data->s32_KalmanObjectNum] = st_KalmanObject;
+            camera_data->arst_KalmanObject[camera_data->s32_KalmanObjectNum] = st_KalmanObject; // 배열에 push
             camera_data->s32_KalmanObjectNum += 1;
 
+            // 보라색 선 그리기 
             DrawDrivingLane(g_ResultImage,
                             st_KalmanObject.st_LaneCoefficient,
                             cv::Scalar(255, 0, 255));
         }
 
-        // ---- 오른쪽 칼만 객체 새로 생성 ----
+        // ---- 오른쪽 차선 kalman 객체 새로 생성 ----
         if (!camera_data->b_ThereIsRight && !b_NoLaneRight) // 오른쪽 칼만 객체 없고, 오른쪽 차선 감지된 경우
         {
             st_KalmanStateRight = CalculateKalmanState(
@@ -353,7 +361,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
                 camera_data->f32_LastAngleRight
             );
 
-            LANE_KALMAN st_KalmanObject;
+            LANE_KALMAN st_KalmanObject; // 왼쪽이랑 같은 칼만객체??
             InitializeKalmanObject(st_KalmanObject);
             UpdateObservation(st_KalmanObject, st_KalmanStateRight);
             SetInitialX(st_KalmanObject);
@@ -364,6 +372,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             double x_intercept = -st_KalmanObject.st_LaneCoefficient.f64_Intercept /
                      st_KalmanObject.st_LaneCoefficient.f64_Slope;
             
+            // 이거 로직 이상함. 수정해야할 수도 
             st_KalmanObject.b_IsLeft = (x_intercept < center_x + margin);
 
             // if (-(st_KalmanObject.st_LaneCoefficient.f64_Intercept /
@@ -384,11 +393,10 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
 
     }
 
-    else // 하나 이상의 칼만 객체가 이미 있는 경우
+    else // 양쪽 차선 칼만 객체 모두 있는 경우 : 이미 칼만객체 생성 이후 추적중인 경우 --> 업데이트
     {
-        // ---- 이미 Kalman Object가 있는 경우: 업데이트 ----
-        // 감지된 왼쪽 차선이 있는 경우 상태 업데이트
-        if (!b_NoLaneLeft)
+        // 이번 프레임 관측값 저장 
+        if (!b_NoLaneLeft)  // 왼쪽 차선 감지된 경우 
         {
             arst_KalmanState[0] = CalculateKalmanState(
                 st_LaneInfoLeft.st_LaneCoefficient,
@@ -397,7 +405,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             );
         }
 
-        if (!b_NoLaneRight)
+        if (!b_NoLaneRight) // 오른쪽 차선 감지된 경우 
         {
             arst_KalmanState[1] = CalculateKalmanState(
                 st_LaneInfoRight.st_LaneCoefficient,
@@ -406,15 +414,18 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             );
         }
 
-        for (s32_I = 0; s32_I < camera_data->s32_KalmanObjectNum; s32_I++)
+        for (s32_I = 0; s32_I < camera_data->s32_KalmanObjectNum; s32_I++) // 저장된 칼만 객체 순회 
         {
-            bool b_SameObj = false;
+            bool b_SameObj = false; // 같은 객체인지 판별하는 플래그 
+
             // 칼만 객체와 새 관측을 비교해 동일 차선인지 판별
-            for (s32_J = 0; s32_J < 2; s32_J++)
+            for (s32_J = 0; s32_J < 2; s32_J++) // 좌우 2개 관측값 순회 0 : 왼쪽 / 1 : 오른쪽 
             {
+                //같은 선인지 확인
                 CheckSameKalmanObject(camera_data->arst_KalmanObject[s32_I],
                                       arst_KalmanState[s32_J]);  // 동일 차선인지 비교
 
+                // 같은 차선으로 매칭 성공 --> 칼만 필터 업데이트
                 if (camera_data->arst_KalmanObject[s32_I].b_MeasurementUpdateFlag)
                 {
                     UpdateObservation(camera_data->arst_KalmanObject[s32_I],
@@ -448,9 +459,9 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
                 }
             }
 
-            if (!b_SameObj)
+            if (!b_SameObj) // 같은 차선으로 매칭 실패한 경우 --> 예측만 수행
             {
-                if (camera_data->arst_KalmanObject[s32_I].s32_CntNoMatching < 20)
+                if (camera_data->arst_KalmanObject[s32_I].s32_CntNoMatching < 60) // 60 프레임 (초당 30프레임-->2초)
                 {
                     camera_data->arst_KalmanObject[s32_I].s32_CntNoMatching += 1;
 
@@ -459,12 +470,14 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
                         camera_data->arst_KalmanObject[s32_I],
                         camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient
                     );
+                    // 예측값으로 차선 그리기 
                     DrawDrivingLane(g_ResultImage,
                                     camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient,
                                     cv::Scalar(255, 255, 0));
                 }
-                else
+                else // 60프레임 안에 관측값 매칭 실패하면 차선 추적 종료. 칼만객체 삭제 
                 {
+                    // 배열에서 칼만 객체 제거 
                     DeleteKalmanObject(*camera_data,
                                        camera_data->s32_KalmanObjectNum,
                                        s32_I);
@@ -562,11 +575,11 @@ void CheckSameKalmanObject(LANE_KALMAN& st_KalmanObject, KALMAN_STATE st_KalmanS
     // printf("Angle   : Kalman Lane: %f, Real Time Lane: %f\n",st_KalmanObject.st_LaneState.f64_Angle,st_KalmanStateLeft.f64_Angle);
 
     // Parameter yaml에서 끌어오도록 수정 필요
-    if (abs(st_KalmanObject.st_LaneState.f64_Distance - st_KalmanStateLeft.f64_Distance) < 40)
+    if (abs(st_KalmanObject.st_LaneState.f64_Distance - st_KalmanStateLeft.f64_Distance) < 40) // 40px
     {
-        if(abs(st_KalmanObject.st_LaneState.f64_Angle - st_KalmanStateLeft.f64_Angle) < 10)
+        if(abs(st_KalmanObject.st_LaneState.f64_Angle - st_KalmanStateLeft.f64_Angle) < 10) // 10도차이
         {
-            st_KalmanObject.b_MeasurementUpdateFlag = true;
+            st_KalmanObject.b_MeasurementUpdateFlag = true; // 조건 만족시 같은 차선으로 간주 
         }
     }
 }
