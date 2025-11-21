@@ -2,127 +2,171 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 
 namespace control
 {
 namespace
 {
-constexpr double kDefaultKp = 10;     // 픽셀 에러를 각속도로 변환하는 기본 비례 이득
-constexpr double kDefaultKi = 0.01;
-constexpr double kDefaultKd = 0.7;
-constexpr double kDefaultLinearSpeed = 15.0;  // 차량 프로토콜 기준 +15가 기본 주행속도 --> 차후에 곡률에 따라 속도 조절 기능 추가 
-constexpr double kDefaultMaxAngular = 1.0; //조향 최댓값
-constexpr double kDefaultMaxIntegral = 1.0;
-constexpr double kDefaultPixelToMeter = 0.35 / 542 ;  // user tunable scale
-constexpr double kDefaultHeadingWeight = 0.2;  // 차선 각도 오프셋 가중치
-constexpr double kDefaultWatchdogSec = 0.5;
+constexpr double kDefaultLookahead = 3.0;
+constexpr double kDefaultMinLookahead = 1.5;
+constexpr double kDefaultMaxLookahead = 6.0;
+constexpr double kDefaultBaseSpeed = 10.0;
+constexpr double kDefaultMinSpeed = 3.0;
+constexpr double kDefaultMaxSpeed = 20.0;
+constexpr double kDefaultMaxAngular = 1.2;
+constexpr double kDefaultSpeedKp = 4.0;
+constexpr double kDefaultSpeedKi = 0.0;
+constexpr double kDefaultSpeedKd = 0.2;
+constexpr double kDefaultIntegralLimit = 5.0;
 }  // namespace
 
 ControlNode::ControlNode()
 : rclcpp::Node("lane_follow_control"),
-  integral_error_(0.0),
-  prev_error_(0.0),
-  heading_error_(0.0),
-  last_angular_cmd_(0.0),
-  last_stamp_(this->now()),
-  watchdog_timeout_(rclcpp::Duration::from_seconds(kDefaultWatchdogSec))
+  lookahead_distance_(declare_parameter("lookahead_distance", kDefaultLookahead)),
+  min_lookahead_(declare_parameter("min_lookahead", kDefaultMinLookahead)),
+  max_lookahead_(declare_parameter("max_lookahead", kDefaultMaxLookahead)),
+  base_speed_(declare_parameter("base_speed", kDefaultBaseSpeed)),
+  min_speed_(declare_parameter("min_speed", kDefaultMinSpeed)),
+  max_speed_(declare_parameter("max_speed", kDefaultMaxSpeed)),
+  max_angular_z_(declare_parameter("max_angular_z", kDefaultMaxAngular)),
+  speed_kp_(declare_parameter("slope_speed_kp", kDefaultSpeedKp)),
+  speed_ki_(declare_parameter("slope_speed_ki", kDefaultSpeedKi)),
+  speed_kd_(declare_parameter("slope_speed_kd", kDefaultSpeedKd)),
+  integral_limit_(declare_parameter("slope_integral_limit", kDefaultIntegralLimit)),
+  slope_integral_(0.0),
+  prev_slope_(0.0),
+  last_update_time_(this->now())
 {
-  // PID 및 차량 주행 관련 기본 파라미터 선언 
-  kp_ = declare_parameter("kp", kDefaultKp);
-  ki_ = declare_parameter("ki", kDefaultKi);
-  kd_ = declare_parameter("kd", kDefaultKd);
-  linear_speed_ = declare_parameter("linear_speed", kDefaultLinearSpeed);
-  max_angular_z_ = declare_parameter("max_angular_z", kDefaultMaxAngular);
-  max_integral_ = declare_parameter("max_integral", kDefaultMaxIntegral);
-  pixel_to_meter_ = declare_parameter("pixel_to_meter", kDefaultPixelToMeter);
-  heading_weight_ = declare_parameter("heading_weight", kDefaultHeadingWeight);
-  const double watchdog = declare_parameter("watchdog_timeout", kDefaultWatchdogSec); //일정시간 업데이트없으면 초기화 
-  watchdog_timeout_ = rclcpp::Duration::from_seconds(watchdog);
+  const std::string path_topic = declare_parameter("path_topic", std::string("/planning/path"));
+  auto qos = rclcpp::QoS(rclcpp::KeepLast(10));
+  path_sub_ = create_subscription<nav_msgs::msg::Path>(
+    path_topic, qos,
+    std::bind(&ControlNode::on_path, this, std::placeholders::_1));
 
-  // /cmd_vel pub
-  cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", rclcpp::QoS(10));
-  
-  //lane offset sub
-  offset_sub_ = create_subscription<std_msgs::msg::Float32>(
-    "/lane/center_offset", rclcpp::QoS(10),
-    std::bind(&ControlNode::on_offset, this, std::placeholders::_1));
-  heading_sub_ = create_subscription<std_msgs::msg::Float32>(
-    "/lane/heading_offset", rclcpp::QoS(10),
-    std::bind(&ControlNode::on_heading, this, std::placeholders::_1));
+  cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", qos);
 
-  RCLCPP_INFO(get_logger(), "PID controller initialized (kp=%.4f ki=%.4f kd=%.4f)", kp_, ki_, kd_);
+  RCLCPP_INFO(get_logger(),
+    "Control node ready (lookahead %.2f m, base speed %.2f m/s)",
+    lookahead_distance_, base_speed_);
 }
 
-// watchdog reset function
-void ControlNode::reset_if_timeout(const rclcpp::Time & now)
+void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
 {
-  // 일정 시간 이상 갱신이 없으면 적분/미분 항을 초기화해 급격한 제어를 방지
-  if ((now - last_stamp_) > watchdog_timeout_) {
-    integral_error_ = 0.0;
-    prev_error_ = 0.0;
-    heading_error_ = 0.0;
-  }
-}
-
-
-// steer control callback
-void ControlNode::on_offset(const std_msgs::msg::Float32::SharedPtr msg)
-{
-  const rclcpp::Time now = this->now();
-  reset_if_timeout(now);
-
-  // dt 계산 (0으로 나누기 방지를 위해 최소값 보장)
-  const double dt = std::max(1e-3, (now - last_stamp_).seconds());
-  last_stamp_ = now;
-
-  // 오프셋이 양수면 차량이 차선 중앙보다 오른쪽에 있음 (픽셀 → 미터 변환)--> - 조향 필요 
-  const double raw_offset = static_cast<double>(msg->data);
-  if (!std::isfinite(raw_offset)) {
-    last_stamp_ = now;
-    double angular_z = std::clamp(last_angular_cmd_ * 1.2, -max_angular_z_, max_angular_z_);
-    last_angular_cmd_ = angular_z;
-
-    geometry_msgs::msg::Twist cmd;
-    cmd.linear.x = std::clamp(linear_speed_, -50.0, 50.0);
-    cmd.angular.z = angular_z;
-    cmd_pub_->publish(cmd);
-    // RCLCPP_WARN_THROTTLE(
-    //   get_logger(), *this->get_clock(), 2000,
-    //   "Lane offset unavailable; reusing last steering (%.3f)", angular_z);
+  if (!msg || msg->poses.empty())
+  {
     return;
   }
 
-  const double error_px = raw_offset;
-  const double error_m = error_px * pixel_to_meter_;
-  const double heading_term = std::isfinite(heading_error_) ? heading_error_ : 0.0;
-  const double combined_error = error_m + heading_weight_ * heading_term;
+  const rclcpp::Time now = this->now();
+  const double dt = std::max(1e-3, (now - last_update_time_).seconds());
+  last_update_time_ = now;
 
-  // PID 적분/미분 항 계산 및 클램프
-  integral_error_ = std::clamp(integral_error_ + combined_error * dt, -max_integral_, max_integral_);
-  const double derivative = (combined_error - prev_error_) / dt;
-  prev_error_ = combined_error;
+  std::vector<Point2D> path_points;
+  path_points.reserve(msg->poses.size());
+  for (const auto & pose : msg->poses)
+  {
+    Point2D pt{pose.pose.position.y, pose.pose.position.x};
+    path_points.push_back(pt);
+  }
 
-  // PID 합산 후 각속도 제한
-  double angular_z = kp_ * combined_error + ki_ * integral_error_ + kd_ * derivative;
-  angular_z = std::clamp(angular_z*-1, -max_angular_z_, max_angular_z_);
+  Point2D target{0.0, 0.0};
+  double selected_lookahead = lookahead_distance_;
+  if (!compute_lookahead_target(path_points, lookahead_distance_, target, selected_lookahead))
+  {
+    return;
+  }
 
-  // 최종 Twist 메시지 구성 후 퍼블리시
-  geometry_msgs::msg::Twist cmd;
-  cmd.linear.x = std::clamp(linear_speed_, -50.0, 50.0);  // 차량 규격 범위 [-50, 50]
-  cmd.angular.z = angular_z;
+  const double curvature = (2.0 * target.x) / std::max(1e-3, selected_lookahead * selected_lookahead);
+  const double slope = estimate_lane_slope(path_points);
+  const double speed_cmd = update_speed_command(slope, dt);
+  const double angular_velocity = std::clamp(curvature * speed_cmd, -max_angular_z_, max_angular_z_);
+
+  geometry_msgs::msg::Twist cmd = build_cmd(curvature, speed_cmd);
+  cmd.angular.z = angular_velocity;
   cmd_pub_->publish(cmd);
-  last_angular_cmd_ = angular_z;
 
   RCLCPP_DEBUG(get_logger(),
-    "PID cmd: err_px=%.2f err_m=%.3f heading=%.3f combined=%.3f ang=%.3f integ=%.3f deriv=%.3f",
-    error_px, error_m, heading_error_, combined_error, angular_z, integral_error_, derivative);
+    "Pure pursuit target=(%.2f, %.2f) lookahead=%.2f slope=%.3f speed=%.2f ang=%.2f",
+    target.x, target.y, selected_lookahead, slope, speed_cmd, cmd.angular.z);
 }
 
-void ControlNode::on_heading(const std_msgs::msg::Float32::SharedPtr msg)
+bool ControlNode::compute_lookahead_target(const std::vector<Point2D> & path_points,
+                                           double lookahead_distance,
+                                           Point2D & target,
+                                           double & actual_lookahead) const
 {
-  const double raw = static_cast<double>(msg->data);
-  heading_error_ = std::isfinite(raw) ? raw : 0.0;
+  if (path_points.empty())
+  {
+    return false;
+  }
+
+  const double min_l = min_lookahead_;
+  const double max_l = max_lookahead_;
+  const double desired = std::clamp(lookahead_distance, min_l, max_l);
+
+  const double desired_sq = desired * desired;
+  const Point2D * candidate = nullptr;
+  for (const auto & pt : path_points)
+  {
+    const double dist_sq = pt.x * pt.x + pt.y * pt.y;
+    if (dist_sq >= desired_sq)
+    {
+      candidate = &pt;
+      actual_lookahead = std::sqrt(dist_sq);
+      break;
+    }
+  }
+
+  if (!candidate)
+  {
+    candidate = &path_points.back();
+    actual_lookahead = std::hypot(candidate->x, candidate->y);
+    if (actual_lookahead < 1e-3)
+    {
+      return false;
+    }
+  }
+
+  target = *candidate;
+  return true;
 }
+
+double ControlNode::estimate_lane_slope(const std::vector<Point2D> & path_points) const
+{
+  if (path_points.size() < 2)
+  {
+    return 0.0;
+  }
+  const auto & first = path_points.front();
+  const auto & last = path_points.back();
+  const double dy = last.y - first.y;
+  if (std::abs(dy) < 1e-3)
+  {
+    return 0.0;
+  }
+  return (last.x - first.x) / dy;
+}
+
+double ControlNode::update_speed_command(double slope, double dt)
+{
+  slope_integral_ = std::clamp(slope_integral_ + slope * dt, -integral_limit_, integral_limit_);
+  const double derivative = (slope - prev_slope_) / dt;
+  prev_slope_ = slope;
+
+  const double correction = speed_kp_ * slope + speed_ki_ * slope_integral_ + speed_kd_ * derivative;
+  const double command = std::clamp(base_speed_ - correction, min_speed_, max_speed_);
+  return command;
+}
+
+geometry_msgs::msg::Twist ControlNode::build_cmd(double curvature, double speed) const
+{
+  geometry_msgs::msg::Twist cmd;
+  cmd.linear.x = std::clamp(speed, min_speed_, max_speed_);
+  cmd.angular.z = std::clamp(curvature * cmd.linear.x, -max_angular_z_, max_angular_z_);
+  return cmd;
+}
+
 }  // namespace control
 
 int main(int argc, char ** argv)

@@ -3,39 +3,51 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "geometry_msgs/msg/twist.hpp"
-#include "std_msgs/msg/float32.hpp"
+#include "nav_msgs/msg/path.hpp"
+#include <vector>
 
 namespace control
 {
-// 차선 중심 오프셋을 받아 PID로 조향 각을 계산하고 /cmd_vel을 퍼블리시합니다.
+// 계획된 경로를 받아 Pure Pursuit로 조향하고 차선 기울기 기반 PID로 속도를 조절합니다.
 class ControlNode : public rclcpp::Node
 {
 public:
   ControlNode();
 
 private:
-  void on_offset(const std_msgs::msg::Float32::SharedPtr msg);
-  void on_heading(const std_msgs::msg::Float32::SharedPtr msg);
-  void reset_if_timeout(const rclcpp::Time & now);
+  struct Point2D
+  {
+    double x;
+    double y;
+  };
 
-  rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr offset_sub_;
-  rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr heading_sub_;
+  void on_path(const nav_msgs::msg::Path::SharedPtr msg);
+  bool compute_lookahead_target(const std::vector<Point2D> & path_points,
+                                double lookahead_distance,
+                                Point2D & target,
+                                double & actual_lookahead) const;
+  double estimate_lane_slope(const std::vector<Point2D> & path_points) const;
+  double update_speed_command(double slope, double dt);
+  geometry_msgs::msg::Twist build_cmd(double curvature, double speed) const;
+
+  rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr path_sub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_pub_;
 
-  double kp_;
-  double ki_;
-  double kd_;
-  double max_integral_;
+  double lookahead_distance_;
+  double min_lookahead_;
+  double max_lookahead_;
+  double base_speed_;
+  double min_speed_;
+  double max_speed_;
   double max_angular_z_;
-  double linear_speed_;
-  double pixel_to_meter_;
-  double integral_error_;
-  double prev_error_;
-  double heading_error_;
-  double heading_weight_;
-  double last_angular_cmd_;
-  rclcpp::Time last_stamp_;
-  rclcpp::Duration watchdog_timeout_;
+  double speed_kp_;
+  double speed_ki_;
+  double speed_kd_;
+  double integral_limit_;
+
+  double slope_integral_;
+  double prev_slope_;
+  rclcpp::Time last_update_time_;
 };
 }  // namespace control
 

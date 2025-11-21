@@ -7,10 +7,21 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(msg REQUIRED)
 
 add_executable(planning_node src/planning_node.cpp)
 target_include_directories(planning_node PRIVATE include)
-ament_target_dependencies(planning_node rclcpp )
+ament_target_dependencies(planning_node
+  rclcpp
+  geometry_msgs
+  nav_msgs
+  visualization_msgs
+  std_msgs
+  msg)
 
 install(TARGETS planning_node
   DESTINATION lib/${PROJECT_NAME})
