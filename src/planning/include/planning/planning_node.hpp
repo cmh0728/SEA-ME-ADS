@@ -16,14 +16,15 @@ namespace planning
 class PlanningNode : public rclcpp::Node
 {
 public:
-  PlanningNode();
-
-private:
   struct LanePoint
   {
     double x{};  // lateral (m)
     double y{};  // longitudinal (m)
   };
+
+  PlanningNode();
+
+private:
 
   void on_left_lane(const perception::msg::Lane::ConstSharedPtr msg);
   void on_right_lane(const perception::msg::Lane::ConstSharedPtr msg);

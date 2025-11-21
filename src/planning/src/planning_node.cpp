@@ -35,10 +35,10 @@ PlanningNode::PlanningNode()
   marker_z_ = declare_parameter("marker_z", 0.0);
 
   auto qos = rclcpp::QoS(rclcpp::KeepLast(10));
-  lane_left_sub_ = create_subscription<msg::msg::Lane>(
+  lane_left_sub_ = create_subscription<perception::msg::Lane>(
     "/lane/left", qos,
     std::bind(&PlanningNode::on_left_lane, this, std::placeholders::_1));
-  lane_right_sub_ = create_subscription<msg::msg::Lane>(
+  lane_right_sub_ = create_subscription<perception::msg::Lane>(
     "/lane/right", qos,
     std::bind(&PlanningNode::on_right_lane, this, std::placeholders::_1));
 
