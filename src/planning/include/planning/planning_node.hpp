@@ -5,7 +5,7 @@
 #include "geometry_msgs/msg/point.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
-#include "msg/msg/lane.hpp"
+#include "perception/msg/lane.hpp"
 #include <optional>
 #include <string>
 #include <vector>
@@ -25,10 +25,10 @@ private:
     double y{};  // longitudinal (m)
   };
 
-  void on_left_lane(const msg::msg::Lane::ConstSharedPtr msg);
-  void on_right_lane(const msg::msg::Lane::ConstSharedPtr msg);
+  void on_left_lane(const perception::msg::Lane::ConstSharedPtr msg);
+  void on_right_lane(const perception::msg::Lane::ConstSharedPtr msg);
   void process_lanes();
-  std::vector<LanePoint> convert_lane(const msg::msg::Lane::ConstSharedPtr & lane_msg) const;
+  std::vector<LanePoint> convert_lane(const perception::msg::Lane::ConstSharedPtr & lane_msg) const;
   std::optional<double> sample_lane(const std::vector<LanePoint> & lane, double longitudinal) const;
   bool build_centerline(const std::vector<LanePoint> & left,
                         const std::vector<LanePoint> & right,
@@ -42,13 +42,13 @@ private:
                                               const std::string & ns,
                                               double r, double g, double b) const;
 
-  rclcpp::Subscription<msg::msg::Lane>::SharedPtr lane_left_sub_;
-  rclcpp::Subscription<msg::msg::Lane>::SharedPtr lane_right_sub_;
+  rclcpp::Subscription<perception::msg::Lane>::SharedPtr lane_left_sub_;
+  rclcpp::Subscription<perception::msg::Lane>::SharedPtr lane_right_sub_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
 
-  msg::msg::Lane::ConstSharedPtr latest_left_;
-  msg::msg::Lane::ConstSharedPtr latest_right_;
+  perception::msg::Lane::ConstSharedPtr latest_left_;
+  perception::msg::Lane::ConstSharedPtr latest_right_;
 
   std::string frame_id_;
   double pixel_scale_x_;

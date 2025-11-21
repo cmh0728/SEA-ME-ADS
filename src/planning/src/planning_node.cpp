@@ -48,13 +48,13 @@ PlanningNode::PlanningNode()
   RCLCPP_INFO(get_logger(), "Planning node ready (frame: %s)", frame_id_.c_str());
 }
 
-void PlanningNode::on_left_lane(const msg::msg::Lane::ConstSharedPtr msg)
+void PlanningNode::on_left_lane(const perception::msg::Lane::ConstSharedPtr msg)
 {
   latest_left_ = msg;
   process_lanes();
 }
 
-void PlanningNode::on_right_lane(const msg::msg::Lane::ConstSharedPtr msg)
+void PlanningNode::on_right_lane(const perception::msg::Lane::ConstSharedPtr msg)
 {
   latest_right_ = msg;
   process_lanes();
@@ -82,7 +82,7 @@ void PlanningNode::process_lanes()
 }
 
 std::vector<PlanningNode::LanePoint> PlanningNode::convert_lane(
-  const msg::msg::Lane::ConstSharedPtr & lane_msg) const
+  const perception::msg::Lane::ConstSharedPtr & lane_msg) const
 {
   std::vector<LanePoint> out;
   if (!lane_msg)
