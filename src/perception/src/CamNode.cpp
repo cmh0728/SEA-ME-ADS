@@ -133,27 +133,70 @@ void CameraProcessing::on_image(const sensor_msgs::msg::CompressedImage::ConstSh
 
 void CameraProcessing::publish_lane_messages()
 {
-  auto publish_single_lane = [](const CAMERA_LANEINFO & lane_info,
-                                bool lane_missing,
-                                const rclcpp::Publisher<perception::msg::Lane>::SharedPtr & publisher)
-  {
-    if (!publisher || lane_missing)
+    // 1) Kalman에서 최종 left/right coef 뽑기
+    LANE_COEFFICIENT left_coef, right_coef;
+    bool has_left = false, has_right = false;
+
+    get_lane_coef_from_kalman(static_camera_data,
+                              left_coef, right_coef,
+                              has_left, has_right);
+
+    const int H = static_camera_data.st_CameraParameter.s32_RemapHeight;
+
+    // 2) 왼쪽 차선 publish
+    if (lane_left_pub_ && has_left)
     {
-      return;
+        auto lane_msg = build_lane_msg_from_coef(left_coef, H);
+        if (!lane_msg.lane_points.empty())
+        {
+            lane_left_pub_->publish(lane_msg);
+        }
     }
 
-    auto lane_msg = build_lane_message(lane_info);
-    if (lane_msg.lane_points.empty())
+    // 3) 오른쪽 차선 publish
+    if (lane_right_pub_ && has_right)
     {
-      return;
+        auto lane_msg = build_lane_msg_from_coef(right_coef, H);
+        if (!lane_msg.lane_points.empty())
+        {
+            lane_right_pub_->publish(lane_msg);
+        }
     }
-
-    publisher->publish(lane_msg);
-  };
-
-  publish_single_lane(st_LaneInfoLeftMain, b_NoLaneLeft, lane_left_pub_);
-  publish_single_lane(st_LaneInfoRightMain, b_NoLaneRight, lane_right_pub_);
 }
+
+perception::msg::Lane build_lane_msg_from_coef(const LANE_COEFFICIENT& coef,
+                                               int img_height,
+                                               int num_samples = 20)
+{
+    perception::msg::Lane lane_msg;
+
+    if (std::abs(coef.f64_Slope) < 1e-6) {
+        // 수평에 가까운 직선이면 일단 skip
+        return lane_msg;
+    }
+
+    // 이미지 좌표계 기준 y(아래로 증가) 샘플
+    // rows-1 (바닥) ~ 0 (위) 사이를 균등하게 num_samples개 찍기
+    for (int i = 0; i < num_samples; ++i)
+    {
+        double y_img = (img_height - 1) - (img_height - 1) * (static_cast<double>(i) / (num_samples - 1));
+        double x_img = (y_img - coef.f64_Intercept) / coef.f64_Slope;
+
+        // 화면 밖이면 skip
+        if (x_img < 0 || x_img >= img_height) continue;
+
+        // IPM 좌표계로 변환 (y 위로 증가)
+        perception::msg::LanePnt p;
+        p.x = static_cast<float>(x_img);
+        p.y = static_cast<float>((img_height - 1) - y_img);
+
+        lane_msg.lane_points.push_back(p);
+    }
+
+    return lane_msg;
+}
+
+
 
 
 //################################################## img processing functions ##################################################//
@@ -1281,6 +1324,36 @@ void LoadMappingParam(CAMERA_DATA *pst_CameraData)
 
 // RANSAC 구현 및 Coefficient 추출 완료
 // Data를 다루는 구조를 다시한번 생각 후 Kalman Filter까지 결합 진행
+
+
+
+//################################################## get_lane_coef_from_kalman function ##################################################//
+// 칼만 필터에서 추정된 차선 계수를 가져오는 함수
+bool get_lane_coef_from_kalman(const CAMERA_DATA& cam_data,
+                               LANE_COEFFICIENT& left_coef,
+                               LANE_COEFFICIENT& right_coef,
+                               bool& has_left,
+                               bool& has_right)
+{
+    has_left  = false;
+    has_right = false;
+
+    for (int i = 0; i < cam_data.s32_KalmanObjectNum; ++i)
+    {
+        const auto& obj = cam_data.arst_KalmanObject[i];
+
+        if (obj.b_IsLeft) {
+            left_coef  = obj.st_LaneCoefficient;
+            has_left   = true;
+        } else {
+            right_coef = obj.st_LaneCoefficient;
+            has_right  = true;
+        }
+    }
+
+    return has_left || has_right;
+}
+
 
 
 //################################################## Camera node main function ##################################################//
