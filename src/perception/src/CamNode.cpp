@@ -305,7 +305,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     // arst_KalmanObject[] : kalman 객체 배열 --> 0 : 이번 프레임 왼쪽, 1 : 이번 프레임 오른쪽 
     // s32_KalmanObjectNum : 현재 kalman 객체 개수
 
-    if (!camera_data->b_ThereIsLeft || !camera_data->b_ThereIsRight) // 둘 중 하나라도 없는 경우 
+    if (!camera_data->b_ThereIsLeft && !camera_data->b_ThereIsRight) // 양쪽 모두 칼만객체 없는 경우 
     {
         int margin = 50 ; // b_IsLeft 판단용 마진 --> ?
 
@@ -331,7 +331,8 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             double x_intercept = -st_KalmanObject.st_LaneCoefficient.f64_Intercept /
                      st_KalmanObject.st_LaneCoefficient.f64_Slope;
             
-            st_KalmanObject.b_IsLeft = (x_intercept < center_x - margin); // 아래쪽 차선이 센터-마진이면 왼쪽 
+            // st_KalmanObject.b_IsLeft = (x_intercept < center_x - margin); // 아래쪽 차선이 센터-마진이면 왼쪽 
+            st_KalmanObject.b_IsLeft = true ;
 
             // 좌/우 판단 (x절편 계산)
             // if (-(st_KalmanObject.st_LaneCoefficient.f64_Intercept /
@@ -351,6 +352,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
                             st_KalmanObject.st_LaneCoefficient,
                             cv::Scalar(255, 0, 255));
         }
+
 
         // ---- 오른쪽 차선 kalman 객체 새로 생성 ----
         if (!camera_data->b_ThereIsRight && !b_NoLaneRight) // 오른쪽 칼만 객체 없고, 오른쪽 차선 감지된 경우
@@ -373,7 +375,8 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
                      st_KalmanObject.st_LaneCoefficient.f64_Slope;
             
             // 이거 로직 이상함. 수정해야할 수도 
-            st_KalmanObject.b_IsLeft = (x_intercept < center_x + margin);
+            // st_KalmanObject.b_IsLeft = (x_intercept < center_x + margin);
+            st_KalmanObject.b_IsLeft = false ;
 
             // if (-(st_KalmanObject.st_LaneCoefficient.f64_Intercept /
             //       st_KalmanObject.st_LaneCoefficient.f64_Slope) < 300)
@@ -386,6 +389,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             camera_data->arst_KalmanObject[camera_data->s32_KalmanObjectNum] = st_KalmanObject;
             camera_data->s32_KalmanObjectNum += 1;
 
+            // 흰색 선 그리기
             DrawDrivingLane(g_ResultImage,
                             st_KalmanObject.st_LaneCoefficient,
                             cv::Scalar(255, 255, 255));
@@ -393,7 +397,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
 
     }
 
-    else // 양쪽 차선 칼만 객체 모두 있는 경우 : 이미 칼만객체 생성 이후 추적중인 경우 --> 업데이트
+    else // 한쪽 칼만 객체라도 있는 경우  : 이미 칼만객체 생성 이후 추적중인 경우 --> 업데이트
     {
         // 이번 프레임 관측값 저장 
         if (!b_NoLaneLeft)  // 왼쪽 차선 감지된 경우 
