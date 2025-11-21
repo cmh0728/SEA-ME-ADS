@@ -470,7 +470,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
 
             if (!b_SameObj) // 같은 차선으로 매칭 실패한 경우 --> 예측만 수행
             {
-                if (camera_data->arst_KalmanObject[s32_I].s32_CntNoMatching < 60) // 60 프레임 (초당 30프레임-->2초)
+                if (camera_data->arst_KalmanObject[s32_I].s32_CntNoMatching < 30) // 30 프레임 (초당 30프레임-->1초)
                 {
                     camera_data->arst_KalmanObject[s32_I].s32_CntNoMatching += 1;
 
@@ -484,7 +484,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
                                     camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient,
                                     cv::Scalar(255, 255, 0));
                 }
-                else // 60프레임 안에 관측값 매칭 실패하면 차선 추적 종료. 칼만객체 삭제 
+                else // 30프레임 안에 관측값 매칭 실패하면 차선 추적 종료. 칼만객체 삭제 
                 {
                     // 배열에서 칼만 객체 제거 
                     DeleteKalmanObject(*camera_data,
@@ -584,22 +584,22 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
         // cv::imshow("Temp_Img", g_TempImg);    // 현재는 sliding window 결과
 
         // =======================  RANSAC 디버그 창 ===========================
-        // cv::Mat ransac_debug;
-        // g_IpmImg.copyTo(ransac_debug);   // 또는 g_TempImg를 COLOR_GRAY2BGR로 변환해서 써도 됨
+        cv::Mat ransac_debug;
+        g_IpmImg.copyTo(ransac_debug);   // 또는 g_TempImg를 COLOR_GRAY2BGR로 변환해서 써도 됨
 
-        // if (!b_NoLaneLeft) {
-        //     DrawDrivingLane(ransac_debug,
-        //                     st_LaneInfoLeftMain.st_LaneCoefficient,
-        //                     cv::Scalar(255, 0, 0));   // 파란/빨간 아무 색
-        // }
+        if (!b_NoLaneLeft) {
+            DrawDrivingLane(ransac_debug,
+                            st_LaneInfoLeftMain.st_LaneCoefficient,
+                            cv::Scalar(255, 0, 0));   // 파란/빨간 아무 색
+        }
 
-        // if (!b_NoLaneRight) {
-        //     DrawDrivingLane(ransac_debug,
-        //                     st_LaneInfoRightMain.st_LaneCoefficient,
-        //                     cv::Scalar(0, 0, 255));
-        // }
+        if (!b_NoLaneRight) {
+            DrawDrivingLane(ransac_debug,
+                            st_LaneInfoRightMain.st_LaneCoefficient,
+                            cv::Scalar(0, 0, 255));
+        }
 
-        // cv::imshow("RANSAC Debug", ransac_debug);   // RANSAC 전용 창
+        cv::imshow("RANSAC Debug", ransac_debug);   // RANSAC 전용 창
         // =======================  RANSAC 디버그 창 ===========================
 
         cv::imshow("st_ResultImage", g_ResultImage); // 차선 + Kalman 결과
