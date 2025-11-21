@@ -399,8 +399,10 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
 
     else // 한쪽 칼만 객체라도 있는 경우  : 이미 칼만객체 생성 이후 추적중인 경우 --> 업데이트
     {
+        bool has_obs[2] = {!b_NoLaneLeft, !b_NoLaneRight}; // 좌우 차선 관측 유무 저장
+        // 관측 없는 쪽도 0으로 매칭하는 문제 생김 
         // 이번 프레임 관측값 저장 
-        if (!b_NoLaneLeft)  // 왼쪽 차선 감지된 경우 
+        if (has_obs[0])  // 왼쪽 차선 감지된 경우 
         {
             arst_KalmanState[0] = CalculateKalmanState(
                 st_LaneInfoLeft.st_LaneCoefficient,
@@ -409,7 +411,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             );
         }
 
-        if (!b_NoLaneRight) // 오른쪽 차선 감지된 경우 
+        if (has_obs[1]) // 오른쪽 차선 감지된 경우 
         {
             arst_KalmanState[1] = CalculateKalmanState(
                 st_LaneInfoRight.st_LaneCoefficient,
@@ -425,6 +427,9 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             // 칼만 객체와 새 관측을 비교해 동일 차선인지 판별
             for (s32_J = 0; s32_J < 2; s32_J++) // 좌우 2개 관측값 순회 0 : 왼쪽 / 1 : 오른쪽 
             {
+                if(!has_obs[s32_J]) // 해당 관측값 없는 경우 스킵 
+                    continue;
+    
                 //같은 선인지 확인
                 CheckSameKalmanObject(camera_data->arst_KalmanObject[s32_I],
                                       arst_KalmanState[s32_J]);  // 동일 차선인지 비교
@@ -488,6 +493,88 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
                 }
             }
         }
+    }
+
+    if (!camera_data->b_ThereIsLeft && !b_NoLaneLeft) {
+        // Kalman state structure 계산 --> 이전 프레임과의 차이 계산하는 로직 
+            st_KalmanStateLeft = CalculateKalmanState(
+                st_LaneInfoLeft.st_LaneCoefficient, // ransac로 구한 차선 계수
+                camera_data->f32_LastDistanceLeft, // 이전 프레임 왼쪽 차선 거리 (초깃값 : 0)
+                camera_data->f32_LastAngleLeft // 이전 프레임 왼쪽 차선 각도
+            );
+
+            // kalman 객체 생성 및 초기화 
+            LANE_KALMAN st_KalmanObject; 
+            InitializeKalmanObject(st_KalmanObject); // A,P,Q,R 세팅
+            UpdateObservation(st_KalmanObject, st_KalmanStateLeft); // Z 관측값 업데이트 
+            SetInitialX(st_KalmanObject); // X <- Z 로 초기화
+            st_KalmanObject.st_LaneCoefficient = st_LaneInfoLeft.st_LaneCoefficient;
+
+            // 좌우 판단 로직 
+            int center_x = camera_data->st_CameraParameter.s32_RemapWidth / 2;
+            double x_intercept = -st_KalmanObject.st_LaneCoefficient.f64_Intercept /
+                     st_KalmanObject.st_LaneCoefficient.f64_Slope;
+            
+            // st_KalmanObject.b_IsLeft = (x_intercept < center_x - margin); // 아래쪽 차선이 센터-마진이면 왼쪽 
+            st_KalmanObject.b_IsLeft = true ;
+
+            // 좌/우 판단 (x절편 계산)
+            // if (-(st_KalmanObject.st_LaneCoefficient.f64_Intercept /
+            //       st_KalmanObject.st_LaneCoefficient.f64_Slope) < 300)
+            //     st_KalmanObject.b_IsLeft = true;
+            // else
+            //     st_KalmanObject.b_IsLeft = false;
+
+            // 전역 상태에 등록  + 결과 이미지에 그리기 
+            st_KalmanObject.st_LaneState = st_KalmanStateLeft;
+            camera_data->b_ThereIsLeft = true;
+            camera_data->arst_KalmanObject[camera_data->s32_KalmanObjectNum] = st_KalmanObject; // 배열에 push
+            camera_data->s32_KalmanObjectNum += 1;
+
+            // 보라색 선 그리기 
+            DrawDrivingLane(g_ResultImage,
+                            st_KalmanObject.st_LaneCoefficient,
+                            cv::Scalar(255, 0, 255));
+    }
+
+    // 오른쪽도 동일
+    if (!camera_data->b_ThereIsRight && !b_NoLaneRight) {
+        st_KalmanStateRight = CalculateKalmanState(
+                st_LaneInfoRight.st_LaneCoefficient,
+                camera_data->f32_LastDistanceRight,
+                camera_data->f32_LastAngleRight
+            );
+
+            LANE_KALMAN st_KalmanObject; // 왼쪽이랑 같은 칼만객체??
+            InitializeKalmanObject(st_KalmanObject);
+            UpdateObservation(st_KalmanObject, st_KalmanStateRight);
+            SetInitialX(st_KalmanObject);
+            st_KalmanObject.st_LaneCoefficient = st_LaneInfoRight.st_LaneCoefficient;
+
+            // b_IsLeft 판단 : false --> 오 / true --> 왼
+            int center_x = camera_data->st_CameraParameter.s32_RemapWidth / 2;
+            double x_intercept = -st_KalmanObject.st_LaneCoefficient.f64_Intercept /
+                     st_KalmanObject.st_LaneCoefficient.f64_Slope;
+            
+            // 이거 로직 이상함. 수정해야할 수도 
+            // st_KalmanObject.b_IsLeft = (x_intercept < center_x + margin);
+            st_KalmanObject.b_IsLeft = false ;
+
+            // if (-(st_KalmanObject.st_LaneCoefficient.f64_Intercept /
+            //       st_KalmanObject.st_LaneCoefficient.f64_Slope) < 300)
+            //     st_KalmanObject.b_IsLeft = true;
+            // else
+            //     st_KalmanObject.b_IsLeft = false;
+
+            st_KalmanObject.st_LaneState = st_KalmanStateRight;
+            camera_data->b_ThereIsRight = true;
+            camera_data->arst_KalmanObject[camera_data->s32_KalmanObjectNum] = st_KalmanObject;
+            camera_data->s32_KalmanObjectNum += 1;
+
+            // 흰색 선 그리기
+            DrawDrivingLane(g_ResultImage,
+                            st_KalmanObject.st_LaneCoefficient,
+                            cv::Scalar(255, 255, 255));
     }
 
     // =======================  (H) Debug GUI ================================
