@@ -21,7 +21,7 @@ CAMERA_LANEINFO st_LaneInfoRightMain{};
 // 시각화 옵션
 bool visualize = true;
 bool track_bar = false;
-bool vis_slidingwindow = true;
+bool vis_slidingwindow = true; // sliding window 시각화 --> 성능에 영향을 주고있음
 static CAMERA_DATA static_camera_data;
 
 // ransac 난수 초기화 전역설정
@@ -629,52 +629,52 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     }
 
     // =======================  칼만 결과 기반 consistency 보정 ========================
-    // {
-    //     LANE_COEFFICIENT kalman_left, kalman_right;
-    //     bool has_left  = false;
-    //     bool has_right = false;
+    {
+        LANE_COEFFICIENT kalman_left, kalman_right;
+        bool has_left  = false;
+        bool has_right = false;
 
-    //     // 현재 프레임에서 칼만 객체로부터 coef 뽑기
-    //     get_lane_coef_from_kalman(*camera_data,
-    //                               kalman_left, kalman_right,
-    //                               has_left, has_right);
+        // 현재 프레임에서 칼만 객체로부터 coef 뽑기
+        get_lane_coef_from_kalman(*camera_data,
+                                  kalman_left, kalman_right,
+                                  has_left, has_right);
 
-    //     // RANSAC sample 개수 기반 신뢰도
-    //     double conf_left  = static_cast<double>(st_LaneInfoLeft.s32_SampleCount);
-    //     double conf_right = static_cast<double>(st_LaneInfoRight.s32_SampleCount);
+        // RANSAC sample 개수 기반 신뢰도
+        double conf_left  = static_cast<double>(st_LaneInfoLeft.s32_SampleCount);
+        double conf_right = static_cast<double>(st_LaneInfoRight.s32_SampleCount);
 
-    //     if (has_left && has_right &&
-    //         st_LaneInfoLeft.s32_SampleCount  > 0 &&
-    //         st_LaneInfoRight.s32_SampleCount > 0)
-    //     {
-    //         bool left_anchor = (conf_left >= conf_right);
+        if (has_left && has_right &&
+            st_LaneInfoLeft.s32_SampleCount  > 0 &&
+            st_LaneInfoRight.s32_SampleCount > 0)
+        {
+            bool left_anchor = (conf_left >= conf_right);
 
-    //         // IPM 상에서 기대 차선 폭(px) - rosbag 보면서 대충 측정해서 튜닝
-    //         double expected_width_px =
-    //             250.0;  // ← 이 값은 나중에 네가 실제 환경에서 맞춰줘
+            // IPM 상에서 기대 차선 폭(px) - rosbag 보면서 대충 측정해서 튜닝
+            double expected_width_px =
+                250.0;  // ← 이 값은 나중에 네가 실제 환경에서 맞춰줘
 
-    //         bool ok = EnforceLaneConsistencyAnchor(
-    //             kalman_left,
-    //             kalman_right,
-    //             camera_data->st_CameraParameter.s32_RemapHeight,
-    //             left_anchor,
-    //             expected_width_px
-    //         );
+            bool ok = EnforceLaneConsistencyAnchor(
+                kalman_left,
+                kalman_right,
+                camera_data->st_CameraParameter.s32_RemapHeight,
+                left_anchor,
+                expected_width_px
+            );
 
-    //         if (ok) {
-    //             // 보정된 coef를 다시 칼만 객체에 반영
-    //             for (int i = 0; i < camera_data->s32_KalmanObjectNum; ++i)
-    //             {
-    //                 auto& obj = camera_data->arst_KalmanObject[i];
-    //                 if (obj.b_IsLeft) {
-    //                     obj.st_LaneCoefficient = kalman_left;
-    //                 } else {
-    //                     obj.st_LaneCoefficient = kalman_right;
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
+            if (ok) {
+                // 보정된 coef를 다시 칼만 객체에 반영
+                for (int i = 0; i < camera_data->s32_KalmanObjectNum; ++i)
+                {
+                    auto& obj = camera_data->arst_KalmanObject[i];
+                    if (obj.b_IsLeft) {
+                        obj.st_LaneCoefficient = kalman_left;
+                    } else {
+                        obj.st_LaneCoefficient = kalman_right;
+                    }
+                }
+            }
+        }
+    }
 
     // =======================  (H) Debug GUI ================================
     if (visualize)
