@@ -1409,8 +1409,37 @@ bool get_lane_coef_from_kalman(const CAMERA_DATA& cam_data,
 
     return has_left || has_right;
 }
-
 // ======================= Lane pair consistency (anchor 기반) ======================= //
+
+// 두 직선에서 폭/각도 계산
+static bool ComputeLaneWidthAngle(const LANE_COEFFICIENT& left,
+                                  const LANE_COEFFICIENT& right,
+                                  int img_height,
+                                  double& width_px,
+                                  double& angle_diff_deg)
+{
+    if (std::abs(left.f64_Slope) < 1e-6 || std::abs(right.f64_Slope) < 1e-6) {
+        return false;
+    }
+
+    // 바닥 쪽에서 폭 측정 (IPM에서 rows-1가 차량 가까운 쪽이라고 가정)
+    double y_ref = img_height - 1;
+
+    double xL = (y_ref - left.f64_Intercept)  / left.f64_Slope;
+    double xR = (y_ref - right.f64_Intercept) / right.f64_Slope;
+
+    if (!std::isfinite(xL) || !std::isfinite(xR)) return false;
+    if (xR <= xL) return false;   // 왼쪽/오른쪽 뒤바뀐 이상 상황
+
+    width_px = xR - xL;
+
+    // 각도 (deg)
+    double theta_left  = std::atan(left.f64_Slope)  * 180.0 / M_PI;
+    double theta_right = std::atan(right.f64_Slope) * 180.0 / M_PI;
+    angle_diff_deg     = std::abs(theta_left - theta_right);
+
+    return std::isfinite(width_px) && std::isfinite(angle_diff_deg);
+}
 bool EnforceLaneConsistencyAnchor(LANE_COEFFICIENT& left,
                                   LANE_COEFFICIENT& right,
                                   int img_height,
