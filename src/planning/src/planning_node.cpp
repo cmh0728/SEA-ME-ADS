@@ -1,21 +1,19 @@
 // =======================================
 // PlanningNode main flow
 // 1) /lane/left, /lane/right 차선 메시지를 수신하고 차량 기준 좌표로 변환한다.
+// lane 토픽은 top view 이미지 기준의 좌표 , waypoint는 차량 기준 좌표가 됨 
 // 2) 좌/우 차선으로부터 중앙선을 추정하고 리샘플링하여 waypoint/path 를 생성한다.
 // 3) nav_msgs/Path, MarkerArray 를 퍼블리시해 RViz 에서 차선/경로를 동시에 확인한다.
 // =======================================
 
 #include "planning/planning_node.hpp"
 
-#include <algorithm>
-#include <cmath>
-#include <functional>
-#include <memory>
 
 namespace planning
 {
 namespace
 {
+// 좌표변환 helper 
 geometry_msgs::msg::Point to_point(const PlanningNode::LanePoint & lane_pt, double z)
 {
   geometry_msgs::msg::Point pt;
@@ -26,14 +24,13 @@ geometry_msgs::msg::Point to_point(const PlanningNode::LanePoint & lane_pt, doub
 }
 }
 
-PlanningNode::PlanningNode()
-: rclcpp::Node("planning_node")
+PlanningNode::PlanningNode(): rclcpp::Node("planning_node")
 {
   // ---- 파라미터 로딩: IPM 스케일, 차선 폭, 경로 길이 등 ----
-  frame_id_ = declare_parameter("frame_id", "base_link");
+  frame_id_ = declare_parameter("frame_id", "map");
   pixel_scale_x_ = declare_parameter("pixel_scale_x", 0.01);  // m per pixel (좌우)
   pixel_scale_y_ = declare_parameter("pixel_scale_y", 0.01);  // m per pixel (전방)
-  ipm_height_ = declare_parameter("ipm_height", 800.0);
+  ipm_height_ = declare_parameter("ipm_height", 640.0);
   ipm_center_x_ = declare_parameter("ipm_center_x", 400.0);
   flip_y_axis_ = declare_parameter("flip_y_axis", true);
   lane_half_width_ = declare_parameter("lane_half_width", 1.75);

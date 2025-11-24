@@ -20,6 +20,9 @@
 #include <stdint.h>
 #include <Eigen/Eigen>
 #include <Eigen/Dense>
+#include <optional>
+#include <functional>
+#include <memory>
 
 #include <limits>  // std::numeric_limits
 
