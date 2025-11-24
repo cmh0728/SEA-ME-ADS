@@ -15,8 +15,15 @@ find_package(perception REQUIRED)
 
 add_executable(planning_node src/planning_node.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/../global/global.cpp)
-target_include_directories(planning_node PRIVATE include)
-ament_target_dependencies(planning_node
+
+target_include_directories(planning_node
+  PRIVATE
+    include
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${EIGEN3_INCLUDE_DIRS}   
+)
+
+  ament_target_dependencies(planning_node
   rclcpp
   geometry_msgs
   nav_msgs
