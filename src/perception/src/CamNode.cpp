@@ -399,10 +399,10 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             camera_data->arst_KalmanObject[camera_data->s32_KalmanObjectNum] = st_KalmanObject; // 배열에 push
             camera_data->s32_KalmanObjectNum += 1;
 
-            // 보라색 선 그리기 
+            // 초록색 선 그리기 
             DrawDrivingLane(g_ResultImage,
                             st_KalmanObject.st_LaneCoefficient,
-                            cv::Scalar(255, 0, 255));
+                            cv::Scalar(0,255,0));
         }
 
 
@@ -441,10 +441,10 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             camera_data->arst_KalmanObject[camera_data->s32_KalmanObjectNum] = st_KalmanObject;
             camera_data->s32_KalmanObjectNum += 1;
 
-            // 흰색 선 그리기
+            // 파랑색 선 그리기
             DrawDrivingLane(g_ResultImage,
                             st_KalmanObject.st_LaneCoefficient,
-                            cv::Scalar(255, 255, 255));
+                            cv::Scalar(255, 0, 0));
         }
 
     }
@@ -515,11 +515,11 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
                     if (s32_J == 0)
                         DrawDrivingLane(g_ResultImage,
                                         camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient,
-                                        cv::Scalar(255, 0, 255));
+                                        cv::Scalar(0,255,0)); // 초록색 선 그리기
                     else if (s32_J == 1)
                         DrawDrivingLane(g_ResultImage,
                                         camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient,
-                                        cv::Scalar(255, 255, 255));
+                                        cv::Scalar(255, 0, 0)); // 파랑색 선 그리기
 
                     b_SameObj = true;
                     break;
@@ -540,7 +540,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
                     // 예측값으로 차선 그리기 
                     DrawDrivingLane(g_ResultImage,
                                     camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient,
-                                    cv::Scalar(255, 255, 0));
+                                    cv::Scalar(0, 0, 255)); // 예측값은 빨강색
                 }
                 else // 30프레임 안에 관측값 매칭 실패하면 차선 추적 종료. 칼만객체 삭제 
                 {
@@ -589,10 +589,10 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             camera_data->arst_KalmanObject[camera_data->s32_KalmanObjectNum] = st_KalmanObject; // 배열에 push
             camera_data->s32_KalmanObjectNum += 1;
 
-            // 보라색 선 그리기 
+            // 초록색 선 그리기 
             DrawDrivingLane(g_ResultImage,
                             st_KalmanObject.st_LaneCoefficient,
-                            cv::Scalar(255, 0, 255));
+                            cv::Scalar(0,255,0)); // 초록색선
     }
 
     // 오른쪽도 동일
@@ -629,10 +629,10 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             camera_data->arst_KalmanObject[camera_data->s32_KalmanObjectNum] = st_KalmanObject;
             camera_data->s32_KalmanObjectNum += 1;
 
-            // 흰색 선 그리기
+            // 파랑색 선 그리기
             DrawDrivingLane(g_ResultImage,
                             st_KalmanObject.st_LaneCoefficient,
-                            cv::Scalar(255, 255, 255));
+                            cv::Scalar(255, 0, 0));
     }
 
     // =======================  칼만 결과 기반 consistency 보정 ========================
@@ -695,59 +695,45 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
         if (!b_NoLaneLeft) {
             DrawDrivingLane(ransac_debug,
                             st_LaneInfoLeftMain.st_LaneCoefficient,
-                            cv::Scalar(255, 0, 0));   // 파란/빨간 아무 색
+                            cv::Scalar(255, 0, 0));   // 왼쪽 차선 파랑색
         }
 
         if (!b_NoLaneRight) {
             DrawDrivingLane(ransac_debug,
                             st_LaneInfoRightMain.st_LaneCoefficient,
-                            cv::Scalar(0, 0, 255));
+                            cv::Scalar(0, 0, 255)); // 오른쪽은 빨간색
         }
 
         cv::imshow("RANSAC Debug", ransac_debug);   // RANSAC 전용 창
         // =======================  RANSAC 디버그 창 ===========================
 
-        // ---------- [추가] IPM 상 차선 폭 계산 + 출력 ---------- //
-        {
-            LANE_COEFFICIENT kalman_left, kalman_right;
-            bool has_left = false, has_right = false;
+        // // ---------- IPM 상 차선 폭 계산 + 출력 ---------- //
+        // {
+        //     LANE_COEFFICIENT kalman_left, kalman_right;
+        //     bool has_left = false, has_right = false;
 
-            if (get_lane_coef_from_kalman(*camera_data,
-                                          kalman_left, kalman_right,
-                                          has_left, has_right)
-                && has_left && has_right)
-            {
-                double width_px = 0.0;
-                double angle_diff_deg = 0.0;
-                int H = camera_data->st_CameraParameter.s32_RemapHeight;
+        //     if (get_lane_coef_from_kalman(*camera_data,
+        //                                   kalman_left, kalman_right,
+        //                                   has_left, has_right)
+        //         && has_left && has_right)
+        //     {
+        //         double width_px = 0.0;
+        //         double angle_diff_deg = 0.0;
+        //         int H = camera_data->st_CameraParameter.s32_RemapHeight;
 
-                if (ComputeLaneWidthAngle(kalman_left,
-                                          kalman_right,
-                                          H,
-                                          width_px,
-                                          angle_diff_deg))
-                {
-                    // 콘솔 출력 --> 530 
-                    // std::cout << "[IPM] lane width: " << std::fixed << std::setprecision(1) << width_px << " px" << std::endl;
+        //         if (ComputeLaneWidthAngle(kalman_left,
+        //                                   kalman_right,
+        //                                   H,
+        //                                   width_px,
+        //                                   angle_diff_deg))
+        //         {
+        //             // 콘솔 출력 --> 530 
+        //             // std::cout << "[IPM] lane width: " << std::fixed << std::setprecision(1) << width_px << " px" << std::endl;
 
-                    // RANSAC 디버그 이미지에 텍스트로 표시
-                    std::ostringstream oss;
-                    oss << "width: " << std::fixed << std::setprecision(1)
-                        << width_px << " px";
-
-                    cv::putText(
-                        ransac_debug,
-                        oss.str(),
-                        cv::Point(30, H - 30),              // 화면 왼쪽 아래 근처
-                        cv::FONT_HERSHEY_SIMPLEX,
-                        0.7,
-                        cv::Scalar(0, 255, 0),              // 녹색
-                        2
-                    );
-                }
-            }
-        }
-        // ---------- [추가 끝] --------------------------------- //
+        //         }
+        //     }
+        // }
+        // // ---------- 차폭계산 , 출력 --------------------------------- //
 
         cv::imshow("st_ResultImage", g_ResultImage); // 차선 + Kalman 결과
         cv::waitKey(1);
