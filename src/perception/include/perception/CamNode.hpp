@@ -116,11 +116,10 @@ bool EnforceLaneConsistencyAnchor(LANE_COEFFICIENT& left,
                                   int img_height,
                                   bool left_anchor,
                                   double target_width_px,
-                                  double min_width_px,
-                                  double max_width_px,
-                                  double max_angle_diff_deg,
-                                  double alpha_anchor_pos,
-                                  double alpha_other_pos,
-                                  double alpha_anchor_slope,
-                                  double alpha_other_slope);
-                              
+                                  double min_width_px      = 120.0,
+                                  double max_width_px      = 400.0,
+                                  double max_angle_diff_deg = 8.0,
+                                  double alpha_anchor_pos   = 0.1,
+                                  double alpha_other_pos    = 0.7,
+                                  double alpha_anchor_slope = 0.2,
+                                  double alpha_other_slope  = 0.6);
