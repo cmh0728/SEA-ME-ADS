@@ -323,10 +323,10 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     
     // ======================= RANSAC으로 차선 계수 산출 ====================
 
-    // RANSAC으로 차선 계수 산출 , 셈플 4개 미만이면 차선 없는걸로 간주  --> sample count는 윈도우당 1개 
-    if (st_LaneInfoLeft.s32_SampleCount < 4)
+    // RANSAC으로 차선 계수 산출 , 셈플 6개 미만이면 차선 없는걸로 간주  --> sample count는 윈도우당 1개 
+    if (st_LaneInfoLeft.s32_SampleCount < 6)
         b_NoLaneLeft = true;
-    if (st_LaneInfoRight.s32_SampleCount < 4)
+    if (st_LaneInfoRight.s32_SampleCount < 6)
         b_NoLaneRight = true;
 
     const int32_t BASE_ITER = 500;  // 기본 RANSAC 반복 수 (튜닝 가능)
