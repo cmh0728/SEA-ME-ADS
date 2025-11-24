@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "rclcpp/rclcpp.hpp"
+
 #include "geometry_msgs/msg/point.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav_msgs/msg/path.hpp"
@@ -67,14 +68,18 @@ private:
     const std::string & ns,
     double r, double g, double b) const;
 
+  visualization_msgs::msg::Marker make_delete_marker(
+    int id,
+    const std::string & ns) const;
+
 private:
   // 파라미터
-  std::string frame_id_;     // 기본: "base_link" (원하면 launch/yaml에서 "map"으로 override)
+  std::string frame_id_;     // 기본: "base_link"
   double pixel_scale_x_;     // m per pixel (좌우)
   double pixel_scale_y_;     // m per pixel (전방)
   double ipm_height_;        // IPM 이미지 세로 픽셀 수 (RemapHeight)
   double ipm_center_x_;      // IPM 상에서 차량 중심 x 픽셀
-  bool   flip_y_axis_;       // IPM y축 뒤집을지 여부 (위=가까운 쪽으로 맞추기용)
+  bool   flip_y_axis_;       // IPM y축 뒤집을지 여부
 
   double lane_half_width_;   // 한 차선 폭의 절반 [m]
   double resample_step_;     // 중앙선 리샘플링 간격 [m]
@@ -82,15 +87,19 @@ private:
   double start_offset_y_;    // 차량 기준 y offset [m]
   double marker_z_;          // z 높이 [m] (시각화용)
 
+  double lane_timeout_sec_;  // 이 시간 이상 새 메시지 없으면 “없는 차선”으로 취급
+
   // ROS 통신
   rclcpp::Subscription<perception::msg::Lane>::SharedPtr lane_left_sub_;
   rclcpp::Subscription<perception::msg::Lane>::SharedPtr lane_right_sub_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
 
-  // 최신 차선 메시지 저장
+  // 최신 차선 메시지 & 마지막 수신 시각
   perception::msg::Lane::ConstSharedPtr latest_left_;
   perception::msg::Lane::ConstSharedPtr latest_right_;
+  rclcpp::Time last_left_stamp_;
+  rclcpp::Time last_right_stamp_;
 };
 
 }  // namespace planning

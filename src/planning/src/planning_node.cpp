@@ -4,7 +4,7 @@ namespace planning
 {
 namespace
 {
-// LanePoint(차량 기준 좌표) → geometry_msgs/Point (ROS 좌표)
+// LanePoint(차량 기준 좌표) → geometry_msgs::Point (ROS 좌표)
 // x: forward, y: left(+)/right(-)
 geometry_msgs::msg::Point to_point(const PlanningNode::LanePoint & lane_pt, double z)
 {
@@ -18,10 +18,8 @@ geometry_msgs::msg::Point to_point(const PlanningNode::LanePoint & lane_pt, doub
 
 // =======================================
 // PlanningNode main flow
-// 1) /lane/left, /lane/right 차선 메시지를 수신하고 차량 기준 좌표로 변환한다.
-//    - lane 토픽: IPM top-view 이미지 기준 픽셀 좌표
-//    - LanePoint: 차량 기준 평면 좌표 (x:좌우, y:전방) [m]
-// 2) 좌/우 차선으로부터 중앙선을 추정하고 리샘플링하여 waypoint/path 생성.
+// 1) /lane/left, /lane/right 차선 메시지를 수신하고 차량 기준 좌표로 변환.
+// 2) 좌/우 차선으로부터 중앙선 추정 + 리샘플링 → waypoint/path 생성.
 // 3) nav_msgs/Path, MarkerArray 퍼블리시 → RViz에서 차선/경로 확인.
 // =======================================
 
@@ -29,7 +27,7 @@ PlanningNode::PlanningNode()
 : rclcpp::Node("planning_node")
 {
   // ---- 파라미터 로딩: IPM 스케일, 차선 폭, 경로 길이 등 ----
-  frame_id_       = declare_parameter("frame_id", "base_link");  // 필요하면 map으로 override
+  frame_id_       = declare_parameter("frame_id", "base_link");
   pixel_scale_x_  = declare_parameter("pixel_scale_x", 0.01);    // m per pixel (좌우)
   pixel_scale_y_  = declare_parameter("pixel_scale_y", 0.01);    // m per pixel (전방)
   ipm_height_     = declare_parameter("ipm_height", 640.0);
@@ -41,6 +39,11 @@ PlanningNode::PlanningNode()
   max_path_length_  = declare_parameter("max_path_length", 30.0);
   start_offset_y_   = declare_parameter("start_offset_y", 0.0);
   marker_z_         = declare_parameter("marker_z", 0.0);
+
+  lane_timeout_sec_ = declare_parameter("lane_timeout_sec", 0.2);  // 200 ms 기본
+
+  last_left_stamp_  = this->now();
+  last_right_stamp_ = this->now();
 
   auto qos = rclcpp::QoS(rclcpp::KeepLast(10));
 
@@ -64,6 +67,8 @@ PlanningNode::PlanningNode()
 void PlanningNode::on_left_lane(const perception::msg::Lane::ConstSharedPtr msg)
 {
   latest_left_ = msg;
+  // perception::msg::Lane header 안 채워져 있을 가능성 높아서 그냥 수신 시각 사용
+  last_left_stamp_ = this->now();
   process_lanes();
 }
 
@@ -71,28 +76,61 @@ void PlanningNode::on_left_lane(const perception::msg::Lane::ConstSharedPtr msg)
 void PlanningNode::on_right_lane(const perception::msg::Lane::ConstSharedPtr msg)
 {
   latest_right_ = msg;
+  last_right_stamp_ = this->now();
   process_lanes();
 }
 
-// 좌/우 차선 최신값을 사용해 path 생성
+// 좌/우 차선 최신값을 사용해 path + markers 생성
 void PlanningNode::process_lanes()
 {
-  if (!latest_left_ && !latest_right_) {
-    return;
+  const auto now = this->now();
+  const rclcpp::Duration timeout = rclcpp::Duration::from_seconds(lane_timeout_sec_);
+
+  std::vector<LanePoint> left_pts;
+  std::vector<LanePoint> right_pts;
+
+  // timeout 이내에 들어온 메시지만 유효하게 사용
+  if (latest_left_ && (now - last_left_stamp_) <= timeout) {
+    left_pts = convert_lane(latest_left_);
   }
 
-  // 차선 메시지를 차량 기준 좌표(LanePoint)로 변환
-  const auto left_pts  = convert_lane(latest_left_);
-  const auto right_pts = convert_lane(latest_right_);
+  if (latest_right_ && (now - last_right_stamp_) <= timeout) {
+    right_pts = convert_lane(latest_right_);
+  }
+
+  // 둘 다 유효하지 않으면 path/marker 지우고 리턴
+  if (left_pts.empty() && right_pts.empty())
+  {
+    // Path 비우기
+    nav_msgs::msg::Path empty_path;
+    empty_path.header.stamp = now;
+    empty_path.header.frame_id = frame_id_;
+    path_pub_->publish(empty_path);
+
+    // Marker 전부 삭제
+    visualization_msgs::msg::MarkerArray del_array;
+    del_array.markers.push_back(make_delete_marker(0, "lane_left"));
+    del_array.markers.push_back(make_delete_marker(1, "lane_right"));
+    del_array.markers.push_back(make_delete_marker(2, "centerline"));
+    marker_pub_->publish(del_array);
+
+    return;
+  }
 
   std::vector<LanePoint> centerline;
-  if (!build_centerline(left_pts, right_pts, centerline)) {
+  if (!build_centerline(left_pts, right_pts, centerline))
+  {
     RCLCPP_DEBUG(get_logger(), "Insufficient lane data for path");
+
+    // centerline 이 아예 안 만들어졌으면 centerline marker만 삭제
+    visualization_msgs::msg::MarkerArray del_array;
+    del_array.markers.push_back(make_delete_marker(2, "centerline"));
+    marker_pub_->publish(del_array);
     return;
   }
 
-  publish_path(centerline);                       // waypoint/path 퍼블리시
-  publish_markers(left_pts, right_pts, centerline);  // RViz용 마커
+  publish_path(centerline);
+  publish_markers(left_pts, right_pts, centerline);
 }
 
 // perception::msg::Lane(IPM 픽셀) → LanePoint(차량 기준 [m])
@@ -115,7 +153,7 @@ std::vector<PlanningNode::LanePoint> PlanningNode::convert_lane(
 
     LanePoint lane_pt;
 
-    // ✅ 좌우 방향: 왼쪽(+), 오른쪽(-) 이 되도록 부호 정리
+    // 좌우 방향: 왼쪽(+), 오른쪽(-)
     // IPM: pt.x < ipm_center_x_ → 왼쪽
     lane_pt.x = (ipm_center_x_ - static_cast<double>(pt.x)) * pixel_scale_x_;
 
@@ -179,10 +217,12 @@ bool PlanningNode::build_centerline(
   }
 
   const double y_end = start_offset_y_ + max_path_length_;
+
   for (double y = start_offset_y_; y <= y_end; y += resample_step_)
   {
     auto left_x  = sample_lane(left, y);
     auto right_x = sample_lane(right, y);
+
     if (!left_x && !right_x) {
       continue;
     }
@@ -194,10 +234,10 @@ bool PlanningNode::build_centerline(
       // 양쪽 차선 모두 있을 때 → 평균
       pt.x = (*left_x + *right_x) * 0.5;
     } else if (left_x) {
-      // 왼쪽만 있을 때 → lane_half_width_만큼 우측으로
-      pt.x = *left_x - lane_half_width_;  // 왼쪽이 +, 오른쪽이 - 이므로 -를 써야 중앙으로
+      // 왼쪽만 있을 때 → lane_half_width_만큼 오른쪽(-)으로 이동
+      pt.x = *left_x - lane_half_width_;
     } else {
-      // 오른쪽만 있을 때 → lane_half_width_만큼 좌측으로
+      // 오른쪽만 있을 때 → lane_half_width_만큼 왼쪽(+)으로 이동
       pt.x = *right_x + lane_half_width_;
     }
 
@@ -253,22 +293,31 @@ void PlanningNode::publish_markers(
 {
   visualization_msgs::msg::MarkerArray array;
 
+  // 왼쪽 차선
   if (!left.empty()) {
     array.markers.push_back(make_marker(left, 0, "lane_left", 0.2, 0.6, 1.0));
+  } else {
+    array.markers.push_back(make_delete_marker(0, "lane_left"));
   }
+
+  // 오른쪽 차선
   if (!right.empty()) {
     array.markers.push_back(make_marker(right, 1, "lane_right", 1.0, 0.6, 0.2));
+  } else {
+    array.markers.push_back(make_delete_marker(1, "lane_right"));
   }
+
+  // 중앙선
   if (!centerline.empty()) {
     array.markers.push_back(make_marker(centerline, 2, "centerline", 0.1, 1.0, 0.2));
+  } else {
+    array.markers.push_back(make_delete_marker(2, "centerline"));
   }
 
-  if (!array.markers.empty()) {
-    marker_pub_->publish(array);
-  }
+  marker_pub_->publish(array);
 }
 
-// Marker 하나 생성
+// 실제 차선 라인 Marker
 visualization_msgs::msg::Marker PlanningNode::make_marker(
   const std::vector<LanePoint> & lane,
   int id,
@@ -294,6 +343,20 @@ visualization_msgs::msg::Marker PlanningNode::make_marker(
     marker.points.push_back(to_point(pt, marker_z_));
   }
 
+  return marker;
+}
+
+// 기존 Marker 삭제용
+visualization_msgs::msg::Marker PlanningNode::make_delete_marker(
+  int id,
+  const std::string & ns) const
+{
+  visualization_msgs::msg::Marker marker;
+  marker.header.frame_id = frame_id_;
+  marker.header.stamp = now();
+  marker.ns = ns;
+  marker.id = id;
+  marker.action = visualization_msgs::msg::Marker::DELETE;
   return marker;
 }
 
