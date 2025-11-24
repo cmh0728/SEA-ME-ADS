@@ -20,6 +20,7 @@ target_include_directories(planning_node
   PRIVATE
     include
     ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${OpenCV_INCLUDE_DIRS}
     ${EIGEN3_INCLUDE_DIRS}   
 )
 
