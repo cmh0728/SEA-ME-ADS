@@ -21,7 +21,7 @@ CAMERA_LANEINFO st_LaneInfoRightMain{};
 // 시각화 옵션
 bool visualize = true;
 bool track_bar = false;
-bool vis_slidingwindow = false;
+bool vis_slidingwindow = true;
 static CAMERA_DATA static_camera_data;
 
 // ransac 난수 초기화 전역설정
