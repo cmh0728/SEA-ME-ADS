@@ -3,11 +3,6 @@
 #include "perception/CamNode.hpp"
 #include "perception/msg/lane_pnt.hpp"
 
-// ransac 난수 초기화 전역설정
-struct RansacRandomInit {
-    RansacRandomInit() { std::srand(static_cast<unsigned int>(std::time(nullptr))); }
-} g_ransacRandomInit;
-
 //################################################## Global parameter ##################################################//
 
 
@@ -26,6 +21,11 @@ bool visualize = true;
 bool track_bar = false;
 bool b_IsprevHistogram = false;
 static CAMERA_DATA static_camera_data;
+
+// ransac 난수 초기화 전역설정
+struct RansacRandomInit {
+    RansacRandomInit() { std::srand(static_cast<unsigned int>(std::time(nullptr))); }
+} g_ransacRandomInit;
 
 //################################################## helper function ##################################################//
 
@@ -809,15 +809,17 @@ void InitializeKalmanObject(LANE_KALMAN& st_KalmanObject)
                             0   , 0   , 0.01, 0,
                             0   , 0   , 0   , 0.01;
 
+    // Q 작으면 상태가 거의 안 바뀐다는 가정 
     st_KalmanObject.st_Q << 0.0001 , 0   , 0   , 0,
                             0   , 0.0001 , 0   , 0,
                             0   , 0   , 0.0001 , 0,
                             0   , 0   , 0   , 0.0001;
 
-    st_KalmanObject.st_R << 1   , 0   , 0   , 0,
-                            0   , 1   , 0   , 0,
-                            0   , 0   , 1   , 0,
-                            0   , 0   , 0   , 1;
+    // R 측정 노이즈 공분산 행렬 --> 값이 크면 측정값 신뢰도 낮음 
+    st_KalmanObject.st_R << 5   , 0   , 0   , 0,
+                            0   , 10   , 0   , 0,
+                            0   , 0   , 20   , 0,
+                            0   , 0   , 0   , 30;
 
     st_KalmanObject.st_X.setZero();
     st_KalmanObject.st_PrevX.setZero();
