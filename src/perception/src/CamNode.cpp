@@ -19,7 +19,7 @@ CAMERA_LANEINFO st_LaneInfoLeftMain{};
 CAMERA_LANEINFO st_LaneInfoRightMain{};
 
 // 시각화 옵션
-bool visualize = true;
+bool visualize = false;
 bool track_bar = false;
 bool vis_slidingwindow = true; // sliding window 시각화 --> 성능에 영향을 주고있음
 static CAMERA_DATA static_camera_data;
@@ -695,7 +695,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     if (visualize)
     {
         // cv::imshow("IPM", g_IpmImg);          // 탑뷰
-        cv::imshow("Temp_Img", g_TempImg);    // 현재는 sliding window 결과
+        // cv::imshow("Temp_Img", g_TempImg);    // 현재는 sliding window 결과
 
         // =======================  RANSAC 디버그 창 ===========================
         cv::Mat ransac_debug;
