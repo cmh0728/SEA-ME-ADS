@@ -17,9 +17,11 @@ bool b_NoLaneLeft = false;
 bool b_NoLaneRight = false;
 CAMERA_LANEINFO st_LaneInfoLeftMain{};
 CAMERA_LANEINFO st_LaneInfoRightMain{};
+
+// 시각화 옵션
 bool visualize = true;
 bool track_bar = false;
-bool b_IsprevHistogram = false;
+bool vis_slidingwindow = false;
 static CAMERA_DATA static_camera_data;
 
 // ransac 난수 초기화 전역설정
@@ -901,9 +903,6 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
     bool b_ValidWindowLeft  = true;
     bool b_ValidWindowRight = true;
 
-    // 디버그용 이미지 (선택 포인트를 색칠)
-    cv::Mat st_DetectedLane(st_EdgeImage.size(), CV_8UC3, cv::Scalar(0, 0, 0));
-
     // RANSAC용 샘플 개수 초기화
     st_LaneInfoLeft.s32_SampleCount  = 0;
     st_LaneInfoRight.s32_SampleCount = 0;
@@ -976,12 +975,15 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
                 }
 
                 // 디버그용 윈도우 시각화
+                if(vis_slidingwindow)
+                {
                 cv::rectangle(
                     st_EdgeImage,
                     cv::Point(s32_WindowMinWidthLeft,  s32_WindowMinHeight),
                     cv::Point(s32_WindowMaxWidthLeft,  s32_WindowHeight),
                     cv::Scalar(255, 255, 255),
                     2);
+                }
             }
 
             // ---- 이번 윈도우에서 유효한 차선 조각을 못 찾은 경우 ----
@@ -1010,9 +1012,6 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
                     if (st_Position.y >= s32_WindowMinHeight && st_Position.y <= s32_WindowHeight &&
                         st_Position.x >= s32_WindowMinWidthLeft && st_Position.x <= s32_WindowMaxWidthLeft)
                     {
-                        // 디버깅용 색칠
-                        st_DetectedLane.at<cv::Vec3b>(st_Position.y, st_Position.x) = cv::Vec3b(255, 0, 0);
-
                         // 윈도우 중심 + 이미지 중심 복합 스코어
                         double d_window = std::abs(st_Position.x - window_center_x_left);
                         double d_global = std::abs(st_Position.x - img_center_x);
@@ -1064,12 +1063,15 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
                     }
                 }
 
+                if(vis_slidingwindow)
+                {
                 cv::rectangle(
                     st_EdgeImage,
                     cv::Point(s32_WindowMinWidthRight,  s32_WindowMinHeight),
                     cv::Point(s32_WindowMaxWidthRight,  s32_WindowHeight),
                     cv::Scalar(255, 255, 255),
                     2);
+                }
             }
 
             if (!b_CheckValidWindowRight)
@@ -1094,7 +1096,6 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
                     if (st_Position.y >= s32_WindowMinHeight && st_Position.y <= s32_WindowHeight &&
                         st_Position.x >= s32_WindowMinWidthRight && st_Position.x <= s32_WindowMaxWidthRight)
                     {
-                        st_DetectedLane.at<cv::Vec3b>(st_Position.y, st_Position.x) = cv::Vec3b(0, 0, 255);
 
                         double d_window = std::abs(st_Position.x - window_center_x_right);
                         double d_global = std::abs(st_Position.x - img_center_x);
