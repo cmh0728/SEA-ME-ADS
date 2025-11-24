@@ -13,7 +13,8 @@ find_package(visualization_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(perception REQUIRED)
 
-add_executable(planning_node src/planning_node.cpp)
+add_executable(planning_node src/planning_node.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../global/global.cpp)
 target_include_directories(planning_node PRIVATE include)
 ament_target_dependencies(planning_node
   rclcpp

@@ -32,7 +32,7 @@ target_include_directories(CameraProcessing
     include
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${OpenCV_INCLUDE_DIRS}
-    ${EIGEN3_INCLUDE_DIRS}   # <- 이 줄 추가
+    ${EIGEN3_INCLUDE_DIRS}   
 )
 
 
@@ -42,11 +42,11 @@ ament_target_dependencies(CameraProcessing
   cv_bridge
   OpenCV
   yaml-cpp
-  # Eigen3 는 여기 넣지 말자 (ament 패키지가 아니라서)
+  
 )
 
 target_link_libraries(CameraProcessing
-  Eigen3::Eigen              # <- Eigen 링크는 여기서
+  Eigen3::Eigen              
   ${OpenCV_LIBRARIES}
   yaml-cpp
 )
