@@ -810,10 +810,10 @@ void InitializeKalmanObject(LANE_KALMAN& st_KalmanObject)
                             0   , 0   , 0   , 0.01;
 
     // Q 작으면 상태가 거의 안 바뀐다는 가정 
-    st_KalmanObject.st_Q << 0.0001 , 0   , 0   , 0,
-                            0   , 0.0001 , 0   , 0,
-                            0   , 0   , 0.0001 , 0,
-                            0   , 0   , 0   , 0.0001;
+    st_KalmanObject.st_Q << 0.001 , 0   , 0   , 0,
+                            0   , 0.001 , 0   , 0,
+                            0   , 0   , 0.001 , 0,
+                            0   , 0   , 0   , 0.001;
 
     // R 측정 노이즈 공분산 행렬 --> 값이 크면 측정값 신뢰도 낮음 
     st_KalmanObject.st_R << 5   , 0   , 0   , 0,
