@@ -65,6 +65,13 @@ void on_trackbar(int, void*)
     // 트랙바 콜백은 안 써도 됨. 값은 전역 변수에 자동으로 들어감.
 }
 
+// 픽셀폭 계산
+static bool ComputeLaneWidthAngle(const LANE_COEFFICIENT& left,
+                                  const LANE_COEFFICIENT& right,
+                                  int img_height,
+                                  double& width_px,
+                                  double& angle_diff_deg);
+
 //################################################## CameraProcessing class functions ##################################################//
 
 // RealSense 이미지 토픽을 구독하고 시각화 창을 준비하는 ROS 노드 생성자
@@ -700,6 +707,51 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
 
         cv::imshow("RANSAC Debug", ransac_debug);   // RANSAC 전용 창
         // =======================  RANSAC 디버그 창 ===========================
+
+        // ---------- [추가] IPM 상 차선 폭 계산 + 출력 ---------- //
+        {
+            LANE_COEFFICIENT kalman_left, kalman_right;
+            bool has_left = false, has_right = false;
+
+            if (get_lane_coef_from_kalman(*camera_data,
+                                          kalman_left, kalman_right,
+                                          has_left, has_right)
+                && has_left && has_right)
+            {
+                double width_px = 0.0;
+                double angle_diff_deg = 0.0;
+                int H = camera_data->st_CameraParameter.s32_RemapHeight;
+
+                if (ComputeLaneWidthAngle(kalman_left,
+                                          kalman_right,
+                                          H,
+                                          width_px,
+                                          angle_diff_deg))
+                {
+                    // 콘솔 출력
+                    std::cout << "[IPM] lane width: "
+                              << std::fixed << std::setprecision(1)
+                              << width_px << " px"
+                              << std::endl;
+
+                    // RANSAC 디버그 이미지에 텍스트로 표시
+                    std::ostringstream oss;
+                    oss << "width: " << std::fixed << std::setprecision(1)
+                        << width_px << " px";
+
+                    cv::putText(
+                        ransac_debug,
+                        oss.str(),
+                        cv::Point(30, H - 30),              // 화면 왼쪽 아래 근처
+                        cv::FONT_HERSHEY_SIMPLEX,
+                        0.7,
+                        cv::Scalar(0, 255, 0),              // 녹색
+                        2
+                    );
+                }
+            }
+        }
+        // ---------- [추가 끝] --------------------------------- //
 
         cv::imshow("st_ResultImage", g_ResultImage); // 차선 + Kalman 결과
         cv::waitKey(1);

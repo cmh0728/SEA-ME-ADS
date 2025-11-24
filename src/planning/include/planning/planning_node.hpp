@@ -1,5 +1,6 @@
 #pragma once
 
+#include "global/global.hpp"
 #include <algorithm>
 #include <cmath>
 #include <memory>
@@ -8,7 +9,6 @@
 #include <vector>
 
 #include "rclcpp/rclcpp.hpp"
-
 #include "geometry_msgs/msg/point.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav_msgs/msg/path.hpp"
