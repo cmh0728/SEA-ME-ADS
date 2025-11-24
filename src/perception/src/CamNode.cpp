@@ -686,7 +686,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     if (visualize)
     {
         // cv::imshow("IPM", g_IpmImg);          // 탑뷰
-        // cv::imshow("Temp_Img", g_TempImg);    // 현재는 sliding window 결과
+        cv::imshow("Temp_Img", g_TempImg);    // 현재는 sliding window 결과
 
         // =======================  RANSAC 디버그 창 ===========================
         cv::Mat ransac_debug;
@@ -930,7 +930,7 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
     // 윈도우 파라미터
     int32_t s32_WindowHeight = rows - 1;        // 현재 윈도우의 "아래쪽" y (맨 아래에서 시작)
     const int32_t s32_MarginX = 30;             // 윈도우 가로 반폭
-    const int32_t s32_MarginY = 70;             // 윈도우 세로 높이 --> 일단 70으로 사용 
+    const int32_t s32_MarginY = 50;             // 윈도우 세로 높이 --> 윈도우 총 개수를 결정
     int32_t s32_I, s32_CentorX, s32_CentorY;
 
     // 유효 윈도우 유지 여부
