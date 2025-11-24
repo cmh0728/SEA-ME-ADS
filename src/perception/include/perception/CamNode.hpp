@@ -110,3 +110,17 @@ bool get_lane_coef_from_kalman(const CAMERA_DATA& cam_data,
                                LANE_COEFFICIENT& right_coef,
                                bool& has_left,
                                bool& has_right);
+
+bool EnforceLaneConsistencyAnchor(LANE_COEFFICIENT& left,
+                                  LANE_COEFFICIENT& right,
+                                  int img_height,
+                                  bool left_anchor,
+                                  double target_width_px,
+                                  double min_width_px,
+                                  double max_width_px,
+                                  double max_angle_diff_deg,
+                                  double alpha_anchor_pos,
+                                  double alpha_other_pos,
+                                  double alpha_anchor_slope,
+                                  double alpha_other_slope);
+                              

@@ -626,6 +626,54 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
                             cv::Scalar(255, 255, 255));
     }
 
+    // =======================  칼만 결과 기반 consistency 보정 ========================
+    {
+        LANE_COEFFICIENT kalman_left, kalman_right;
+        bool has_left  = false;
+        bool has_right = false;
+
+        // 현재 프레임에서 칼만 객체로부터 coef 뽑기
+        get_lane_coef_from_kalman(*camera_data,
+                                  kalman_left, kalman_right,
+                                  has_left, has_right);
+
+        // RANSAC sample 개수 기반 신뢰도
+        double conf_left  = static_cast<double>(st_LaneInfoLeft.s32_SampleCount);
+        double conf_right = static_cast<double>(st_LaneInfoRight.s32_SampleCount);
+
+        if (has_left && has_right &&
+            st_LaneInfoLeft.s32_SampleCount  > 0 &&
+            st_LaneInfoRight.s32_SampleCount > 0)
+        {
+            bool left_anchor = (conf_left >= conf_right);
+
+            // IPM 상에서 기대 차선 폭(px) - rosbag 보면서 대충 측정해서 튜닝
+            double expected_width_px =
+                250.0;  // ← 이 값은 나중에 네가 실제 환경에서 맞춰줘
+
+            bool ok = EnforceLaneConsistencyAnchor(
+                kalman_left,
+                kalman_right,
+                camera_data->st_CameraParameter.s32_RemapHeight,
+                left_anchor,
+                expected_width_px
+            );
+
+            if (ok) {
+                // 보정된 coef를 다시 칼만 객체에 반영
+                for (int i = 0; i < camera_data->s32_KalmanObjectNum; ++i)
+                {
+                    auto& obj = camera_data->arst_KalmanObject[i];
+                    if (obj.b_IsLeft) {
+                        obj.st_LaneCoefficient = kalman_left;
+                    } else {
+                        obj.st_LaneCoefficient = kalman_right;
+                    }
+                }
+            }
+        }
+    }
+
     // =======================  (H) Debug GUI ================================
     if (visualize)
     {
@@ -1361,6 +1409,115 @@ bool get_lane_coef_from_kalman(const CAMERA_DATA& cam_data,
 
     return has_left || has_right;
 }
+
+// ======================= Lane pair consistency (anchor 기반) ======================= //
+
+// 두 직선에서 폭/각도 계산
+static bool ComputeLaneWidthAngle(const LANE_COEFFICIENT& left,
+                                  const LANE_COEFFICIENT& right,
+                                  int img_height,
+                                  double& width_px,
+                                  double& angle_diff_deg)
+{
+    if (std::abs(left.f64_Slope) < 1e-6 || std::abs(right.f64_Slope) < 1e-6) {
+        return false;
+    }
+
+    // 바닥 쪽에서 폭 측정 (IPM에서 rows-1가 차량 가까운 쪽이라고 가정)
+    double y_ref = img_height - 1;
+
+    double xL = (y_ref - left.f64_Intercept)  / left.f64_Slope;
+    double xR = (y_ref - right.f64_Intercept) / right.f64_Slope;
+
+    if (!std::isfinite(xL) || !std::isfinite(xR)) return false;
+    if (xR <= xL) return false;   // 왼쪽/오른쪽 뒤바뀐 이상 상황
+
+    width_px = xR - xL;
+
+    // 각도 (deg)
+    double theta_left  = std::atan(left.f64_Slope)  * 180.0 / M_PI;
+    double theta_right = std::atan(right.f64_Slope) * 180.0 / M_PI;
+    angle_diff_deg     = std::abs(theta_left - theta_right);
+
+    return std::isfinite(width_px) && std::isfinite(angle_diff_deg);
+}
+
+// anchor 기반으로 폭 + 기울기 consistency 맞추기
+static bool EnforceLaneConsistencyAnchor(LANE_COEFFICIENT& left,
+                                         LANE_COEFFICIENT& right,
+                                         int img_height,
+                                         bool left_anchor,
+                                         double target_width_px,
+                                         double min_width_px      = 120.0,
+                                         double max_width_px      = 400.0,
+                                         double max_angle_diff_deg = 8.0,
+                                         double alpha_anchor_pos   = 0.1,  // anchor는 적게
+                                         double alpha_other_pos    = 0.7,  // 약한 쪽은 많이
+                                         double alpha_anchor_slope = 0.2,
+                                         double alpha_other_slope  = 0.6)
+{
+    double width_now = 0.0, angle_diff = 0.0;
+    if (!ComputeLaneWidthAngle(left, right, img_height, width_now, angle_diff)) {
+        return false;
+    }
+
+    // 폭/각도 자체가 너무 이상하면 보정 안 함 (이 프레임은 그냥 패스)
+    if (width_now < min_width_px || width_now > max_width_px) return false;
+    if (angle_diff > max_angle_diff_deg) return false;
+
+    double y_ref = img_height - 1;
+
+    double xL = (y_ref - left.f64_Intercept)  / left.f64_Slope;
+    double xR = (y_ref - right.f64_Intercept) / right.f64_Slope;
+
+    // 현재 중심 / 목표 폭 계산
+    double x_mid      = 0.5 * (xL + xR);
+    double w_target   = (1.0 - 0.4) * width_now + 0.4 * target_width_px; // 폭도 살짝만 타겟쪽으로
+    double xL_sym     = x_mid - 0.5 * w_target;
+    double xR_sym     = x_mid + 0.5 * w_target;
+
+    // 기존 기울기
+    double mL_old = left.f64_Slope;
+    double mR_old = right.f64_Slope;
+    double m_mean = 0.5 * (mL_old + mR_old);
+
+    double mL_new, mR_new;
+    double xL_new, xR_new;
+
+    if (left_anchor) {
+        // 위치 보정
+        xL_new = (1.0 - alpha_anchor_pos) * xL + alpha_anchor_pos * xL_sym;
+        xR_new = (1.0 - alpha_other_pos ) * xR + alpha_other_pos  * xR_sym;
+
+        // 기울기 보정
+        mL_new = (1.0 - alpha_anchor_slope) * mL_old + alpha_anchor_slope * m_mean;
+        mR_new = (1.0 - alpha_other_slope ) * mR_old + alpha_other_slope  * m_mean;
+    } else {
+        // 오른쪽이 anchor
+        xL_new = (1.0 - alpha_other_pos ) * xL + alpha_other_pos  * xL_sym;
+        xR_new = (1.0 - alpha_anchor_pos) * xR + alpha_anchor_pos * xR_sym;
+
+        mL_new = (1.0 - alpha_other_slope ) * mL_old + alpha_other_slope  * m_mean;
+        mR_new = (1.0 - alpha_anchor_slope) * mR_old + alpha_anchor_slope * m_mean;
+    }
+
+    // 새 y절편 (y = m x + c → c = y_ref - m x)
+    double cL_new = y_ref - mL_new * xL_new;
+    double cR_new = y_ref - mR_new * xR_new;
+
+    if (!std::isfinite(mL_new) || !std::isfinite(mR_new) ||
+        !std::isfinite(cL_new) || !std::isfinite(cR_new)) {
+        return false;
+    }
+
+    left.f64_Slope      = mL_new;
+    left.f64_Intercept  = cL_new;
+    right.f64_Slope     = mR_new;
+    right.f64_Intercept = cR_new;
+
+    return true;
+}
+
 
 
 
