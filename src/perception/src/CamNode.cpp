@@ -657,7 +657,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             bool left_anchor = (conf_left >= conf_right);
 
             // IPM 상에서 기대 차선 폭(px) 
-            double expected_width_px = 530  
+            double expected_width_px = 530 ;
 
             bool ok = EnforceLaneConsistencyAnchor(
                 kalman_left,
