@@ -488,7 +488,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
                 if (camera_data->arst_KalmanObject[s32_I].b_IsLeft != is_left_meas)
                     continue;
     
-                //같은 선인지 확인
+                //같은 선인지 확인 --> 매칭이 되어야 기존 차선이 업데이트가 됨 
                 CheckSameKalmanObject(camera_data->arst_KalmanObject[s32_I],
                                       arst_KalmanState[s32_J]);  // 동일 차선인지 비교
 
@@ -511,6 +511,9 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
                         camera_data->arst_KalmanObject[s32_I],
                         camera_data->arst_KalmanObject[s32_I].st_LaneCoefficient
                     );
+
+                    // 이번 프레임으로 데이터 업데이트(칼만객체 비교 )
+                    camera_data->arst_KalmanObject[s32_I].st_LaneState = arst_KalmanState[s32_J];
 
                     if (s32_J == 0)
                         DrawDrivingLane(g_ResultImage,
