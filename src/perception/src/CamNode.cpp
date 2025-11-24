@@ -531,7 +531,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
 
             if (!b_SameObj) // 같은 차선으로 매칭 실패한 경우 --> 예측만 수행
             {
-                if (camera_data->arst_KalmanObject[s32_I].s32_CntNoMatching < 30) // 30 프레임 (초당 30프레임-->1초)
+                if (camera_data->arst_KalmanObject[s32_I].s32_CntNoMatching < 15) // 15 프레임 기준
                 {
                     camera_data->arst_KalmanObject[s32_I].s32_CntNoMatching += 1;
 
