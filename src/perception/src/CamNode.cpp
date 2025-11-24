@@ -529,11 +529,17 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
                 }
             }
 
+            // kalman 예측 수행 
             if (!b_SameObj) // 같은 차선으로 매칭 실패한 경우 --> 예측만 수행
             {
-                if (camera_data->arst_KalmanObject[s32_I].s32_CntNoMatching < 15) // 15 프레임 기준
+
+                if (camera_data->arst_KalmanObject[s32_I].s32_CntNoMatching < 10) // 10 프레임 기준 --> 너무 길면 드리프트 갈겨버림
                 {
                     camera_data->arst_KalmanObject[s32_I].s32_CntNoMatching += 1;
+
+                    // 관측이 안 들어오는 동안에는 속도 성분을 조금씩 줄여서 드리프트 억제
+                    camera_data->arst_KalmanObject[s32_I].st_X(1) *= 0.5 ; // 거리 절반
+                    camera_data->arst_KalmanObject[s32_I].st_X(3) *= 0.5 ; // 각도 절반 
 
                     PredictState(camera_data->arst_KalmanObject[s32_I]);
                     MakeKalmanStateBasedLaneCoef(
