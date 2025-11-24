@@ -656,9 +656,8 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
         {
             bool left_anchor = (conf_left >= conf_right);
 
-            // IPM 상에서 기대 차선 폭(px) - rosbag 보면서 대충 측정해서 튜닝
-            double expected_width_px =
-                250.0;  // ← 이 값은 나중에 네가 실제 환경에서 맞춰줘
+            // IPM 상에서 기대 차선 폭(px) 
+            double expected_width_px = 530  
 
             bool ok = EnforceLaneConsistencyAnchor(
                 kalman_left,
@@ -728,11 +727,8 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
                                           width_px,
                                           angle_diff_deg))
                 {
-                    // 콘솔 출력
-                    std::cout << "[IPM] lane width: "
-                              << std::fixed << std::setprecision(1)
-                              << width_px << " px"
-                              << std::endl;
+                    // 콘솔 출력 --> 530 
+                    // std::cout << "[IPM] lane width: " << std::fixed << std::setprecision(1) << width_px << " px" << std::endl;
 
                     // RANSAC 디버그 이미지에 텍스트로 표시
                     std::ostringstream oss;
