@@ -140,9 +140,11 @@ void CameraProcessing::on_image(const sensor_msgs::msg::CompressedImage::ConstSh
   }
 }
 
+// ############################################# publish_lane_messages func #############################################//
+
+
 void CameraProcessing::publish_lane_messages()
 {
-    // 1) Kalman에서 최종 left/right coef 뽑기
     LANE_COEFFICIENT left_coef, right_coef;
     bool has_left = false, has_right = false;
 
@@ -151,21 +153,20 @@ void CameraProcessing::publish_lane_messages()
                               has_left, has_right);
 
     const int H = static_camera_data.st_CameraParameter.s32_RemapHeight;
+    const int W = static_camera_data.st_CameraParameter.s32_RemapWidth;
 
-    // 2) 왼쪽 차선 publish
     if (lane_left_pub_ && has_left)
     {
-        auto lane_msg = build_lane_msg_from_coef(left_coef, H);
+        auto lane_msg = build_lane_msg_from_coef(left_coef, W, H);
         if (!lane_msg.lane_points.empty())
         {
             lane_left_pub_->publish(lane_msg);
         }
     }
 
-    // 3) 오른쪽 차선 publish
     if (lane_right_pub_ && has_right)
     {
-        auto lane_msg = build_lane_msg_from_coef(right_coef, H);
+        auto lane_msg = build_lane_msg_from_coef(right_coef, W, H);
         if (!lane_msg.lane_points.empty())
         {
             lane_right_pub_->publish(lane_msg);
@@ -173,28 +174,30 @@ void CameraProcessing::publish_lane_messages()
     }
 }
 
+
+// ############################################# build_lane_msg_from_coef func #############################################//
+
 perception::msg::Lane build_lane_msg_from_coef(const LANE_COEFFICIENT& coef,
+                                               int img_width,
                                                int img_height,
                                                int num_samples )
 {
     perception::msg::Lane lane_msg;
 
-    if (std::abs(coef.f64_Slope) < 1e-6) {
-        // 수평에 가까운 직선이면 일단 skip
-        return lane_msg;
+    // 너무 수평이면 일단은 보내되, 나중에 필터에서 처리하게 두는게 좋음
+    if (!std::isfinite(coef.f64_Slope)) {
+        return lane_msg; // 완전 이상한 경우만 버리기
     }
 
-    // 이미지 좌표계 기준 y(아래로 증가) 샘플
-    // rows-1 (바닥) ~ 0 (위) 사이를 균등하게 num_samples개 찍기
     for (int i = 0; i < num_samples; ++i)
     {
-        double y_img = (img_height - 1) - (img_height - 1) * (static_cast<double>(i) / (num_samples - 1));
+        double y_img = (img_height - 1)
+                     - (img_height - 1) * (static_cast<double>(i) / (num_samples - 1));
         double x_img = (y_img - coef.f64_Intercept) / coef.f64_Slope;
 
         // 화면 밖이면 skip
-        if (x_img < 0 || x_img >= img_height) continue;
+        if (x_img < 0 || x_img >= img_width) continue;
 
-        // IPM 좌표계로 변환 (y 위로 증가)
         perception::msg::LanePnt p;
         p.x = static_cast<float>(x_img);
         p.y = static_cast<float>((img_height - 1) - y_img);
@@ -204,7 +207,6 @@ perception::msg::Lane build_lane_msg_from_coef(const LANE_COEFFICIENT& coef,
 
     return lane_msg;
 }
-
 
 
 

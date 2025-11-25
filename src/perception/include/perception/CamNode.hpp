@@ -100,9 +100,11 @@ void MakeKalmanStateBasedLaneCoef(const LANE_KALMAN& st_KalmanObject,
 // ====================== 새로 추가된 Lane 메시지 관련 helper들 ======================
 
 // RANSAC / Kalman으로 얻은 직선 계수 → Lane 메시지로 샘플 포인트 생성
-perception::msg::Lane build_lane_msg_from_coef(const LANE_COEFFICIENT& coef,
-                                               int img_height,
-                                               int num_samples = 20);
+perception::msg::Lane build_lane_msg_from_coef(
+    const LANE_COEFFICIENT& coef,
+    int img_width,
+    int img_height,
+    int num_samples = 30);
 
 // CAMERA_DATA 안의 Kalman 객체들에서 좌/우 차선 계수 뽑기
 bool get_lane_coef_from_kalman(const CAMERA_DATA& cam_data,
