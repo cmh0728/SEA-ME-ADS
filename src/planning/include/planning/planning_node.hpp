@@ -92,6 +92,8 @@ private:
   double start_offset_y_;
   double marker_z_;
   double lane_timeout_sec_;
+  double origin_offset_x_m_;
+  double origin_offset_y_m_;
 
   // ROS 통신
   rclcpp::Subscription<perception::msg::Lane>::SharedPtr lane_left_sub_;
