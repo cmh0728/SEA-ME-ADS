@@ -716,33 +716,33 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
         cv::imshow("RANSAC Debug", ransac_debug);   // RANSAC 전용 창
         // =======================  RANSAC 디버그 창 ===========================
 
-        // ---------- IPM 상 차선 폭 계산 + 출력 ---------- //
-        {
-            LANE_COEFFICIENT kalman_left, kalman_right;
-            bool has_left = false, has_right = false;
+        // // ---------- IPM 상 차선 폭 계산 + 출력 ---------- //
+        // {
+        //     LANE_COEFFICIENT kalman_left, kalman_right;
+        //     bool has_left = false, has_right = false;
 
-            if (get_lane_coef_from_kalman(*camera_data,
-                                          kalman_left, kalman_right,
-                                          has_left, has_right)
-                && has_left && has_right)
-            {
-                double width_px = 0.0;
-                double angle_diff_deg = 0.0;
-                int H = camera_data->st_CameraParameter.s32_RemapHeight;
+        //     if (get_lane_coef_from_kalman(*camera_data,
+        //                                   kalman_left, kalman_right,
+        //                                   has_left, has_right)
+        //         && has_left && has_right)
+        //     {
+        //         double width_px = 0.0;
+        //         double angle_diff_deg = 0.0;
+        //         int H = camera_data->st_CameraParameter.s32_RemapHeight;
 
-                if (ComputeLaneWidthAngle(kalman_left,
-                                          kalman_right,
-                                          H,
-                                          width_px,
-                                          angle_diff_deg))
-                {
-                    // 콘솔 출력 --> 535px
-                    std::cout << "[IPM] lane width: " << std::fixed << std::setprecision(1) << width_px << " px" << std::endl;
+        //         if (ComputeLaneWidthAngle(kalman_left,
+        //                                   kalman_right,
+        //                                   H,
+        //                                   width_px,
+        //                                   angle_diff_deg))
+        //         {
+        //             // 콘솔 출력 --> 400/320기준 305px
+        //             std::cout << "[IPM] lane width: " << std::fixed << std::setprecision(1) << width_px << " px" << std::endl;
 
-                }
-            }
-        }
-        // ---------- 차폭계산 , 출력 --------------------------------- //
+        //         }
+        //     }
+        // }
+        // // ---------- 차폭계산 , 출력 --------------------------------- //
 
         cv::imshow("Kalman Result", g_ResultImage); // 차선 + Kalman 결과
         cv::waitKey(1);
