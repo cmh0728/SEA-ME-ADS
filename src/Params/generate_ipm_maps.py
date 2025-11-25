@@ -11,8 +11,8 @@ X_MIN, X_MAX = -0.25 , 0.1 # max가 차량 뒤쪽, min이 앞쪽
 Y_MIN, Y_MAX = -0.28 , 0.21   # max가 차량 왼쪽 
 
 # --- camera.yaml 과 동일 ---
-H_ipm = 640
-W_ipm = 800
+H_ipm = 400
+W_ipm = 320
 
 map_x = np.zeros((H_ipm, W_ipm), np.float32)
 map_y = np.zeros((H_ipm, W_ipm), np.float32)
