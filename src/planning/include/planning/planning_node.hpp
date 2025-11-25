@@ -75,19 +75,25 @@ private:
 private:
   // 파라미터
   std::string frame_id_;     // 기본: "base_link"
-  double pixel_scale_x_;     // m per pixel (좌우)
-  double pixel_scale_y_;     // m per pixel (전방)
-  double ipm_height_;        // IPM 이미지 세로 픽셀 수 (RemapHeight)
-  double ipm_center_x_;      // IPM 상에서 차량 중심 x 픽셀
-  bool   flip_y_axis_;       // IPM y축 뒤집을지 여부
+    // IPM 월드 영역 정의 [m]
+  double x_min_m_;
+  double x_max_m_;
+  double y_min_m_;
+  double y_max_m_;
 
-  double lane_half_width_;   // 한 차선 폭의 절반 [m]
-  double resample_step_;     // 중앙선 리샘플링 간격 [m]
-  double max_path_length_;   // Path 최대 길이 [m]
-  double start_offset_y_;    // 차량 기준 y offset [m]
-  double marker_z_;          // z 높이 [m] (시각화용)
+  // IPM 이미지 크기 [px]
+  double ipm_width_;
+  double ipm_height_;
 
-  double lane_timeout_sec_;  // 이 시간 이상 새 메시지 없으면 “없는 차선”으로 취급
+  // 기존에 있던 것들
+  std::string frame_id_;
+
+  double lane_half_width_;
+  double resample_step_;
+  double max_path_length_;
+  double start_offset_y_;
+  double marker_z_;
+  double lane_timeout_sec_;
 
   // ROS 통신
   rclcpp::Subscription<perception::msg::Lane>::SharedPtr lane_left_sub_;
