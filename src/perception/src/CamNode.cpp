@@ -695,7 +695,7 @@ void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     if (visualize)
     {
         // cv::imshow("IPM", g_IpmImg);          // 탑뷰
-        // cv::imshow("Temp_Img", g_TempImg);    // 현재는 sliding window 결과
+        cv::imshow("Temp_Img", g_TempImg);    // 현재는 sliding window 결과
 
         // =======================  RANSAC 디버그 창 ===========================
         cv::Mat ransac_debug;
