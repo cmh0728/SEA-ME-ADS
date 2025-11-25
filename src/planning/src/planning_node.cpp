@@ -26,21 +26,23 @@ geometry_msgs::msg::Point to_point(const PlanningNode::LanePoint & lane_pt, doub
 PlanningNode::PlanningNode()
 : rclcpp::Node("planning_node")
 {
-  // ---- 파라미터 로딩: IPM 스케일, 차선 폭, 경로 길이 등 ----
-  frame_id_       = declare_parameter("frame_id", "base_link");
-  pixel_scale_x_  = declare_parameter("pixel_scale_x", 0.01);    // m per pixel (좌우)
-  pixel_scale_y_  = declare_parameter("pixel_scale_y", 0.01);    // m per pixel (전방)
-  ipm_height_     = declare_parameter("ipm_height", 640.0);
-  ipm_center_x_   = declare_parameter("ipm_center_x", 400.0);
-  flip_y_axis_    = declare_parameter("flip_y_axis", true);
+  // ---- 파라미터 로딩: IPM 변환 범위 ----
+  x_min_m_    = declare_parameter("x_min_m", 0.0);    // 예: 0.0 (차량 앞 범퍼 기준)
+  x_max_m_    = declare_parameter("x_max_m", 0.31);   // 예: +0.31m (IPM 전방 끝)
+  y_min_m_    = declare_parameter("y_min_m", -0.25);  // 예: 오른쪽 -0.25m
+  y_max_m_    = declare_parameter("y_max_m",  0.25);  // 예: 왼쪽  +0.25m
+  ipm_width_  = declare_parameter("ipm_width",  400.0);
+  ipm_height_ = declare_parameter("ipm_height", 320.0);
 
-  lane_half_width_  = declare_parameter("lane_half_width", 1.75);
-  resample_step_    = declare_parameter("resample_step", 0.5);
-  max_path_length_  = declare_parameter("max_path_length", 30.0);
+  // ---- 파라미터 로딩: IPM 스케일, 차선 폭, 경로 길이 등 ----
+  frame_id_       = declare_parameter("frame_id", "map");
+  lane_half_width_  = declare_parameter("lane_half_width", 0.175);  // scale car면 이렇게
+  resample_step_    = declare_parameter("resample_step", 0.02);     // 2cm 간격
+  max_path_length_  = declare_parameter("max_path_length", 0.6);    // 0.6m 정도
   start_offset_y_   = declare_parameter("start_offset_y", 0.0);
   marker_z_         = declare_parameter("marker_z", 0.0);
 
-  lane_timeout_sec_ = declare_parameter("lane_timeout_sec", 0.2);  // 200 ms 기본
+  lane_timeout_sec_ = declare_parameter("lane_timeout_sec", 0.2);
 
   last_left_stamp_  = this->now();
   last_right_stamp_ = this->now();
@@ -63,6 +65,8 @@ PlanningNode::PlanningNode()
   RCLCPP_INFO(get_logger(), "Planning node ready (frame: %s)", frame_id_.c_str());
 }
 
+//################################################## on_left_lane func ##################################################//
+
 // 좌측 차선 콜백
 void PlanningNode::on_left_lane(const perception::msg::Lane::ConstSharedPtr msg)
 {
@@ -72,6 +76,9 @@ void PlanningNode::on_left_lane(const perception::msg::Lane::ConstSharedPtr msg)
   process_lanes();
 }
 
+//################################################## on_right_lane func ##################################################//
+
+
 // 우측 차선 콜백
 void PlanningNode::on_right_lane(const perception::msg::Lane::ConstSharedPtr msg)
 {
@@ -79,6 +86,9 @@ void PlanningNode::on_right_lane(const perception::msg::Lane::ConstSharedPtr msg
   last_right_stamp_ = this->now();
   process_lanes();
 }
+
+//################################################## process_lanes func ##################################################//
+
 
 // 좌/우 차선 최신값을 사용해 path + markers 생성
 void PlanningNode::process_lanes()
@@ -133,6 +143,8 @@ void PlanningNode::process_lanes()
   publish_markers(left_pts, right_pts, centerline);
 }
 
+//################################################## convert_lane func ##################################################//
+
 // perception::msg::Lane(IPM 픽셀) → LanePoint(차량 기준 [m])
 std::vector<PlanningNode::LanePoint> PlanningNode::convert_lane(
   const perception::msg::Lane::ConstSharedPtr & lane_msg) const
@@ -146,19 +158,25 @@ std::vector<PlanningNode::LanePoint> PlanningNode::convert_lane(
 
   for (const auto & pt : lane_msg->lane_points)
   {
-    // IPM 이미지 기준 y 픽셀 → 위가 가까운 쪽이 되도록 flip (필요 시)
-    double y_pix = flip_y_axis_
-      ? (ipm_height_ - static_cast<double>(pt.y))
-      : static_cast<double>(pt.y);
+    // IPM 픽셀 좌표 (col=c, row=r)
+    const double c = static_cast<double>(pt.x);  // 0 ~ ipm_width_-1
+    const double r = static_cast<double>(pt.y);  // 0 ~ ipm_height_-1
+
+    // --- 전방 방향 X (m) ---
+    // r = 0          -> X_min (가까운 쪽)
+    // r = H_ipm - 1  -> X_max (먼 쪽)
+    const double X =
+      x_min_m_ + (x_max_m_ - x_min_m_) * (r / (ipm_height_ - 1.0));
+
+    // --- 좌우 방향 Y (m) ---
+    // c = 0          -> Y_max (왼쪽)
+    // c = W_ipm - 1  -> Y_min (오른쪽)
+    const double Y =
+      y_max_m_ - (y_max_m_ - y_min_m_) * (c / (ipm_width_ - 1.0));
 
     LanePoint lane_pt;
-
-    // 좌우 방향: 왼쪽(+), 오른쪽(-)
-    // IPM: pt.x < ipm_center_x_ → 왼쪽
-    lane_pt.x = (ipm_center_x_ - static_cast<double>(pt.x)) * pixel_scale_x_;
-
-    // 전방 방향: y 픽셀 → m
-    lane_pt.y = y_pix * pixel_scale_y_ + start_offset_y_;
+    lane_pt.x = Y;  // lateral (왼쪽 +, 오른쪽 -)
+    lane_pt.y = X;  // forward (앞 +)
 
     out.push_back(lane_pt);
   }
@@ -171,6 +189,8 @@ std::vector<PlanningNode::LanePoint> PlanningNode::convert_lane(
 
   return out;
 }
+
+//################################################## sample_lane func ##################################################//
 
 // 특정 전방 거리 longitudinal(y)에 대해 차선 x를 보간
 std::optional<double> PlanningNode::sample_lane(
@@ -204,6 +224,8 @@ std::optional<double> PlanningNode::sample_lane(
   const double ratio = (longitudinal - p1.y) / dy;
   return p1.x + ratio * (p2.x - p1.x);
 }
+
+//################################################## build_centerline func ##################################################//
 
 // 좌/우 차선으로부터 중앙선 생성
 bool PlanningNode::build_centerline(
@@ -246,6 +268,7 @@ bool PlanningNode::build_centerline(
 
   return !centerline.empty();
 }
+//################################################## vis : publish_path func ##################################################//
 
 // 중앙선 → nav_msgs/Path 로 퍼블리시
 void PlanningNode::publish_path(const std::vector<LanePoint> & centerline)
@@ -284,6 +307,7 @@ void PlanningNode::publish_path(const std::vector<LanePoint> & centerline)
 
   path_pub_->publish(path_msg);
 }
+//################################################## vis : publish_markers func ##################################################//
 
 // 좌/우/중앙선 → MarkerArray (LINE_STRIP) 로 퍼블리시
 void PlanningNode::publish_markers(
@@ -316,6 +340,7 @@ void PlanningNode::publish_markers(
 
   marker_pub_->publish(array);
 }
+//################################################## vis : make_marker func ##################################################//
 
 // 실제 차선 라인 Marker
 visualization_msgs::msg::Marker PlanningNode::make_marker(
@@ -345,6 +370,7 @@ visualization_msgs::msg::Marker PlanningNode::make_marker(
 
   return marker;
 }
+//################################################## vis : make_delete_marker func ##################################################//
 
 // 기존 Marker 삭제용
 visualization_msgs::msg::Marker PlanningNode::make_delete_marker(
@@ -362,9 +388,8 @@ visualization_msgs::msg::Marker PlanningNode::make_delete_marker(
 
 }  // namespace planning
 
-// =======================================
-// main
-// =======================================
+//################################################## main func ##################################################//
+
 int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
