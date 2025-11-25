@@ -73,9 +73,7 @@ private:
     const std::string & ns) const;
 
 private:
-  // 파라미터
-  std::string frame_id_;     // 기본: "base_link"
-    // IPM 월드 영역 정의 [m]
+  // IPM 월드 영역 정의 [m]
   double x_min_m_;
   double x_max_m_;
   double y_min_m_;
