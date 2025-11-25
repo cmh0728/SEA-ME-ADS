@@ -4,13 +4,13 @@ import cv2
 
 # ---------- 사용자 설정 ----------
 # 단일 체커보드 프레임으로 외부 파라미터와 IPM을 추정하는 스크립트
-IMAGE_PATH = "frame0004.jpg"      # 바닥 체스보드가 보이는 한 장
+IMAGE_PATH = "frame0000.jpg"      # 바닥 체스보드가 보이는 한 장
 # 내부 코너 수(가로 x 세로) - 인쇄물 내부코너 기준으로 맞춰주세요!
 BOARD_COLS, BOARD_ROWS = 9, 7
 SQUARE_SIZE_M = 0.011  # 1.1 cm
 
 # IPM 영역/스케일 (체커보드 평면 기준 [X(앞), Y(좌/우)])
-X_MIN, X_MAX = -0.15 , 0.1 # max가 차량 뒤쪽, min이 앞쪽
+X_MIN, X_MAX = -0.25 , 0.1 # max가 차량 뒤쪽, min이 앞쪽
 Y_MIN, Y_MAX = -0.28 , 0.21   # max가 차량 왼쪽 
 W_target, H_target = 1280, 720  # 목표 IPM 크기 (픽셀)
 INTERVAL_X = (X_MAX - X_MIN) / W_target
@@ -155,11 +155,12 @@ def main():
     # 가로(W) 방향: Y_MIN → Y_MAX (좌/우)
     # 세로(Hh) 방향: X_MIN → X_MAX (앞/뒤)
     ground_corners = np.float32([
-        [X_MIN, Y_MIN, 1.0],   # 좌측 근처
-        [X_MIN, Y_MAX, 1.0],   # 우측 근처
-        [X_MAX, Y_MAX, 1.0],   # 우측 먼 쪽
-        [X_MAX, Y_MIN, 1.0],   # 좌측 먼 쪽
+    [X_MIN, Y_MAX, 1.0],   # 좌측 근처 (왼쪽, 가까운)
+    [X_MIN, Y_MIN, 1.0],   # 우측 근처 (오른쪽, 가까운)
+    [X_MAX, Y_MIN, 1.0],   # 우측 먼 쪽
+    [X_MAX, Y_MAX, 1.0],   # 좌측 먼 쪽
     ]).T  # 3x4
+
 
     img_corners_h = H @ ground_corners    # 3x4
     img_corners = (img_corners_h[:2] / img_corners_h[2]).T.astype(np.float32)  # 4x2
