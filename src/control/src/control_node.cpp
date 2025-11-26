@@ -74,8 +74,7 @@ ControlNode::ControlNode()
     lookahead_distance_, base_speed_);
 }
 
-//================================================== on_path ==================================================//
-
+//================================================== on_path func ==================================================//
 void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
 {
   if (!msg || msg->poses.empty())
@@ -87,11 +86,7 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   const double dt = std::max(1e-3, (now - last_update_time_).seconds());
   last_update_time_ = now;
 
-  // Path 메시지를 Pure Pursuit 계산에 쓰기 위해 (x=횡, y=종) 포맷으로 변환
-  //  - planning node 에서:
-  //      pose.position.x = forward (전방, +)
-  //      pose.position.y = lateral (좌우, 왼+ / 오-)
-  //  → 여기서는 Point2D{x=lateral, y=forward} 로 다시 저장
+  // Path → (x=lateral, y=forward)
   std::vector<Point2D> path_points;
   path_points.reserve(msg->poses.size());
   for (const auto & pose : msg->poses)
@@ -100,7 +95,6 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
     path_points.push_back(pt);
   }
 
-  // Pure Pursuit target 계산
   Point2D target{0.0, 0.0};
   double selected_lookahead = lookahead_distance_;
   if (!compute_lookahead_target(path_points, lookahead_distance_, target, selected_lookahead))
@@ -108,37 +102,34 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
     return;
   }
 
-  // --- 조향 curvature 계산 ---
-  //   curvature = 2 * x / L^2
-  //   x: lateral offset (좌 +, 우 -), L: lookahead
+  // ----- 여기부터 조향/속도 계산 -----
+
+  // 1) Pure Pursuit 곡률 계산 (좌측(+x) → 양의 curvature)
   const double curvature =
     (2.0 * target.x) / std::max(1e-3, selected_lookahead * selected_lookahead);
 
-  // --- 경로 기울기(곡률 느낌) 계산: 곡선에서 속도 줄이기 위함 ---
+  // 2) 경로 기울기로 속도 결정 (곡선에서 감속)
   const double slope = estimate_lane_slope(path_points);
   const double speed_cmd = update_speed_command(slope, dt);
 
-  // ---- 최종 명령 생성 ----
-  geometry_msgs::msg::Twist cmd = build_cmd(curvature, speed_cmd);
+  // 3) 조향 게인 & 부호 보정
+  //    - target.x > 0 → 좌측 → 우리는 angular.z < 0 (좌회전) 이 필요
+  //    - 그래서 "-"를 붙여서 부호를 뒤집는다.
+  constexpr double kSteerGain = 0.03;  // 너무 크면 항상 ±1로 포화됨. 필요하면 0.02~0.05 사이 튜닝
 
-  // ★ 조향만 별도로 계산 ★
-  //
-  // - 차량 좌표계:
-  //     x>0 : 왼쪽, x<0 : 오른쪽
-  // - curvature>0 : 왼쪽으로 휘는 곡선
-  // - 하지만 하드웨어:
-  //     cmd.angular.z = +1  → 우회전
-  //     cmd.angular.z = -1  → 좌회전
-  //
-  // → 부호를 한 번 뒤집어서 사용해야 함.
-  double raw_steer = -kSteerGain * curvature;  // 부호 뒤집기 + gain 적용
-  raw_steer = std::clamp(raw_steer, -max_angular_z_, max_angular_z_);
-  cmd.angular.z = raw_steer;
+  double steer_cmd = -kSteerGain * curvature * speed_cmd;
+  steer_cmd = std::clamp(steer_cmd, -max_angular_z_, max_angular_z_);
+
+  // 4) 최종 Twist 구성
+  geometry_msgs::msg::Twist cmd;
+  cmd.linear.x  = std::clamp(speed_cmd, -max_speed_, max_speed_);
+  cmd.angular.z = steer_cmd;
 
   cmd_pub_->publish(cmd);
 
-  RCLCPP_DEBUG(get_logger(),
-    "target=(%.2f, %.2f) L=%.2f curvature=%.3f slope=%.3f speed=%.2f steer=%.2f",
+  RCLCPP_DEBUG(
+    get_logger(),
+    "PP target=(%.3f, %.3f) L=%.3f curv=%.3f slope=%.3f v=%.2f steer=%.3f",
     target.x, target.y, selected_lookahead, curvature, slope, cmd.linear.x, cmd.angular.z);
 }
 
