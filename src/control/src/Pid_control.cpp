@@ -18,7 +18,7 @@ constexpr double kDefaultHeadingWeight = 0.2;  // 차선 각도 오프셋 가중
 constexpr double kDefaultWatchdogSec = 0.5;
 }  // namespace
 
-ControlNode::ControlNode()
+PidControl::PidControl()
 : rclcpp::Node("lane_follow_control"),
   integral_error_(0.0),
   prev_error_(0.0),
@@ -45,16 +45,16 @@ ControlNode::ControlNode()
   //lane offset sub
   offset_sub_ = create_subscription<std_msgs::msg::Float32>(
     "/lane/center_offset", rclcpp::QoS(10),
-    std::bind(&ControlNode::on_offset, this, std::placeholders::_1));
+    std::bind(&PidControl::on_offset, this, std::placeholders::_1));
   heading_sub_ = create_subscription<std_msgs::msg::Float32>(
     "/lane/heading_offset", rclcpp::QoS(10),
-    std::bind(&ControlNode::on_heading, this, std::placeholders::_1));
+    std::bind(&PidControl::on_heading, this, std::placeholders::_1));
 
   RCLCPP_INFO(get_logger(), "PID controller initialized (kp=%.4f ki=%.4f kd=%.4f)", kp_, ki_, kd_);
 }
 
 // watchdog reset function
-void ControlNode::reset_if_timeout(const rclcpp::Time & now)
+void PidControl::reset_if_timeout(const rclcpp::Time & now)
 {
   // 일정 시간 이상 갱신이 없으면 적분/미분 항을 초기화해 급격한 제어를 방지
   if ((now - last_stamp_) > watchdog_timeout_) {
@@ -66,7 +66,7 @@ void ControlNode::reset_if_timeout(const rclcpp::Time & now)
 
 
 // steer control callback
-void ControlNode::on_offset(const std_msgs::msg::Float32::SharedPtr msg)
+void PidControl::on_offset(const std_msgs::msg::Float32::SharedPtr msg)
 {
   const rclcpp::Time now = this->now();
   reset_if_timeout(now);
@@ -118,7 +118,7 @@ void ControlNode::on_offset(const std_msgs::msg::Float32::SharedPtr msg)
     error_px, error_m, heading_error_, combined_error, angular_z, integral_error_, derivative);
 }
 
-void ControlNode::on_heading(const std_msgs::msg::Float32::SharedPtr msg)
+void PidControl::on_heading(const std_msgs::msg::Float32::SharedPtr msg)
 {
   const double raw = static_cast<double>(msg->data);
   heading_error_ = std::isfinite(raw) ? raw : 0.0;
@@ -128,7 +128,7 @@ void ControlNode::on_heading(const std_msgs::msg::Float32::SharedPtr msg)
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<control::ControlNode>());
+  rclcpp::spin(std::make_shared<control::PidControl>());
   rclcpp::shutdown();
   return 0;
 }

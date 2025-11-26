@@ -8,10 +8,10 @@
 namespace control
 {
 // 차선 중심 오프셋을 받아 PID로 조향 각을 계산하고 /cmd_vel을 퍼블리시합니다.
-class ControlNode : public rclcpp::Node
+class PidControl : public rclcpp::Node
 {
 public:
-  ControlNode();
+  PidControl();
 
 private:
   void on_offset(const std_msgs::msg::Float32::SharedPtr msg);
