@@ -17,7 +17,7 @@ def generate_launch_description() -> LaunchDescription:
 
     controller = Node(
         package="control",
-        executable="Pid_control",
+        executable="pid_control",
         name="lane_follow_control",
         output="screen",
     )
