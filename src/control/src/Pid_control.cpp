@@ -19,7 +19,7 @@ constexpr double kDefaultWatchdogSec = 0.5;
 }  // namespace
 
 PidControl::PidControl()
-: rclcpp::Node("lane_follow_control"),
+: rclcpp::Node("pid_control"),
   integral_error_(0.0),
   prev_error_(0.0),
   heading_error_(0.0),

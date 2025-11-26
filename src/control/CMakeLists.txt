@@ -29,6 +29,12 @@ ament_target_dependencies(control_node
   nav_msgs
   std_msgs)
 
+ament_target_dependencies(pid_control
+  rclcpp
+  geometry_msgs
+  std_msgs
+)
+
 install(TARGETS 
   control_node 
   pid_control
