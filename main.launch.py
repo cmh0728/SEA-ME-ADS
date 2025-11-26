@@ -10,7 +10,7 @@ from launch_ros.actions import Node
 def generate_launch_description() -> LaunchDescription:
     CameraNode = Node(
         package="perception",
-        executable="CamNode",
+        executable="CameraProcessing",
         name="CameraProcessing_node",
         output="screen",
     )
