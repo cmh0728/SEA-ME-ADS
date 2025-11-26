@@ -1,15 +1,24 @@
 #include "planning/planning_node.hpp"
 
-namespace planning
-{
-namespace
-{
-// LanePoint(차량 기준 좌표계) → geometry_msgs::Point (Marker에서 사용할 좌표)
+// =======================================
+// PlanningNode main flow
+// 1) /lane/left, /lane/right 차선 메시지(IPM 픽셀 좌표)를 수신
+// 2) IPM 픽셀 → 차량 기준 [m] 좌표로 변환 (convert_lane)
+// 3) 좌/우 차선으로부터 중앙선(centerline) 생성 (build_centerline)
+// 4) nav_msgs/Path + MarkerArray 퍼블리시 → RViz에서 확인
+// =======================================
+
+// Planning namespace 
+namespace planning {
+namespace{
+// LanePoint(차량 기준 좌표계) → geometry_msgs::Point 
 // LanePoint:
 //   x: lateral  (왼쪽 + / 오른쪽 -)
 //   y: forward  (앞쪽 +)
 // ROS Point:
 //   x: forward, y: left/right 로 쓰겠다는 약속
+
+// 좌표 변환 헬퍼
 geometry_msgs::msg::Point to_point(const PlanningNode::LanePoint & lane_pt, double z)
 {
   geometry_msgs::msg::Point pt;
@@ -20,22 +29,12 @@ geometry_msgs::msg::Point to_point(const PlanningNode::LanePoint & lane_pt, doub
 }
 }  // namespace
 
-// =======================================
-// PlanningNode main flow
-// 1) /lane/left, /lane/right 차선 메시지(IPM 픽셀 좌표)를 수신
-// 2) IPM 픽셀 → 차량 기준 [m] 좌표로 변환 (convert_lane)
-// 3) 좌/우 차선으로부터 중앙선(centerline) 생성 (build_centerline)
-// 4) nav_msgs/Path + MarkerArray 퍼블리시 → RViz에서 확인
-// =======================================
 
-PlanningNode::PlanningNode()
-: rclcpp::Node("planning_node")
+PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
 {
   // ------------------------------------------------------
   // [1] IPM 변환 범위 파라미터
   //
-  //  - IPM을 만들 때 Python에서 썼던 X_MIN/X_MAX, Y_MIN/Y_MAX, W/H_ipm 값과
-  //    "반드시" 동일해야 한다.
   //
   //  - 좌표계 정의 (현재는 카메라 중심 기준으로 정의한다고 가정):
   //      X (전방, forward): 카메라 기준 앞(+), 뒤(-)   [m]
@@ -47,16 +46,14 @@ PlanningNode::PlanningNode()
   //          하단 = 0.42 m (가까운 쪽)
   //          상단 = 0.73 m (먼  쪽)
   //
-  //    즉,
   //      r = 0            → X = 0.73 m (이미지 상단, 먼 쪽)
   //      r = ipm_height-1 → X = 0.42 m (이미지 하단, 가까운 쪽)
   //
-  //  - 이를 위해:
   //      x_min_m_ = 0.42 (near)
   //      x_max_m_ = 0.73 (far)
   //    으로 두고, 아래 convert_lane()에서
   //      X = x_max_m_ - (x_max_m_ - x_min_m_) * (r / (H-1))
-  //    형태로 매핑할 것이다.
+  //    형태로 매핑
   // ------------------------------------------------------
   x_min_m_    = declare_parameter("x_min_m", 0.42);     // near (이미지 하단)  0.42 m
   x_max_m_    = declare_parameter("x_max_m", 0.73);     // far  (이미지 상단)  0.73 m
@@ -131,6 +128,7 @@ PlanningNode::PlanningNode()
   //   - Lane이 끊겼을 때 path/marker를 지우기 위해 사용
   lane_timeout_sec_ = declare_parameter("lane_timeout_sec", 0.2);
 
+  // 타임스탬프 초기화 
   last_left_stamp_  = this->now();
   last_right_stamp_ = this->now();
 
@@ -262,6 +260,8 @@ void PlanningNode::process_lanes()
 //   r = 0        → X_raw = x_max_m_ = 0.73
 //   r = H - 1    → X_raw = x_min_m_ = 0.42
 //
+
+// 픽셀 기반 포인트를 m 단위의 현실 프레임 단위로 변환 
 std::vector<PlanningNode::LanePoint> PlanningNode::convert_lane(
   const perception::msg::Lane::ConstSharedPtr & lane_msg) const
 {
@@ -358,6 +358,8 @@ std::optional<double> PlanningNode::sample_lane(
 // - y(start_offset_y_ ~ y_end) 구간을 일정 간격(resample_step_)으로 스캔하면서
 //   해당 y에서의 left_x, right_x를 sample_lane()으로 얻고,
 //   둘 다 있으면 평균, 한쪽만 있으면 lane_half_width_로 보정.
+
+// 중앙선 포인트들을 생성 
 bool PlanningNode::build_centerline(
   const std::vector<LanePoint> & left,
   const std::vector<LanePoint> & right,
@@ -407,6 +409,8 @@ bool PlanningNode::build_centerline(
 // - Path의 각 포인트는 PoseStamped
 // - position.x: forward, position.y: lateral 로 매핑
 // - orientation: 다음 포인트와의 방향(yaw)을 이용해 계산
+
+// path 메시지 생성 및 퍼블리시 
 void PlanningNode::publish_path(const std::vector<LanePoint> & centerline)
 {
   nav_msgs::msg::Path path_msg;
