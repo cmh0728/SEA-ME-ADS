@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace control
+namespace PidControl
 {
 namespace
 {
@@ -128,7 +128,7 @@ void PidControl::on_heading(const std_msgs::msg::Float32::SharedPtr msg)
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<control::PidControl>());
+  rclcpp::spin(std::make_shared<PidControl::PidControl>());
   rclcpp::shutdown();
   return 0;
 }

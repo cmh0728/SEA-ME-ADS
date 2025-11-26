@@ -1,11 +1,10 @@
-#ifndef Pid_control__CONTROL_NODE_HPP_
-#define Pid_control__CONTROL_NODE_HPP_
+#pragma once
 
 #include "rclcpp/rclcpp.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "std_msgs/msg/float32.hpp"
 
-namespace control
+namespace PidControl
 {
 // 차선 중심 오프셋을 받아 PID로 조향 각을 계산하고 /cmd_vel을 퍼블리시합니다.
 class PidControl : public rclcpp::Node
@@ -39,4 +38,3 @@ private:
 };
 }  // namespace control
 
-#endif  // CONTROL__CONTROL_NODE_HPP_
