@@ -13,11 +13,15 @@ find_package(nav_msgs REQUIRED)
 add_executable(control_node 
   src/control_node.cpp
   )
-  
+
 add_executable(pid_control
   src/Pid_control.cpp
 )
 target_include_directories(control_node  PRIVATE include)
+
+target_include_directories(Pid_control  PRIVATE include)
+
+
 ament_target_dependencies(control_node
   rclcpp
   geometry_msgs
