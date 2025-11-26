@@ -10,8 +10,13 @@ find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 
-add_executable(control_node src/control_node.cpp
-  src/Pid_control.cpp)
+add_executable(control_node 
+  src/control_node.cpp
+  )
+  
+add_executable(pid_control
+  src/Pid_control.cpp
+)
 target_include_directories(control_node  PRIVATE include)
 ament_target_dependencies(control_node
   rclcpp
