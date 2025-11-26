@@ -10,14 +10,15 @@ find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 
-add_executable(control_node src/control_node.cpp)
-target_include_directories(control_node PRIVATE include)
+add_executable(control_node src/control_node.cpp
+  src/Pid_control.cpp)
+target_include_directories(control_node  PRIVATE include)
 ament_target_dependencies(control_node
   rclcpp
   geometry_msgs
   nav_msgs)
 
-install(TARGETS control_node
+install(TARGETS control_node 
   DESTINATION lib/${PROJECT_NAME})
 
 ament_package()
