@@ -32,7 +32,7 @@ geometry_msgs::msg::Point to_point(const PlanningNode::LanePoint & lane_pt, doub
 
 PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
 {
-  PlanningNode::LoadParam(); // 나중에 yaml 파일로 정리, 타입 정리 
+  LoadParam(); // 나중에 yaml 파일로 정리, 타입 정리 
   // --------------------- planning parameter ---------------------------------
   x_min_m_    = declare_parameter("x_min_m", 0.42);     // near (이미지 하단)  0.42 m
   x_max_m_    = declare_parameter("x_max_m", 0.73);     // far  (이미지 상단)  0.73 m
@@ -46,7 +46,7 @@ PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
   origin_offset_y_m_ = declare_parameter("origin_offset_y_m", 0.0);  // lateral offset
   frame_id_       = declare_parameter("frame_id", "base_link");
   lane_half_width_  = declare_parameter("lane_half_width", 0.175); // 실제 차폭의 절반 
-  resample_step_    = declare_parameter("resample_step", 0.02);  // 2 cm 간격으로 centerline 샘플링
+  resample_step_    = declare_parameter("resample_step", 0.005);  // 2 cm 간격으로 centerline 샘플링
 
   // max_path_length_:
   //   - start_offset_y_에서 시작해서 몇 m까지 centerline을 만들지
@@ -83,40 +83,34 @@ PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
 }
 
 //################################################## on_left_lane func ##################################################//
-
 // 좌측 차선 콜백
-// - latest_left_ 에 마지막 메시지 저장
-// - 타임스탬프 갱신 후 process_lanes() 호출
 void PlanningNode::on_left_lane(const perception::msg::Lane::ConstSharedPtr msg)
 {
-  latest_left_ = msg;
-  // perception::msg::Lane header 안 채워져 있을 가능성 높아서 그냥 수신 시각 사용
-  last_left_stamp_ = this->now();
+  latest_left_ = msg; // 메세지 저장
+  last_left_stamp_ = this->now(); // 수신 시각 갱신
   process_lanes();
 }
 
 //################################################## on_right_lane func ##################################################//
-
 // 우측 차선 콜백
 void PlanningNode::on_right_lane(const perception::msg::Lane::ConstSharedPtr msg)
 {
-  latest_right_ = msg;
-  last_right_stamp_ = this->now();
+  latest_right_ = msg; // 메세지 저장
+  last_right_stamp_ = this->now(); // 수신시각 갱신 
   process_lanes();
 }
 
 //################################################## process_lanes func ##################################################//
-
-// 좌/우 차선 최신값을 사용해 centerline + markers 생성
+// 좌/우 차선 최신값을 사용해 centerline + markers 생성 --> 로직 수정해야함 
 void PlanningNode::process_lanes()
 {
-  const auto now = this->now();
-  const rclcpp::Duration timeout = rclcpp::Duration::from_seconds(lane_timeout_sec_);
+  const auto now = this->now(); // 현재 시각
+  const rclcpp::Duration timeout = rclcpp::Duration::from_seconds(lane_timeout_sec_); // 0.2 초
 
   std::vector<LanePoint> left_pts;
   std::vector<LanePoint> right_pts;
 
-  // timeout 이내에 들어온 메시지만 유효하게 사용 (너무 오래된 차선 정보는 버림)
+  // timeout 이내에 들어온 메시지만 유효하게 사용 (너무 오래된 차선 정보는 버림), nullptr 인지 체크 
   if (latest_left_ && (now - last_left_stamp_) <= timeout) {
     left_pts = convert_lane(latest_left_);
   }
@@ -125,7 +119,7 @@ void PlanningNode::process_lanes()
     right_pts = convert_lane(latest_right_);
   }
 
-  // 좌/우 둘 다 유효하지 않으면 Path/Marker 모두 삭제 후 리턴
+  // 좌/우 둘 다 메세지 없으면 Path/Marker 모두 삭제 후 리턴
   if (left_pts.empty() && right_pts.empty())
   {
     // Path 비우기
@@ -144,8 +138,8 @@ void PlanningNode::process_lanes()
     return;
   }
 
-  std::vector<LanePoint> centerline;
-  if (!build_centerline(left_pts, right_pts, centerline))
+  std::vector<LanePoint> centerline; // vector 포인트 집합 
+  if (!build_centerline(left_pts, right_pts, centerline)) // centerline 생성 실패
   {
     RCLCPP_DEBUG(get_logger(), "Insufficient lane data for path");
 
@@ -156,47 +150,25 @@ void PlanningNode::process_lanes()
     return;
   }
 
+  // centerline 생성 성공
   // centerline 으로 path + markers 퍼블리시
   publish_path(centerline);
   publish_markers(left_pts, right_pts, centerline);
 }
 
 //################################################## convert_lane func ##################################################//
-
-// perception::msg::Lane(IPM 픽셀) → LanePoint(차량/카메라 기준 [m])
-//
-// Pixel 기준:
-//   c = pt.x (col) : 0 ~ ipm_width_-1   (왼 → 오)
-//   r = pt.y (row) : 0 ~ ipm_height_-1  (위 → 아래)
-//
-// World 기준:
-//   X: 전방 (앞 +, 뒤 -)
-//   Y: 좌우 (왼 +, 오른 -)
-//
-// 주어진 조건을 반영:
-//   - r = 0           → X = 0.73 m (이미지 상단, 먼 쪽)
-//   - r = ipm_height-1→ X = 0.42 m (이미지 하단, 가까운 쪽)
-//
-// 이를 만족시키기 위해:
-//
-//   X_raw = x_max_m_ - (x_max_m_ - x_min_m_) * (r / (ipm_height_ - 1))
-//
-//   (x_min_m_ = 0.42, x_max_m_ = 0.73 일 때)
-//
-//   r = 0        → X_raw = x_max_m_ = 0.73
-//   r = H - 1    → X_raw = x_min_m_ = 0.42
-//
-
 // 픽셀 기반 포인트를 m 단위의 현실 프레임 단위로 변환 
 std::vector<PlanningNode::LanePoint> PlanningNode::convert_lane(
   const perception::msg::Lane::ConstSharedPtr & lane_msg) const
 {
-  std::vector<LanePoint> out;
+  std::vector<LanePoint> rst;
+  // 메시지 유효성 검사
   if (!lane_msg) {
-    return out;
+    return rst;
   }
-
-  out.reserve(lane_msg->lane_points.size());
+  
+  // 메모리 미리 확보 
+  rst.reserve(lane_msg->lane_points.size());
 
   for (const auto & pt : lane_msg->lane_points)
   {
@@ -205,16 +177,11 @@ std::vector<PlanningNode::LanePoint> PlanningNode::convert_lane(
     const double r = static_cast<double>(pt.y);  // 0 ~ ipm_height_-1
 
     // --- 전방 방향 X_raw (m) ---
-    const double X_raw =
-      x_max_m_ - (x_max_m_ - x_min_m_) * (r / (ipm_height_ - 1.0));
-
+    const double X_raw = x_max_m_ - (x_max_m_ - x_min_m_) * (r / (ipm_height_ - 1.0));
     // --- 좌우 방향 Y_raw (m) ---
-    // c = 0          -> Y_max (왼쪽)
-    // c = W_ipm - 1  -> Y_min (오른쪽)
-    const double Y_raw =
-      y_max_m_ - (y_max_m_ - y_min_m_) * (c / (ipm_width_ - 1.0));
+    const double Y_raw = y_max_m_ - (y_max_m_ - y_min_m_) * (c / (ipm_width_ - 1.0));
 
-    // --- 원점 오프셋 보정 (카메라 → 차량 중심 등으로 평행 이동) ---
+    // --- 원점 오프셋 보정 (카메라 → 차량 중심으로 원점 이동 ) ---
     const double X = X_raw - origin_offset_x_m_;  // forward
     const double Y = Y_raw - origin_offset_y_m_;  // lateral
 
@@ -222,17 +189,17 @@ std::vector<PlanningNode::LanePoint> PlanningNode::convert_lane(
     lane_pt.x = Y;  // lateral (왼쪽 +, 오른쪽 -)
     lane_pt.y = X;  // forward (앞 +)
 
-    out.push_back(lane_pt);
+    rst.push_back(lane_pt);
   }
 
   // 전방 방향(y=forward) 기준 오름차순 정렬
   //   → 이후 보간(sample_lane)에서 사용
-  std::sort(out.begin(), out.end(),
+  std::sort(rst.begin(), rst.end(),
     [](const LanePoint & a, const LanePoint & b) {
       return a.y < b.y;
     });
 
-  return out;
+  return rst;
 }
 
 //################################################## sample_lane func ##################################################//
@@ -292,9 +259,12 @@ bool PlanningNode::build_centerline(
   std::vector<LanePoint> & centerline) const
 {
   centerline.clear();
-  if (left.empty() && right.empty()) {
+  if (left.empty() && right.empty())  // 둘 다 비어있으면 실패
+  {
     return false;
   }
+
+  // 둘 중 하나라도 있으면 보간
 
   const double y_end = start_offset_y_ + max_path_length_;
 
@@ -325,7 +295,7 @@ bool PlanningNode::build_centerline(
     centerline.push_back(pt);
   }
 
-  return !centerline.empty();
+  return !centerline.empty(); // 성공 여부 반환
 }
 
 //################################################## vis : publish_path func ##################################################//
@@ -340,9 +310,10 @@ bool PlanningNode::build_centerline(
 void PlanningNode::publish_path(const std::vector<LanePoint> & centerline)
 {
   nav_msgs::msg::Path path_msg;
-  path_msg.header.stamp = now();
+  path_msg.header.stamp = now(); 
   path_msg.header.frame_id = frame_id_;
 
+  // centerline 포인트 하나하나를 PoseStamped로 변환
   for (size_t i = 0; i < centerline.size(); ++i)
   {
     const auto & pt = centerline[i];
@@ -350,10 +321,11 @@ void PlanningNode::publish_path(const std::vector<LanePoint> & centerline)
     geometry_msgs::msg::PoseStamped pose;
     pose.header = path_msg.header;
 
+    //PoseStamped로 포인트 이동 
     // 좌표계 매핑: x=forward, y=lateral
     pose.pose.position.x = pt.y;  // forward
     pose.pose.position.y = pt.x;  // lateral
-    pose.pose.position.z = marker_z_;
+    pose.pose.position.z = marker_z_; // default 0.0
 
     // yaw 계산 (다음 점과의 방향)
     double yaw = 0.0;
