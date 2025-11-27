@@ -30,7 +30,8 @@ public:
   };
 
   PlanningNode();
-
+  void LoadParam();
+  
 private:
   // 콜백
   void on_left_lane(const perception::msg::Lane::ConstSharedPtr msg);

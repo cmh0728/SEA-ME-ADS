@@ -24,12 +24,6 @@ Stanley: false
 PurePursuit: false
 MPC: false
 
-# Fixed Path
-FixedPath: false
-NonFixedPath: false
-
-# Basic Lane
-BasicLane: 2    # 1, 2
 
 # road info
 # 실제 차폭 --> 픽셀 차폭 계산필요 

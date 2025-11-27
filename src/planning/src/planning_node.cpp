@@ -32,79 +32,21 @@ geometry_msgs::msg::Point to_point(const PlanningNode::LanePoint & lane_pt, doub
 
 PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
 {
-  // ------------------------------------------------------
-  // [1] IPM 변환 범위 파라미터
-  //
-  //
-  //  - 좌표계 정의 (현재는 카메라 중심 기준으로 정의한다고 가정):
-  //      X (전방, forward): 카메라 기준 앞(+), 뒤(-)   [m]
-  //      Y (좌우, lateral): 카메라 기준 왼(+), 오른(-) [m]
-  //
-  //  - 주어진 조건:
-  //      · IPM 세로 방향(이미지 상단/하단)이
-  //        카메라 중심에서
-  //          하단 = 0.42 m (가까운 쪽)
-  //          상단 = 0.73 m (먼  쪽)
-  //
-  //      r = 0            → X = 0.73 m (이미지 상단, 먼 쪽)
-  //      r = ipm_height-1 → X = 0.42 m (이미지 하단, 가까운 쪽)
-  //
-  //      x_min_m_ = 0.42 (near)
-  //      x_max_m_ = 0.73 (far)
-  //    으로 두고, 아래 convert_lane()에서
-  //      X = x_max_m_ - (x_max_m_ - x_min_m_) * (r / (H-1))
-  //    형태로 매핑
-  // ------------------------------------------------------
+  PlanningNode::LoadParam(); // 나중에 yaml 파일로 정리, 타입 정리 
+  // --------------------- planning parameter ---------------------------------
   x_min_m_    = declare_parameter("x_min_m", 0.42);     // near (이미지 하단)  0.42 m
   x_max_m_    = declare_parameter("x_max_m", 0.73);     // far  (이미지 상단)  0.73 m
-  y_min_m_    = declare_parameter("y_min_m", -0.25);    // 예: 오른쪽 -0.25 m
-  y_max_m_    = declare_parameter("y_max_m",  0.25);    // 예: 왼쪽  +0.25 m
+  y_min_m_    = declare_parameter("y_min_m", -0.26);    // 오른쪽 -0.25 m
+  y_max_m_    = declare_parameter("y_max_m",  0.26);    // 왼쪽  +0.25 m
   ipm_width_  = declare_parameter("ipm_width",  400.0); // IPM 가로 픽셀 수 (W)
   ipm_height_ = declare_parameter("ipm_height", 320.0); // IPM 세로 픽셀 수 (H)
-
-  // ------------------------------------------------------
-  // [1-1] 원점 오프셋 (IPM 좌표계 원점 → 차량 중심까지 거리)
-  //
-  //  - 지금 x_min_m_/x_max_m_/y_min_m_/y_max_m_는 "카메라 중심" 기준이라고 가정.
-  //  - 나중에 차량 중심(base_link) 기준으로 쓰고 싶으면,
-  //      origin_offset_x_m_ / origin_offset_y_m_
-  //    를 이용해서 평행 이동할 수 있다.
-  //
-  //  - 정의:
-  //      origin_offset_x_m_ : IPM 좌표계의 (0,0)에서
-  //                           "앞쪽(+)/뒤쪽(-)"으로 차량 중심까지 거리 [m]
-  //      origin_offset_y_m_ : IPM 좌표계의 (0,0)에서
-  //                           "왼쪽(+)/오른쪽(-)"으로 차량 중심까지 거리 [m]
-  //
-  //  - LanePoint로 쓸 때는:
-  //      X_vehicle = X_raw - origin_offset_x_m_
-  //      Y_vehicle = Y_raw - origin_offset_y_m_
-  //    처럼 원점을 차량 중심으로 평행 이동해 준다.
-  //  - 지금은 카메라 기준 그대로 쓰기 위해 0.0으로 두었다.
-  // ------------------------------------------------------
-  origin_offset_x_m_ = declare_parameter("origin_offset_x_m", 0.0);  // forward offset
+  // 차량 중심이랑 카메라 위치는 9cm정도 차이 남. 카메라가 차량중심에서 9cm 뒤에 있음
+  // 카메라 , 차량 중심 offset
+  origin_offset_x_m_ = declare_parameter("origin_offset_x_m", 0.09);  // forward offset
   origin_offset_y_m_ = declare_parameter("origin_offset_y_m", 0.0);  // lateral offset
-
-  // ------------------------------------------------------
-  // [2] Planning / Visualization 관련 파라미터
-  // ------------------------------------------------------
-
-  // frame_id_:
-  //   - convert_lane에서 만드는 좌표는 "어떤 기준"에서의 2D 평면 좌표.
-  //   - origin_offset_*_m_를 적절히 넣으면 "차량 중심(base_link)" 기준이 된다.
-  //   - base_link를 TF로 이미 구성했다면 "base_link"가 자연스럽다.
   frame_id_       = declare_parameter("frame_id", "base_link");
-
-  // lane_half_width_:
-  //   - 중앙선 계산에서, 한쪽 차선만 보일 때 사용하는 차선 반폭 [m]
-  //   - ex) scale car의 실제 차선폭이 0.35 m 정도면 0.175로 설정
-  lane_half_width_  = declare_parameter("lane_half_width", 0.175);
-
-  // resample_step_:
-  //   - centerline을 몇 m 간격으로 샘플링할지
-  //   - 세로 범위가 0.42 ~ 0.73 (약 0.31 m)이므로,
-  //     0.02 m면 대략 15개 포인트 정도.
-  resample_step_    = declare_parameter("resample_step", 0.02);  // 2 cm 간격
+  lane_half_width_  = declare_parameter("lane_half_width", 0.175); // 실제 차폭의 절반 
+  resample_step_    = declare_parameter("resample_step", 0.02);  // 2 cm 간격으로 centerline 샘플링
 
   // max_path_length_:
   //   - start_offset_y_에서 시작해서 몇 m까지 centerline을 만들지
@@ -113,32 +55,18 @@ PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
   //     대략 0.42 ~ 0.73 m까지만 사용하게 된다.
   //   - 여기서는 기본값을 0.31으로 맞춰둠 (필요하면 parameter로 조정).
   max_path_length_  = declare_parameter("max_path_length", 0.31);
-
-  // start_offset_y_:
-  //   - path 시작 전방 거리 [m]
-  //   - 카메라 기준 0.42 m부터 보이는 영역이라면 0.42로 설정하는 게 자연스럽다.
-  start_offset_y_   = declare_parameter("start_offset_y", 0.42);
-
-  // marker_z_:
-  //   - RViz에서 시각화할 때, z 높이 (0.0이면 바닥에 붙음)
-  marker_z_         = declare_parameter("marker_z", 0.0);
-
-  // lane_timeout_sec_:
-  //   - 이 시간 이상 오래된 lane 메시지는 무시
-  //   - Lane이 끊겼을 때 path/marker를 지우기 위해 사용
-  lane_timeout_sec_ = declare_parameter("lane_timeout_sec", 0.2);
+  start_offset_y_   = declare_parameter("start_offset_y", 0.42); // path의 시작 지점 
+  marker_z_         = declare_parameter("marker_z", 0.0); // rviz marker z 높이 
+  lane_timeout_sec_ = declare_parameter("lane_timeout_sec", 0.2); // 차선 메시지 타임아웃(오래된 차선 버림 )
 
   // 타임스탬프 초기화 
   last_left_stamp_  = this->now();
   last_right_stamp_ = this->now();
 
+  // ros qos 설정 
   auto qos = rclcpp::QoS(rclcpp::KeepLast(10));
 
-  // ------------------------------------------------------
-  // [3] 차선 토픽 구독
-  //   - perception 노드에서 publish하는 /lane/left, /lane/right를 구독
-  //   - perception::msg::Lane 안에 lane_points: IPM 이미지 상의 픽셀 좌표 리스트
-  // ------------------------------------------------------
+  // subscriber 선언
   lane_left_sub_ = create_subscription<perception::msg::Lane>(
     "/lane/left", qos,
     std::bind(&PlanningNode::on_left_lane, this, std::placeholders::_1));
@@ -147,9 +75,7 @@ PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
     "/lane/right", qos,
     std::bind(&PlanningNode::on_right_lane, this, std::placeholders::_1));
 
-  // ------------------------------------------------------
-  // [4] Path / Marker 퍼블리셔
-  // ------------------------------------------------------
+  // path, marker publisher 선언
   path_pub_ = create_publisher<nav_msgs::msg::Path>("/planning/path", qos);
   marker_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>("/planning/markers", qos);
 
@@ -532,7 +458,22 @@ visualization_msgs::msg::Marker PlanningNode::make_delete_marker(
   return marker;
 }
 
+//################################################## loadparam func ##################################################//
+
+// YAML palnning 설정을 로드하고 기본 상태를 초기화
+void PlanningNode::LoadParam()
+{
+    YAML::Node st_PlanningParam = YAML::LoadFile("src/Params/Planning.yaml");
+    std::cout << "Loading Planning Parameter from YAML File..." << std::endl;
+
+   
+    std::cout << "Sucess to Load Planning Parameter!" << std::endl;
+    
+}  
+
 }  // namespace planning
+
+
 
 //################################################## main func ##################################################//
 
