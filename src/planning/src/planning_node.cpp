@@ -46,7 +46,7 @@ PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
   origin_offset_y_m_ = declare_parameter("origin_offset_y_m", 0.0);  // lateral offset
   frame_id_       = declare_parameter("frame_id", "base_link");
   lane_half_width_  = declare_parameter("lane_half_width", 0.175); // 실제 차폭의 절반 
-  resample_step_    = declare_parameter("resample_step", 0.01);  // 1 cm 간격으로 centerline 샘플링
+  resample_step_    = declare_parameter("resample_step", 0.02);  // 2 cm 간격으로 centerline 샘플링
 
   // max_path_length_:
   //   - start_offset_y_에서 시작해서 몇 m까지 centerline을 만들지
