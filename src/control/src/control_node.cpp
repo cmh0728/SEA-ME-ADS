@@ -241,7 +241,6 @@ geometry_msgs::msg::Twist ControlNode::build_cmd(double /*curvature*/, double sp
   return cmd;
 }
 
-}  // namespace control
 
 void ControlNode::publish_target_marker(const Point2D & target, const std::string & frame_id)
 {
@@ -275,6 +274,9 @@ void ControlNode::publish_target_marker(const Point2D & target, const std::strin
 
   target_marker_pub_->publish(marker);
 }
+
+}  // namespace control
+
 
 
 
