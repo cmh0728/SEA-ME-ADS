@@ -374,11 +374,11 @@ void PlanningNode::publish_markers(
   }
 
   // 중앙선 marker
-  // if (!centerline.empty()) {
-  //   array.markers.push_back(make_marker(centerline, 2, "centerline", 0.1, 1.0, 0.2));
-  // } else {
-  //   array.markers.push_back(make_delete_marker(2, "centerline"));
-  // }
+  if (!centerline.empty()) {
+    array.markers.push_back(make_marker(centerline, 2, "centerline", 0.1, 1.0, 0.2));
+  } else {
+    array.markers.push_back(make_delete_marker(2, "centerline"));
+  }
 
   marker_pub_->publish(array);
 }
