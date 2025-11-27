@@ -31,12 +31,14 @@ ament_target_dependencies(control_node
   geometry_msgs
   nav_msgs
   std_msgs
+  visualization_msgs
   yaml-cpp)
 
 ament_target_dependencies(pid_control
   rclcpp
   geometry_msgs
   std_msgs
+  visualization_msgs
   yaml-cpp
 )
 
