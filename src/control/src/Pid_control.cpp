@@ -79,13 +79,13 @@ void PidControl::on_offset(const std_msgs::msg::Float32::SharedPtr msg)
   const double raw_offset = static_cast<double>(msg->data);
   if (!std::isfinite(raw_offset)) {
     last_stamp_ = now;
-    double angular_z = -1 * std::clamp(last_angular_cmd_ * 1.2, -max_angular_z_, max_angular_z_);
-    last_angular_cmd_ = angular_z;
+    double angular_z = std::clamp(last_angular_cmd_ * 1.2, -max_angular_z_, max_angular_z_);
+    last_angular_cmd_ = angular_z  ;
 
     geometry_msgs::msg::Twist cmd;
     cmd.linear.x = std::clamp(linear_speed_, -50.0, 50.0);
     cmd.angular.z = angular_z ;
-    cmd_pub_->publish(cmd);
+    cmd_pub_->publish(cmd) ;
     // RCLCPP_WARN_THROTTLE(
     //   get_logger(), *this->get_clock(), 2000,
     //   "Lane offset unavailable; reusing last steering (%.3f)", angular_z);
@@ -109,9 +109,9 @@ void PidControl::on_offset(const std_msgs::msg::Float32::SharedPtr msg)
   // 최종 Twist 메시지 구성 후 퍼블리시
   geometry_msgs::msg::Twist cmd;
   cmd.linear.x = std::clamp(linear_speed_, -50.0, 50.0);  // 차량 규격 범위 [-50, 50]
-  cmd.angular.z = angular_z;
+  cmd.angular.z = angular_z * -1 ;
   cmd_pub_->publish(cmd);
-  last_angular_cmd_ = angular_z;
+  last_angular_cmd_ = angular_z * -1 ;
 
   RCLCPP_DEBUG(get_logger(),
     "PID cmd: err_px=%.2f err_m=%.3f heading=%.3f combined=%.3f ang=%.3f integ=%.3f deriv=%.3f",
