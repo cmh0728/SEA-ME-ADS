@@ -59,7 +59,6 @@ ControlNode::ControlNode()
   prev_slope_(0.0),
   last_update_time_(this->now())
 {
-  // ---- 플래닝 경로 구독 ----
   const std::string path_topic = declare_parameter("path_topic", std::string("/planning/path"));
   auto qos = rclcpp::QoS(rclcpp::KeepLast(10));
 
@@ -68,6 +67,10 @@ ControlNode::ControlNode()
     std::bind(&ControlNode::on_path, this, std::placeholders::_1));
 
   cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", qos);
+
+  // ★ 타겟 포인트용 Marker 퍼블리셔
+  target_marker_pub_ =
+    create_publisher<visualization_msgs::msg::Marker>("/control/lookahead_target", 1);
 
   RCLCPP_INFO(get_logger(),
     "Control node ready (lookahead %.2f m, base speed %.2f)",
@@ -101,6 +104,13 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   {
     return;
   }
+
+  // ★ RViz에 타겟 포인트 표시
+  publish_target_marker(target, msg->header.frame_id);
+
+  // ----- 여기부터 조향/속도 계산 -----
+  const double curvature =
+    (2.0 * target.x) / std::max(1e-3, selected_lookahead * selected_lookahead);
 
   // ----- 여기부터 조향/속도 계산 -----
 
@@ -236,6 +246,41 @@ geometry_msgs::msg::Twist ControlNode::build_cmd(double /*curvature*/, double sp
 }
 
 }  // namespace control
+
+void ControlNode::publish_target_marker(const Point2D & target, const std::string & frame_id)
+{
+  visualization_msgs::msg::Marker marker;
+
+  marker.header.frame_id = frame_id;     // path와 같은 frame 사용 (보통 base_link)
+  marker.header.stamp    = this->now();
+  marker.ns   = "lookahead_target";
+  marker.id   = 0;
+  marker.type = visualization_msgs::msg::Marker::SPHERE;
+  marker.action = visualization_msgs::msg::Marker::ADD;
+
+  // Point2D: x = lateral, y = forward
+  // Marker 좌표: x = forward, y = lateral 이라서 다시 매핑
+  marker.pose.position.x = target.y;   // forward
+  marker.pose.position.y = target.x;   // lateral
+  marker.pose.position.z = 0.05;       // 바닥에서 조금 띄우기
+
+  marker.pose.orientation.w = 1.0;
+
+  // 점 크기
+  marker.scale.x = 0.06;
+  marker.scale.y = 0.06;
+  marker.scale.z = 0.06;
+
+  // 빨간색
+  marker.color.a = 1.0;
+  marker.color.r = 1.0;
+  marker.color.g = 0.0;
+  marker.color.b = 0.0;
+
+  target_marker_pub_->publish(marker);
+}
+
+
 
 //================================================== main ==================================================//
 

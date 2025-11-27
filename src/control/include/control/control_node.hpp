@@ -5,6 +5,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/path.hpp"
+#include "visualization_msgs/msg/marker.hpp"
 
 namespace control
 {
@@ -21,6 +22,12 @@ struct Point2D
 class ControlNode : public rclcpp::Node
 {
 public:
+  struct Point2D
+  {
+    double x;  // lateral (left +, right -)  [m]
+    double y;  // longitudinal (forward +)   [m]
+  };
+
   ControlNode();
 
 private:
@@ -76,6 +83,13 @@ private:
   // ---- ROS 통신 ----
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr path_sub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_pub_;
+
+  // RViz에서 볼 lookahead target 마커 publisher
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr target_marker_pub_;
+
+  // 타겟 포인트 마커 퍼블리시 함수
+  void publish_target_marker(const Point2D & target, const std::string & frame_id);
+
 };
 
 }  // namespace control
