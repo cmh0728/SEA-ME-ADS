@@ -46,7 +46,7 @@ PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
   origin_offset_y_m_ = declare_parameter("origin_offset_y_m", 0.0);  // lateral offset
   frame_id_       = declare_parameter("frame_id", "base_link");
   lane_half_width_  = declare_parameter("lane_half_width", 0.175); // 실제 차폭의 절반 
-  resample_step_    = declare_parameter("resample_step", 0.005);  // 2 cm 간격으로 centerline 샘플링
+  resample_step_    = declare_parameter("resample_step", 0.01);  // 1 cm 간격으로 centerline 샘플링
 
   // max_path_length_:
   //   - start_offset_y_에서 시작해서 몇 m까지 centerline을 만들지
@@ -56,7 +56,7 @@ PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
   //   - 여기서는 기본값을 0.31으로 맞춰둠 (필요하면 parameter로 조정).
   max_path_length_  = declare_parameter("max_path_length", 0.31);
   start_offset_y_   = declare_parameter("start_offset_y", 0.42); // path의 시작 지점 
-  marker_z_         = declare_parameter("marker_z", 0.0); // rviz marker z 높이 
+  marker_z_         = declare_parameter("marker_z", 0.0); // rviz markr z 높이 
   lane_timeout_sec_ = declare_parameter("lane_timeout_sec", 0.2); // 차선 메시지 타임아웃(오래된 차선 버림 )
 
   // 타임스탬프 초기화 
@@ -374,11 +374,11 @@ void PlanningNode::publish_markers(
   }
 
   // 중앙선 marker
-  if (!centerline.empty()) {
-    array.markers.push_back(make_marker(centerline, 2, "centerline", 0.1, 1.0, 0.2));
-  } else {
-    array.markers.push_back(make_delete_marker(2, "centerline"));
-  }
+  // if (!centerline.empty()) {
+  //   array.markers.push_back(make_marker(centerline, 2, "centerline", 0.1, 1.0, 0.2));
+  // } else {
+  //   array.markers.push_back(make_delete_marker(2, "centerline"));
+  // }
 
   marker_pub_->publish(array);
 }
