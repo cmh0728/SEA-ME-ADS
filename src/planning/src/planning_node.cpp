@@ -259,43 +259,125 @@ bool PlanningNode::build_centerline(
   std::vector<LanePoint> & centerline) const
 {
   centerline.clear();
-  if (left.empty() && right.empty())  // 둘 다 비어있으면 실패
-  {
+
+  const bool has_left  = !left.empty();
+  const bool has_right = !right.empty();
+
+  // 둘 다 없으면 실패
+  if (!has_left && !has_right) {
     return false;
   }
 
-  // 둘 중 하나라도 있으면 보간
+  // 전체 y 범위(플래닝에서 쓰고 싶은 전방 거리)
+  const double global_y_start = start_offset_y_;
+  const double global_y_end   = start_offset_y_ + max_path_length_;
 
-  const double y_end = start_offset_y_ + max_path_length_;
+  bool built = false;
 
-  for (double y = start_offset_y_; y <= y_end; y += resample_step_)
+  // ============================================================
+  // 1) 양쪽 차선이 모두 있을 때: 겹치는 y 구간에서만 "진짜 중앙" 생성
+  // ============================================================
+  if (has_left && has_right)
   {
-    auto left_x  = sample_lane(left, y);
-    auto right_x = sample_lane(right, y);
+    // left/right는 convert_lane()에서 y 오름차순으로 정렬되어 있다고 가정
+    const double left_min_y  = left.front().y;
+    const double left_max_y  = left.back().y;
+    const double right_min_y = right.front().y;
+    const double right_max_y = right.back().y;
 
-    if (!left_x && !right_x) {
-      // 이 y 위치에서는 두 차선 모두 데이터 없음 → centerline 포인트 생략
-      continue;
+    // 두 차선이 실제로 커버하는 구간의 교집합 + global 범위와의 교집합
+    double y_start = std::max(global_y_start, std::max(left_min_y,  right_min_y));
+    double y_end   = std::min(global_y_end,   std::min(left_max_y,   right_max_y));
+
+    if (y_start < y_end)
+    {
+      for (double y = y_start; y <= y_end; y += resample_step_)
+      {
+        auto left_x  = sample_lane(left,  y);
+        auto right_x = sample_lane(right, y);
+
+        // 둘 다 있어야 "진짜 중앙"으로 인정
+        if (!left_x || !right_x) {
+          continue;
+        }
+
+        LanePoint pt;
+        pt.y = y;  // forward
+        pt.x = (*left_x + *right_x) * 0.5;  // 두 차선의 정확한 중앙
+
+        centerline.push_back(pt);
+      }
+
+      if (!centerline.empty()) {
+        built = true;
+      }
     }
-
-    LanePoint pt;
-    pt.y = y;  // forward
-
-    if (left_x && right_x) {
-      // 양쪽 차선 모두 있을 때 → x 좌표 평균
-      pt.x = (*left_x + *right_x) * 0.5;
-    } else if (left_x) {
-      // 왼쪽 차선만 있을 때 → lane_half_width_만큼 오른쪽(-)으로 이동
-      pt.x = *left_x - lane_half_width_;
-    } else {
-      // 오른쪽 차선만 있을 때 → lane_half_width_만큼 왼쪽(+)으로 이동
-      pt.x = *right_x + lane_half_width_;
-    }
-
-    centerline.push_back(pt);
   }
 
-  return !centerline.empty(); // 성공 여부 반환
+  // ============================================================
+  // 2) 한쪽 차선만 있는 경우 (또는 위에서 겹치는 구간이 아예 없었던 경우)
+  //
+  //    - has_left && !has_right  : 왼쪽 차선 기준, lane_half_width_만큼 오른쪽(-)
+  //    - !has_left && has_right  : 오른쪽 차선 기준, lane_half_width_만큼 왼쪽(+)
+  //    - 두 개 다 있는데 겹치는 구간이 없어서 못 만든 경우:
+  //        더 길게 보이는 차선을 기준으로 fallback
+  // ============================================================
+  if (!built)
+  {
+    // 기준이 될 차선 선택
+    const std::vector<LanePoint>* base_lane = nullptr;
+    double lateral_offset = 0.0;  // centerline = base_lane.x + lateral_offset
+
+    if (has_left && !has_right) {
+      base_lane = &left;
+      lateral_offset = -lane_half_width_;  // 왼쪽 차선에서 오른쪽(-)으로 이동
+    } else if (!has_left && has_right) {
+      base_lane = &right;
+      lateral_offset = +lane_half_width_;  // 오른쪽 차선에서 왼쪽(+)으로 이동
+    } else if (has_left && has_right) {
+      // 둘 다 있는데 겹치는 구간이 없어서 위에서 centerline을 못 만든 경우
+      // → 더 길이가 긴 차선을 기준으로 fallback
+      if (left.size() >= right.size()) {
+        base_lane = &left;
+        lateral_offset = -lane_half_width_;
+      } else {
+        base_lane = &right;
+        lateral_offset = +lane_half_width_;
+      }
+    }
+
+    if (base_lane)
+    {
+      const auto & lane = *base_lane;
+
+      const double lane_min_y = lane.front().y;
+      const double lane_max_y = lane.back().y;
+
+      double y_start = std::max(global_y_start, lane_min_y);
+      double y_end   = std::min(global_y_end,   lane_max_y);
+
+      if (y_start < y_end)
+      {
+        for (double y = y_start; y <= y_end; y += resample_step_)
+        {
+          auto base_x = sample_lane(lane, y);
+          if (!base_x) {
+            continue;
+          }
+
+          LanePoint pt;
+          pt.y = y;                    // forward
+          pt.x = *base_x + lateral_offset;  // 한쪽 차선에서 lane_half_width_ 만큼 평행 이동
+
+          centerline.push_back(pt);
+        }
+      }
+    }
+
+    built = !centerline.empty();
+  }
+
+  return built;
 }
 
 //################################################## vis : publish_path func ##################################################//
