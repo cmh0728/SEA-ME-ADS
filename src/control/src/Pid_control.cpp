@@ -79,12 +79,12 @@ void PidControl::on_offset(const std_msgs::msg::Float32::SharedPtr msg)
   const double raw_offset = static_cast<double>(msg->data);
   if (!std::isfinite(raw_offset)) {
     last_stamp_ = now;
-    double angular_z = std::clamp(last_angular_cmd_ * 1.2, -max_angular_z_, max_angular_z_);
+    double angular_z = -1 * std::clamp(last_angular_cmd_ * 1.2, -max_angular_z_, max_angular_z_);
     last_angular_cmd_ = angular_z;
 
     geometry_msgs::msg::Twist cmd;
     cmd.linear.x = std::clamp(linear_speed_, -50.0, 50.0);
-    cmd.angular.z = angular_z;
+    cmd.angular.z = angular_z ;
     cmd_pub_->publish(cmd);
     // RCLCPP_WARN_THROTTLE(
     //   get_logger(), *this->get_clock(), 2000,
