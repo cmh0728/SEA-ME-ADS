@@ -89,7 +89,7 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   const double dt = std::max(1e-3, (now - last_update_time_).seconds());
   last_update_time_ = now;
 
-  // Path → (x=lateral, y=forward)
+  // 1) Path → (x=lateral, y=forward)
   std::vector<Point2D> path_points;
   path_points.reserve(msg->poses.size());
   for (const auto & pose : msg->poses)
@@ -98,35 +98,53 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
     path_points.push_back(pt);
   }
 
-  Point2D target{0.0, 0.0};
-  double selected_lookahead = lookahead_distance_;
-  if (!compute_lookahead_target(path_points, lookahead_distance_, target, selected_lookahead))
+  if (path_points.empty())
   {
     return;
   }
 
-  // ★ RViz에 타겟 포인트 표시
+  // 2) 경로 기울기 계산 (직선 vs 곡선 판단용)
+  const double slope = estimate_lane_slope(path_points);
+
+  // 3) 속도 명령 계산 (이미 있던 함수 그대로 사용)
+  const double speed_cmd = update_speed_command(slope, dt);
+
+  // 4) 속도에 따른 동적 lookahead 계산
+  //    - 직선(속도↑) → lookahead 크게 (max_lookahead_)
+  //    - 곡선(속도↓) → lookahead 작게 (min_lookahead_)
+  double speed_norm = 0.0;
+  if (max_speed_ > min_speed_)
+  {
+    speed_norm = (speed_cmd - min_speed_) / (max_speed_ - min_speed_);
+  }
+  speed_norm = std::clamp(speed_norm, 0.0, 1.0);
+
+  // 동적으로 사용할 lookahead
+  const double dynamic_lookahead =
+    min_lookahead_ + (max_lookahead_ - min_lookahead_) * speed_norm;
+
+  // 5) dynamic_lookahead를 사용해서 Pure Pursuit 타겟 선택
+  Point2D target{0.0, 0.0};
+  double selected_lookahead = 0.0;
+  if (!compute_lookahead_target(path_points, dynamic_lookahead, target, selected_lookahead))
+  {
+    return;
+  }
+
+  // RViz 타겟 시각화
   publish_target_marker(target, msg->header.frame_id);
 
-  // ----- 여기부터 조향/속도 계산 -----
-
-  // 1) Pure Pursuit 곡률 계산 (좌측(+x) → 양의 curvature)
+  // 6) Pure Pursuit 곡률 계산
   const double curvature =
     (2.0 * target.x) / std::max(1e-3, selected_lookahead * selected_lookahead);
 
-  // 2) 경로 기울기로 속도 결정 (곡선에서 감속)
-  const double slope = estimate_lane_slope(path_points);
-  const double speed_cmd = update_speed_command(slope, dt);
-
-  // 3) 조향 게인 & 부호 보정
-  //    - target.x > 0 → 좌측 → 우리는 angular.z < 0 (좌회전) 이 필요
-  //    - 그래서 "-"를 붙여서 부호를 뒤집는다.
-  constexpr double kSteerGain = 0.03;  // 너무 크면 항상 ±1로 포화됨. 필요하면 0.02~0.05 사이 튜닝
+  // 7) 조향 게인 & 부호 보정
+  constexpr double kSteerGain = 0.03;  // 이미 쓰던 값
 
   double steer_cmd = -kSteerGain * curvature * speed_cmd;
   steer_cmd = std::clamp(steer_cmd, -max_angular_z_, max_angular_z_);
 
-  // 4) 최종 Twist 구성
+  // 8) 최종 Twist 구성
   geometry_msgs::msg::Twist cmd;
   cmd.linear.x  = std::clamp(speed_cmd, -max_speed_, max_speed_);
   cmd.angular.z = steer_cmd;
@@ -135,9 +153,11 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
 
   RCLCPP_DEBUG(
     get_logger(),
-    "PP target=(%.3f, %.3f) L=%.3f curv=%.3f slope=%.3f v=%.2f steer=%.3f",
-    target.x, target.y, selected_lookahead, curvature, slope, cmd.linear.x, cmd.angular.z);
+    "PP target=(%.3f, %.3f) L(desired)=%.3f L(actual)=%.3f slope=%.3f v=%.2f steer=%.3f",
+    target.x, target.y, dynamic_lookahead, selected_lookahead,
+    slope, cmd.linear.x, cmd.angular.z);
 }
+
 
 //================================================== compute_lookahead_target ==================================================//
 
