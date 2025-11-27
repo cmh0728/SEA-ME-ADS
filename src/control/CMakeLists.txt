@@ -10,6 +10,7 @@ find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(yaml-cpp REQUIRED)
 
 add_executable(control_node 
   src/control_node.cpp
@@ -27,12 +28,14 @@ ament_target_dependencies(control_node
   rclcpp
   geometry_msgs
   nav_msgs
-  std_msgs)
+  std_msgs
+  yaml-cpp)
 
 ament_target_dependencies(pid_control
   rclcpp
   geometry_msgs
   std_msgs
+  yaml-cpp
 )
 
 install(TARGETS 
