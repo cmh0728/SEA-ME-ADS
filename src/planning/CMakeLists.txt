@@ -25,7 +25,7 @@ target_include_directories(planning_node
     ${EIGEN3_INCLUDE_DIRS}   
 )
 
-target_link_libraries(CameraProcessing
+target_link_libraries(planning_node
   Eigen3::Eigen              
   ${OpenCV_LIBRARIES}
   yaml-cpp
