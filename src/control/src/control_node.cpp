@@ -31,9 +31,9 @@ constexpr double kDefaultMaxSpeed      = 50.0;  // 하드웨어 상한
 constexpr double kDefaultMaxAngular    = 1.0;
 
 // 속도 제어용 PID 파라미터 
-constexpr double kDefaultSpeedKp       = 5.0;
+constexpr double kDefaultSpeedKp       = 10.0;
 constexpr double kDefaultSpeedKi       = 0.001;
-constexpr double kDefaultSpeedKd       = 0.5;
+constexpr double kDefaultSpeedKd       = 0.7;
 constexpr double kDefaultIntegralLimit = 5.0; // 적분 항 클램프 한계
 
 // 조향 민감도 (curvature → steer 로 보낼 때 gain)
@@ -106,7 +106,7 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
     return;
   }
 
-  // 경로 기울기 계산 
+  // 경로 기울기 계산 , 곡선구간 0.4 언저리 
   const double slope = estimate_lane_slope(path_points);
 
   // 속도 명령 계산 
@@ -221,7 +221,7 @@ double ControlNode::estimate_lane_slope(const std::vector<Point2D> & path_points
     return 0.0;
   }
   double slope = (last.x - first.x) / dy;
-  std::cout << "slope: " << slope << std::endl;
+  // std::cout << "slope: " << slope << std::endl; // 곡선구간 0.4정도, 직선구간 0.01~근처 
   return slope;
 }
 
@@ -230,21 +230,20 @@ double ControlNode::estimate_lane_slope(const std::vector<Point2D> & path_points
 double ControlNode::update_speed_command(double slope, double dt)
 {
   // slope가 클수록 (더 많이 기울어질수록) → 곡선 구간 → 속도 줄이기
-  const double error = std::abs(slope);  // 직선(기울기 0)을 target으로 보는 개념
+  const double error = std::abs(slope);  // 직선에 가까울수록 0에 가까워짐 
 
-  slope_integral_ = std::clamp(
-    slope_integral_ + error * dt, -integral_limit_, integral_limit_);
+  // 적분 항 업데이트 (클램프)
+  slope_integral_ = std::clamp(slope_integral_ + error * dt, -integral_limit_, integral_limit_);
 
+  // 미분 항 계산
   const double derivative = (error - prev_slope_) / dt;
   prev_slope_ = error;
 
-  // PID 보정값이 클수록 속도를 더 깎음
-  const double correction =
-    speed_kp_ * error + speed_ki_ * slope_integral_ + speed_kd_ * derivative;
+  // PID 계산
+  const double correction = speed_kp_ * error + speed_ki_ * slope_integral_ + speed_kd_ * derivative;
 
   // base_speed_ 에서 correction 만큼 빼고, [min_speed_, max_speed_]로 제한
-  const double command =
-    std::clamp(base_speed_ - correction, min_speed_, max_speed_);
+  const double command = std::clamp(base_speed_ - correction, min_speed_, max_speed_);
 
   return command;
 }
