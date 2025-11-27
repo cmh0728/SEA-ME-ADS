@@ -15,35 +15,34 @@ namespace control
 {
 namespace
 {
-// ----- 스케일 카 기준 튜닝 값 -----
-// IPM 상에서 forward 범위가 0.4~0.7m 정도라서 lookahead도 그 근처로 잡음
-constexpr double kDefaultLookahead     = 0.40;  // 기본 lookahead (m)
-constexpr double kDefaultMinLookahead  = 0.30;  // 최소 lookahead
-constexpr double kDefaultMaxLookahead  = 0.60;  // 최대 lookahead
+
+// 나중에 yaml 파일로 정리 
+// ----- pure pursuit params -----
+constexpr double kDefaultLookahead     = 0.45;  // 기본 lookahead (m)
+constexpr double kDefaultMinLookahead  = 0.40;  // 최소 lookahead
+constexpr double kDefaultMaxLookahead  = 0.70;  // 최대 lookahead
 
 // speed: cmd_vel.linear.x = 0 ~ 50 근처 사용
-constexpr double kDefaultBaseSpeed     = 25.0;  // 직선 기준 속도
-constexpr double kDefaultMinSpeed      =  5.0;  // 너무 느리면 제어 불안정하니 5 이상
+constexpr double kDefaultBaseSpeed     = 20.0;  // 직선 기준 속도
+constexpr double kDefaultMinSpeed      = 10.0;  // 너무 느리면 제어 불안정하니 10 이상
 constexpr double kDefaultMaxSpeed      = 50.0;  // 하드웨어 상한
 
-// steer: cmd_vel.angular.z = -1 ~ +1  ( -1 좌, +1 우 )
+// steer
 constexpr double kDefaultMaxAngular    = 1.0;
 
-// 곡선 구간 속도 제어용 PID 파라미터 (필요하면 나중에 튜닝)
-constexpr double kDefaultSpeedKp       = 4.0;
-constexpr double kDefaultSpeedKi       = 0.0;
-constexpr double kDefaultSpeedKd       = 0.2;
-constexpr double kDefaultIntegralLimit = 5.0;
+// 속도 제어용 PID 파라미터 
+constexpr double kDefaultSpeedKp       = 5.0;
+constexpr double kDefaultSpeedKi       = 0.001;
+constexpr double kDefaultSpeedKd       = 0.5;
+constexpr double kDefaultIntegralLimit = 5.0; // 적분 항 클램프 한계
 
 // 조향 민감도 (curvature → steer 로 보낼 때 gain)
-//   - 0.1 ~ 0.5 사이에서 시작해보고 튜닝하면 됨
-constexpr double kSteerGain            = 0.4;
+constexpr double kSteerGain            = 0.6;
 }  // namespace
 
 //================================================== ctor ==================================================//
 
-ControlNode::ControlNode()
-: rclcpp::Node("lane_follow_control"),
+ControlNode::ControlNode(): rclcpp::Node("control_node"),
   lookahead_distance_(declare_parameter("lookahead_distance", kDefaultLookahead)),
   min_lookahead_(declare_parameter("min_lookahead", kDefaultMinLookahead)),
   max_lookahead_(declare_parameter("max_lookahead", kDefaultMaxLookahead)),
@@ -62,22 +61,26 @@ ControlNode::ControlNode()
   const std::string path_topic = declare_parameter("path_topic", std::string("/planning/path"));
   auto qos = rclcpp::QoS(rclcpp::KeepLast(10));
 
+  // path sub
   path_sub_ = create_subscription<nav_msgs::msg::Path>(
     path_topic, qos,
     std::bind(&ControlNode::on_path, this, std::placeholders::_1));
 
+  // cmd pub
   cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", qos);
 
-  // ★ 타겟 포인트용 Marker 퍼블리셔
+  // ld pub
   target_marker_pub_ =
     create_publisher<visualization_msgs::msg::Marker>("/control/lookahead_target", 1);
 
+  // log 
   RCLCPP_INFO(get_logger(),
     "Control node ready (lookahead %.2f m, base speed %.2f)",
     lookahead_distance_, base_speed_);
 }
 
 //================================================== on_path func ==================================================//
+// 경로 수신 콜백
 void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
 {
   if (!msg || msg->poses.empty())
@@ -90,12 +93,12 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   last_update_time_ = now;
 
   // 1) Path → (x=lateral, y=forward)
-  std::vector<Point2D> path_points;
-  path_points.reserve(msg->poses.size());
+  std::vector<Point2D> path_points; // 차량 기준 좌표계 포인트 저장 vector  
+  path_points.reserve(msg->poses.size()); // 메모리 미리 할당
   for (const auto & pose : msg->poses)
   {
-    Point2D pt{pose.pose.position.y, pose.pose.position.x};
-    path_points.push_back(pt);
+    Point2D pt{pose.pose.position.y, pose.pose.position.x}; // 좌표 변환, Point2D 에 저장
+    path_points.push_back(pt); // path_points 에 추가
   }
 
   if (path_points.empty())
@@ -103,16 +106,15 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
     return;
   }
 
-  // 2) 경로 기울기 계산 (직선 vs 곡선 판단용)
+  // 경로 기울기 계산 
   const double slope = estimate_lane_slope(path_points);
 
-  // 3) 속도 명령 계산 (이미 있던 함수 그대로 사용)
+  // 속도 명령 계산 
   const double speed_cmd = update_speed_command(slope, dt);
 
-  // 4) 속도에 따른 동적 lookahead 계산
-  //    - 직선(속도↑) → lookahead 크게 (max_lookahead_)
-  //    - 곡선(속도↓) → lookahead 작게 (min_lookahead_)
-  double speed_norm = 0.0;
+  // 속도에 따른 동적 lookahead 계산
+
+  double speed_norm = 0.0; // 0.0 ~ 1.0
   if (max_speed_ > min_speed_)
   {
     speed_norm = (speed_cmd - min_speed_) / (max_speed_ - min_speed_);
@@ -120,10 +122,9 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   speed_norm = std::clamp(speed_norm, 0.0, 1.0);
 
   // 동적으로 사용할 lookahead
-  const double dynamic_lookahead =
-    min_lookahead_ + (max_lookahead_ - min_lookahead_) * speed_norm;
+  const double dynamic_lookahead = min_lookahead_ + (max_lookahead_ - min_lookahead_) * speed_norm;
 
-  // 5) dynamic_lookahead를 사용해서 Pure Pursuit 타겟 선택
+  // dynamic_lookahead를 사용해서 Pure Pursuit 타겟 선택
   Point2D target{0.0, 0.0};
   double selected_lookahead = 0.0;
   if (!compute_lookahead_target(path_points, dynamic_lookahead, target, selected_lookahead))
@@ -134,17 +135,16 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   // RViz 타겟 시각화
   publish_target_marker(target, msg->header.frame_id);
 
-  // 6) Pure Pursuit 곡률 계산
-  const double curvature =
-    (2.0 * target.x) / std::max(1e-3, selected_lookahead * selected_lookahead);
+  // Pure Pursuit 곡률 계산
+  const double curvature = (2.0 * target.x) / std::max(1e-3, selected_lookahead * selected_lookahead);
 
-  // 7) 조향 게인 & 부호 보정
+  // 조향 게인 & 부호 보정
   constexpr double kSteerGain = 0.03;  // 이미 쓰던 값
 
   double steer_cmd = -kSteerGain * curvature * speed_cmd;
   steer_cmd = std::clamp(steer_cmd, -max_angular_z_, max_angular_z_);
 
-  // 8) 최종 Twist 구성
+  // 최종 Twist 구성
   geometry_msgs::msg::Twist cmd;
   cmd.linear.x  = std::clamp(speed_cmd, -max_speed_, max_speed_);
   cmd.angular.z = steer_cmd;
@@ -159,8 +159,8 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
 }
 
 
-//================================================== compute_lookahead_target ==================================================//
-
+//================================================== compute_lookahead_target func ==================================================//
+// Pure Pursuit 타겟 선택
 bool ControlNode::compute_lookahead_target(const std::vector<Point2D> & path_points,
                                            double lookahead_distance,
                                            Point2D & target,
@@ -202,8 +202,8 @@ bool ControlNode::compute_lookahead_target(const std::vector<Point2D> & path_poi
   return true;
 }
 
-//================================================== estimate_lane_slope ==================================================//
-
+//================================================== estimate_lane_slope func ==================================================//
+// 경로 기울기 간단 추정 --> lane coefficient  계산한거 넘겨주는 코드 추가 
 double ControlNode::estimate_lane_slope(const std::vector<Point2D> & path_points) const
 {
   if (path_points.size() < 2)
@@ -211,7 +211,7 @@ double ControlNode::estimate_lane_slope(const std::vector<Point2D> & path_points
     return 0.0;
   }
 
-  // 간단히: 맨 앞 포인트와 맨 뒤 포인트로 전체 기울기 계산
+  // 맨 앞 포인트와 맨 뒤 포인트로 전체 기울기 계산
   //   slope = Δx / Δy (전방 기준)
   const auto & first = path_points.front();
   const auto & last  = path_points.back();
@@ -220,11 +220,13 @@ double ControlNode::estimate_lane_slope(const std::vector<Point2D> & path_points
   {
     return 0.0;
   }
-  return (last.x - first.x) / dy;
+  double slope = (last.x - first.x) / dy;
+  std::cout << "slope: " << slope << std::endl;
+  return slope;
 }
 
-//================================================== update_speed_command ==================================================//
-
+//================================================== update_speed_command func ==================================================//
+// 경로 기울기에 따른 속도 PID 보정
 double ControlNode::update_speed_command(double slope, double dt)
 {
   // slope가 클수록 (더 많이 기울어질수록) → 곡선 구간 → 속도 줄이기
@@ -247,13 +249,13 @@ double ControlNode::update_speed_command(double slope, double dt)
   return command;
 }
 
-//================================================== build_cmd ==================================================//
-
+//================================================== build_cmd func ==================================================//
+// ros topic /cmd_vel 용 Twist 메시지 생성
 geometry_msgs::msg::Twist ControlNode::build_cmd(double /*curvature*/, double speed) const
 {
   geometry_msgs::msg::Twist cmd;
 
-  // speed: 0 ~ 50 근처로 clamping
+  // 최저,최대 속도 설정
   cmd.linear.x = std::clamp(speed, min_speed_, max_speed_);
 
   // 조향은 on_path()에서 따로 설정하므로 여기서는 0으로 초기화
@@ -261,7 +263,8 @@ geometry_msgs::msg::Twist ControlNode::build_cmd(double /*curvature*/, double sp
   return cmd;
 }
 
-
+//================================================== publish_target_marker func ==================================================//
+// ld marker pub
 void ControlNode::publish_target_marker(const Point2D & target, const std::string & frame_id)
 {
   visualization_msgs::msg::Marker marker;
