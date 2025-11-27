@@ -30,12 +30,15 @@ public:
   };
 
   PlanningNode();
-  void LoadParam();
+  
   
 private:
   // 콜백
   void on_left_lane(const perception::msg::Lane::ConstSharedPtr msg);
   void on_right_lane(const perception::msg::Lane::ConstSharedPtr msg);
+
+  // 파라미터 로드
+  void LoadParam();
 
   // 메인 처리
   void process_lanes();
