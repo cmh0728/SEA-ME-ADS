@@ -109,10 +109,6 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   publish_target_marker(target, msg->header.frame_id);
 
   // ----- 여기부터 조향/속도 계산 -----
-  const double curvature =
-    (2.0 * target.x) / std::max(1e-3, selected_lookahead * selected_lookahead);
-
-  // ----- 여기부터 조향/속도 계산 -----
 
   // 1) Pure Pursuit 곡률 계산 (좌측(+x) → 양의 curvature)
   const double curvature =
