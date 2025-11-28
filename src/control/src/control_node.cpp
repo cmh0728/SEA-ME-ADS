@@ -21,6 +21,7 @@ namespace
 constexpr double kDefaultLookahead     = 0.45;  // 기본 lookahead (m)
 constexpr double kDefaultMinLookahead  = 0.40;  // 최소 lookahead
 constexpr double kDefaultMaxLookahead  = 0.70;  // 최대 lookahead
+constexpr double kDefualtCarL          = 0.26;  // 차량 축간 거리 (m)
 
 // speed: cmd_vel.linear.x = 0 ~ 50 근처 사용
 constexpr double kDefaultBaseSpeed     = 20.0;  // 직선 기준 속도
@@ -43,13 +44,18 @@ constexpr double kSteerGain            = 0.6;
 //================================================== ctor ==================================================//
 
 ControlNode::ControlNode(): rclcpp::Node("control_node"),
+  // Ld
   lookahead_distance_(declare_parameter("lookahead_distance", kDefaultLookahead)),
   min_lookahead_(declare_parameter("min_lookahead", kDefaultMinLookahead)),
   max_lookahead_(declare_parameter("max_lookahead", kDefaultMaxLookahead)),
+  car_L(declare_parameter("car_L", kDefualtCarL)),
+
+  // speed / steer limits
   base_speed_(declare_parameter("base_speed", kDefaultBaseSpeed)),
   min_speed_(declare_parameter("min_speed", kDefaultMinSpeed)),
   max_speed_(declare_parameter("max_speed", kDefaultMaxSpeed)),
   max_angular_z_(declare_parameter("max_angular_z", kDefaultMaxAngular)),
+  // PID params
   speed_kp_(declare_parameter("slope_speed_kp", kDefaultSpeedKp)),
   speed_ki_(declare_parameter("slope_speed_ki", kDefaultSpeedKi)),
   speed_kd_(declare_parameter("slope_speed_kd", kDefaultSpeedKd)),
@@ -121,7 +127,7 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   }
   speed_norm = std::clamp(speed_norm, 0.0, 1.0);
 
-  // 동적으로 사용할 lookahead
+  // 동적으로 사용할 lookahead (Ld)
   const double dynamic_lookahead = min_lookahead_ + (max_lookahead_ - min_lookahead_) * speed_norm;
 
   // dynamic_lookahead를 사용해서 Pure Pursuit 타겟 선택
@@ -131,6 +137,9 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   {
     return;
   }
+
+  double error = target.x; // 왼쪽 +, 오른쪽 - (scale : m)
+  std::cout << "error : " << error << std::endl;
 
   // RViz 타겟 시각화
   publish_target_marker(target, msg->header.frame_id);

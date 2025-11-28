@@ -1524,6 +1524,7 @@ bool EnforceLaneConsistencyAnchor(LANE_COEFFICIENT& left,
     double mL_new, mR_new;
     double xL_new, xR_new;
 
+
     if (left_anchor) {
         xL_new = (1.0 - alpha_anchor_pos) * xL + alpha_anchor_pos * xL_sym;
         xR_new = (1.0 - alpha_other_pos ) * xR + alpha_other_pos  * xR_sym;
