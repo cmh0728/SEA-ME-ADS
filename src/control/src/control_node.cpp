@@ -48,7 +48,7 @@ ControlNode::ControlNode(): rclcpp::Node("control_node"),
   lookahead_distance_(declare_parameter("lookahead_distance", kDefaultLookahead)),
   min_lookahead_(declare_parameter("min_lookahead", kDefaultMinLookahead)),
   max_lookahead_(declare_parameter("max_lookahead", kDefaultMaxLookahead)),
-  car_L(declare_parameter("car_L", kDefualtCarL)),
+  car_L_(declare_parameter("car_L", kDefualtCarL)),
 
   // speed / steer limits
   base_speed_(declare_parameter("base_speed", kDefaultBaseSpeed)),
@@ -133,24 +133,25 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   // dynamic_lookahead를 사용해서 Pure Pursuit 타겟 선택
   Point2D target{0.0, 0.0};
   double selected_lookahead = 0.0;
+  // 실제 목표지점을 찾지 못하면 false 리턴 
   if (!compute_lookahead_target(path_points, dynamic_lookahead, target, selected_lookahead))
   {
     return;
   }
 
-  double error = target.x; // 왼쪽 +, 오른쪽 - (scale : m)
-  std::cout << "error : " << error << std::endl;
+  double error = target.x; // 오른쪽으로 치우치면 양수값, 왼쪽으로 치우치면 음수값 (scale : m)
+  // std::cout << "error : " << error << std::endl;
 
   // RViz 타겟 시각화
   publish_target_marker(target, msg->header.frame_id);
 
   // Pure Pursuit 곡률 계산
   const double curvature = (2.0 * target.x) / std::max(1e-3, selected_lookahead * selected_lookahead);
+  // std::cout << "curvature : " << curvature << std::endl;
+  double steer_cmd = std::atan(car_L_ * curvature)
 
   // 조향 게인 & 부호 보정
-  constexpr double kSteerGain = 0.03;  // 이미 쓰던 값
-
-  double steer_cmd = -kSteerGain * curvature * speed_cmd;
+  // constexpr double kSteerGain = 0.03;  // 이미 쓰던 값
   steer_cmd = std::clamp(steer_cmd, -max_angular_z_, max_angular_z_);
 
   // 최종 Twist 구성
