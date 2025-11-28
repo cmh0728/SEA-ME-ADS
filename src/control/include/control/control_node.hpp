@@ -63,6 +63,7 @@ private:
   double lookahead_distance_;
   double min_lookahead_;
   double max_lookahead_;
+  double car_L;  // 차량 축간 거리 (m)
 
   // 속도/조향 한계
   double base_speed_;
@@ -75,6 +76,7 @@ private:
   double speed_ki_;
   double speed_kd_;
   double integral_limit_;
+
 
   double slope_integral_;
   double prev_slope_;        // 이전 slope (derivative 계산용)
