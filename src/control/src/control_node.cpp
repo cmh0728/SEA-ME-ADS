@@ -148,7 +148,7 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   // Pure Pursuit 곡률 계산
   const double curvature = (2.0 * target.x) / std::max(1e-3, selected_lookahead * selected_lookahead);
   // std::cout << "curvature : " << curvature << std::endl;
-  double steer_cmd = std::atan(kDefualtCarL * curvature)
+  double steer_cmd = std::atan(kDefualtCarL * curvature);
 
   // 조향 게인 & 부호 보정
   // constexpr double kSteerGain = 0.03;  // 이미 쓰던 값
