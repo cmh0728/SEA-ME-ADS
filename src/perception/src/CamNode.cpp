@@ -19,7 +19,7 @@ CAMERA_LANEINFO st_LaneInfoLeftMain{};
 CAMERA_LANEINFO st_LaneInfoRightMain{};
 
 // 시각화 옵션
-bool visualize = true;
+bool visualize = false;
 bool track_bar = false;
 bool vis_slidingwindow = true; // sliding window 시각화 --> 성능에 영향을 주고있음 --> ture 냅두기 
 static CAMERA_DATA static_camera_data;
