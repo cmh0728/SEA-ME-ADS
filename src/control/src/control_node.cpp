@@ -119,6 +119,8 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   // 속도 명령 계산 
   const double speed_cmd = update_speed_command(slope, dt);
 
+  // 고정 ld 사용 
+
   // 속도에 따른 동적 lookahead 계산
 
   double speed_norm = 0.0; // 0.0 ~ 1.0
@@ -202,6 +204,7 @@ bool ControlNode::compute_lookahead_target(const std::vector<Point2D> & path_poi
 
   const double min_l = min_lookahead_;
   const double max_l = max_lookahead_;
+  std::cout << "min_l: " << min_l << ", max_l: " << max_l << std::endl;
   const double desired = std::clamp(lookahead_distance, min_l, max_l);
 
   const double desired_sq = desired * desired;
