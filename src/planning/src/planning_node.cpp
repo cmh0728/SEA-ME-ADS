@@ -272,9 +272,15 @@ bool PlanningNode::build_centerline(
   const double y_start = start_offset_y_;
   const double y_end   = start_offset_y_ + max_path_length_;
 
+  // 직전 centerline x값 + 한쪽 차선 fallback용 동적 오프셋
+  double prev_center_x = 0.0;
+  bool   has_prev_center = false;
+
+  double single_lane_offset = 0.0;
+  bool   offset_initialized = false;
+
   for (double y = y_start; y <= y_end; y += resample_step_)
   {
-    // 각 y에서 left/right 차선 값 샘플링
     std::optional<double> left_x;
     std::optional<double> right_x;
 
@@ -295,25 +301,57 @@ bool PlanningNode::build_centerline(
 
     if (left_x && right_x)
     {
-      // 양쪽 차선이 모두 있을 때 → 진짜 중앙
-      pt.x = (*left_x + *right_x) * 0.5;
-    }
-    else if (left_x && !right_x)
-    {
-      // 왼쪽 차선만 있을 때 → 차폭 절반만큼 오른쪽(-)으로 평행 이동
-      pt.x = *left_x - lane_half_width_;
-    }
-    else // (!left_x && right_x)
-    {
-      // 오른쪽 차선만 있을 때 → 차폭 절반만큼 왼쪽(+)으로 평행 이동
-      pt.x = *right_x + lane_half_width_;
-    }
+      // ===== 1) 양쪽 차선이 모두 있는 구간: 진짜 중앙선 =====
+      double center_x = (*left_x + *right_x) * 0.5;
+      pt.x = center_x;
 
-    centerline.push_back(pt);
+      centerline.push_back(pt);
+      prev_center_x = center_x;
+      has_prev_center = true;
+
+      // 양쪽 차선이 다시 보이기 시작하면, 단일 차선 offset은 초기화해도 됨
+      // (필요 없으면 이 줄은 생략해도 됨)
+      // offset_initialized = false;
+    }
+    else
+    {
+      // ===== 2) 한쪽 차선만 있는 구간 =====
+      // base_lane: 한쪽 차선
+      const bool use_left = (bool)left_x;
+      const double base_x = use_left ? *left_x : *right_x;
+
+      // 아직 offset이 안 정해졌다면, 경계에서 한 번 설정
+      if (!offset_initialized)
+      {
+        if (has_prev_center)
+        {
+          // 직전 centerline과 base_lane 사이의 차이를 그대로 offset으로 사용
+          single_lane_offset = prev_center_x - base_x;
+        }
+        else
+        {
+          // 시작부터 한쪽 차선만 있는 경우: 기존 로직처럼 lane_half_width_ 사용
+          if (use_left) {
+            single_lane_offset = -lane_half_width_;  // left 기준 오른쪽(-)으로
+          } else {
+            single_lane_offset = +lane_half_width_;  // right 기준 왼쪽(+)으로
+          }
+        }
+        offset_initialized = true;
+      }
+
+      double center_x = base_x + single_lane_offset;
+      pt.x = center_x;
+
+      centerline.push_back(pt);
+      prev_center_x = center_x;
+      has_prev_center = true;
+    }
   }
 
   return !centerline.empty();
 }
+
 
 
 //################################################## vis : publish_path func ##################################################//
