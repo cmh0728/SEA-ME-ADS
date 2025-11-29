@@ -77,6 +77,16 @@ private:
   double speed_kd_;
   double integral_limit_;
 
+  // 조향 필터링 
+  double max_steer_rate_;
+  double max_steer_jump_;
+
+  double prev_steer_cmd_;
+  bool   has_prev_steer_;
+
+  // 조향 필터 함수
+  double filter_steering(double raw_steer, double dt);
+
 
   double slope_integral_;
   double prev_slope_;        // 이전 slope (derivative 계산용)

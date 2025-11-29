@@ -39,6 +39,11 @@ constexpr double kDefaultIntegralLimit = 5.0; // 적분 항 클램프 한계
 
 // 조향 민감도 (curvature → steer 로 보낼 때 gain)
 constexpr double kSteerGain            = 2.293;
+// 조향 신뢰도 체크 
+constexpr double kDefaultMaxSteerRate  = 2.0; // rad/s, 한 프레임당 변화율 제한
+constexpr double kDefaultMaxSteerJump  = 0.6; // rad, 한 번에 이만큼 튀면 아예 버림 (outlier)
+
+
 }  // namespace
 
 //================================================== ctor ==================================================//
@@ -62,7 +67,12 @@ ControlNode::ControlNode(): rclcpp::Node("control_node"),
   integral_limit_(declare_parameter("slope_integral_limit", kDefaultIntegralLimit)),
   slope_integral_(0.0),
   prev_slope_(0.0),
-  last_update_time_(this->now())
+  last_update_time_(this->now()),
+    // ===== 조향 필터용 파라미터 & 상태 =====
+  max_steer_rate_(declare_parameter("max_steer_rate", kDefaultMaxSteerRate)),
+  max_steer_jump_(declare_parameter("max_steer_jump", kDefaultMaxSteerJump)),
+  prev_steer_cmd_(0.0),
+  has_prev_steer_(false)
 {
   const std::string path_topic = declare_parameter("path_topic", std::string("/planning/path"));
   auto qos = rclcpp::QoS(rclcpp::KeepLast(10));
@@ -159,10 +169,19 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
     // 거의 직선
     gain_factor *= 1.0;
   }
+  
   // steer 보정 
   double steer_cmd = raw_steer * gain_factor;
-  // 조향 게인 & 부호 보정
+
+  // 1차 안전 클램프
   steer_cmd = std::clamp(steer_cmd, -max_angular_z_, max_angular_z_);
+
+  // === 이전 프레임과 비교해서 이상치/과도한 변화 방지 ===
+  steer_cmd = filter_steering(steer_cmd, dt);
+
+  // 최종 안전 클램프 (필터 후에도 범위 보장)
+  steer_cmd = std::clamp(steer_cmd, -max_angular_z_, max_angular_z_);
+
 
   // 최종 Twist 구성
   geometry_msgs::msg::Twist cmd;
@@ -331,6 +350,43 @@ void ControlNode::publish_target_marker(const Point2D & target, const std::strin
 
   target_marker_pub_->publish(marker);
 }
+
+//================================================== filter_steering func ==================================================//
+double ControlNode::filter_steering(double raw_steer, double dt)
+{
+  // 최초 프레임이면 그냥 통과
+  if (!has_prev_steer_) {
+    prev_steer_cmd_ = raw_steer;
+    has_prev_steer_ = true;
+    return raw_steer;
+  }
+
+  const double delta = raw_steer - prev_steer_cmd_;
+
+  // 1) 완전 말도 안되는 점프 감지 → 이번 프레임은 버리고 이전 값 유지
+  if (std::abs(delta) > max_steer_jump_)
+  {
+    RCLCPP_WARN(
+      get_logger(),
+      "Reject steering outlier: raw=%.3f, prev=%.3f (|Δ|=%.3f > %.3f)",
+      raw_steer, prev_steer_cmd_, delta, max_steer_jump_);
+    return prev_steer_cmd_;
+  }
+
+  // 2) 정상 범위 내에서는 변화율 제한 (rate limiting)
+  const double max_delta = max_steer_rate_ * dt; // 이번 프레임에서 허용 가능한 최대 변화량
+  double limited_delta = delta;
+  if (std::abs(limited_delta) > max_delta)
+  {
+    limited_delta = (limited_delta > 0.0 ? 1.0 : -1.0) * max_delta;
+  }
+
+  const double filtered = prev_steer_cmd_ + limited_delta;
+
+  prev_steer_cmd_ = filtered;
+  return filtered;
+}
+
 
 }  // namespace control
 
