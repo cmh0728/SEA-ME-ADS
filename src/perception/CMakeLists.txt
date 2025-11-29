@@ -10,18 +10,57 @@ find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(yaml-cpp REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
 
-add_executable(perception_node src/perception_node.cpp)
-target_include_directories(perception_node
+# 메시지 인터페이스 생성
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/LanePnt.msg"
+  "msg/Lane.msg"
+)
+
+
+# 실행파일, include 경로
+add_executable(CameraProcessing
+  src/CamNode.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../global/global.cpp
+)
+
+target_include_directories(CameraProcessing
   PRIVATE
     include
-    ${OpenCV_INCLUDE_DIRS})
-ament_target_dependencies(perception_node rclcpp sensor_msgs cv_bridge)
-target_link_libraries(perception_node ${OpenCV_LIBRARIES})
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${OpenCV_INCLUDE_DIRS}
+    ${EIGEN3_INCLUDE_DIRS}   
+)
 
-install(TARGETS perception_node
-  DESTINATION lib/${PROJECT_NAME})
 
-ament_export_dependencies(rclcpp sensor_msgs cv_bridge OpenCV)
+ament_target_dependencies(CameraProcessing
+  rclcpp
+  sensor_msgs
+  cv_bridge
+  OpenCV
+  yaml-cpp
+  
+)
+
+target_link_libraries(CameraProcessing
+  Eigen3::Eigen              
+  ${OpenCV_LIBRARIES}
+  yaml-cpp
+)
+
+rosidl_target_interfaces(CameraProcessing
+  ${PROJECT_NAME} "rosidl_typesupport_cpp"
+)
+
+ament_export_dependencies(rosidl_default_runtime)
+
+install(TARGETS CameraProcessing
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+ament_export_dependencies(rclcpp sensor_msgs cv_bridge OpenCV Eigen3 yaml-cpp)
 
 ament_package()

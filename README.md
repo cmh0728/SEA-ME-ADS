@@ -52,7 +52,7 @@ The demo publishes synthetic perception measurements, turns them into planning o
 
 
 ## References
-1. OpenCV: OpenCV is a popular open-source computer vision library that provides a wide range of tools and algorithms for image and video processing. Participants could use OpenCV for pre-processing the video footage, extracting features, and identifying the lane markings. Link: https://opencv.org/
+1. OpenCV: OpenCV is a popular open-source computer vision library that provides a wide range of tools and algorithms for image and video processing. Participants could use OpenCV for pre-processing the video footage, extracting features, and identifying the lane markings. Link: https://docs.opencv.org/4.5.4/d7/dbd/group__imgproc.html
 
 2. TensorFlow: TensorFlow is an open-source machine learning framework that provides a wide range of tools for training deep neural networks. Participants could use TensorFlow for training a deep neural network for identifying extracted lane markings. Link: https://www.tensorflow.org/
 
