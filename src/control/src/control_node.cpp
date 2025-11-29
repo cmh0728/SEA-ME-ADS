@@ -119,28 +119,16 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   // 속도 명령 계산 
   const double speed_cmd = update_speed_command(slope, dt);
 
-  // 고정 ld 사용 
-
-  // 속도에 따른 동적 lookahead 계산
-
-  double speed_norm = 0.0; // 0.0 ~ 1.0
-  if (max_speed_ > min_speed_)
-  {
-    speed_norm = (speed_cmd - min_speed_) / (max_speed_ - min_speed_);
-  }
-  speed_norm = std::clamp(speed_norm, 0.0, 1.0);
-
-  // 동적으로 사용할 lookahead (Ld)
-  const double dynamic_lookahead = min_lookahead_ + (max_lookahead_ - min_lookahead_) * speed_norm;
-
-  // dynamic_lookahead를 사용해서 Pure Pursuit 타겟 선택
+  // ====== Ld: 경로 내에서 차량 중심(0,0)으로부터 가장 먼 점 사용 ======
   Point2D target{0.0, 0.0};
-  double selected_lookahead = 0.0;
-  // 실제 목표지점을 찾지 못하면 false 리턴 
-  if (!compute_lookahead_target(path_points, dynamic_lookahead, target, selected_lookahead))
+  double selected_lookahead = 0.0;   // = |target| (거리)
+
+  // lookahead_distance 인자는 더 이상 사용하지 않으므로 0.0 전달
+  if (!compute_lookahead_target(path_points, 0.0, target, selected_lookahead))
   {
     return;
   }
+
 
   double error = target.x; // 오른쪽으로 치우치면 양수값, 왼쪽으로 치우치면 음수값 (scale : m)
   // std::cout << "error : " << error << std::endl;
@@ -150,6 +138,7 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
 
   // Pure Pursuit 곡률 계산
   const double curvature = (2.0 * target.x) / std::max(1e-3, selected_lookahead * selected_lookahead);
+  
   // std::cout << "curvature : " << curvature << std::endl;
   // 조향각 계산 --> slope에 따라서 다른 게인 적용 
   double raw_steer = std::atan(kDefualtCarL * curvature); 
@@ -184,16 +173,17 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
 
   RCLCPP_DEBUG(
     get_logger(),
-    "PP target=(%.3f, %.3f) L(desired)=%.3f L(actual)=%.3f slope=%.3f v=%.2f steer=%.3f",
-    target.x, target.y, dynamic_lookahead, selected_lookahead,
+    "PP target=(%.3f, %.3f) L=%.3f slope=%.3f v=%.2f steer=%.3f",
+    target.x, target.y, selected_lookahead,
     slope, cmd.linear.x, cmd.angular.z);
+
 }
 
 
 //================================================== compute_lookahead_target func ==================================================//
 // Pure Pursuit 타겟 선택
 bool ControlNode::compute_lookahead_target(const std::vector<Point2D> & path_points,
-                                           double lookahead_distance,
+                                           double /*lookahead_distance*/,
                                            Point2D & target,
                                            double & actual_lookahead) const
 {
@@ -202,37 +192,50 @@ bool ControlNode::compute_lookahead_target(const std::vector<Point2D> & path_poi
     return false;
   }
 
-  const double min_l = min_lookahead_;
-  const double max_l = max_lookahead_;
-  std::cout << "min_l: " << min_l << ", max_l: " << max_l << std::endl;
-  const double desired = std::clamp(lookahead_distance, min_l, max_l);
+  const Point2D* candidate = nullptr;
+  double max_dist_sq = 0.0;
 
-  const double desired_sq = desired * desired;
-  const Point2D * candidate = nullptr;
+  // 차량 앞쪽만 고려(원하면 pt.y > 0.0 조건은 빼도 됨)
+  constexpr double kMinForward = 0.0;  // 완전 앞쪽만 쓰고 싶으면 0.05 같은 값으로 올리기
+
   for (const auto & pt : path_points)
   {
-    const double dist_sq = pt.x * pt.x + pt.y * pt.y;
-    if (dist_sq >= desired_sq)
+    // 차량 뒤쪽/정확히 중심은 스킵
+    if (pt.y <= kMinForward)
     {
-      candidate = &pt;
-      actual_lookahead = std::sqrt(dist_sq);
-      break;
+      continue;
+    }
+
+    const double dist_sq = pt.x * pt.x + pt.y * pt.y;
+
+    if (!candidate || dist_sq > max_dist_sq)
+    {
+      candidate    = &pt;
+      max_dist_sq  = dist_sq;
     }
   }
 
+  // 전방에 후보가 하나도 없을 때 fallback: 마지막 점 사용
   if (!candidate)
   {
-    candidate = &path_points.back();
-    actual_lookahead = std::hypot(candidate->x, candidate->y);
-    if (actual_lookahead < 1e-3)
+    const auto & back = path_points.back();
+    const double dist_sq = back.x * back.x + back.y * back.y;
+
+    if (dist_sq < 1e-6)
     {
       return false;
     }
+
+    target = back;
+    actual_lookahead = std::sqrt(dist_sq);
+    return true;
   }
 
   target = *candidate;
+  actual_lookahead = std::sqrt(max_dist_sq);
   return true;
 }
+
 
 //================================================== estimate_lane_slope func ==================================================//
 // 경로 기울기 간단 추정 --> lane coefficient  계산한거 넘겨주는 코드 추가 
