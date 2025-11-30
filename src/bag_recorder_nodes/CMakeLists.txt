@@ -10,6 +10,8 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rosbag2_cpp REQUIRED)
 find_package(example_interfaces REQUIRED)
+find_package(std_msgs REQUIRED)
+
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -24,7 +26,10 @@ if(BUILD_TESTING)
 endif()
 
 add_executable(simple_bag_recorder src/simple_bag_recorder.cpp)
-ament_target_dependencies(simple_bag_recorder rclcpp rosbag2_cpp)
+ament_target_dependencies(simple_bag_recorder 
+  rclcpp 
+  rosbag2_cpp
+  std_msgs)
 
 install(TARGETS
   simple_bag_recorder
