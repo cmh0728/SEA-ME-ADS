@@ -363,7 +363,7 @@ double ControlNode::filter_steering(double raw_steer, double dt)
 
   const double delta = raw_steer - prev_steer_cmd_;
 
-  // 1) 완전 말도 안되는 점프 감지 → 이번 프레임은 버리고 이전 값 유지
+  // 완전 말도 안되는 조향값 감지 → 이번 프레임은 버리고 이전 값 유지
   if (std::abs(delta) > max_steer_jump_)
   {
     RCLCPP_WARN(
