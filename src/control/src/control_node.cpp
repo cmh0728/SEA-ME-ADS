@@ -24,8 +24,8 @@ constexpr double kDefaultMaxLookahead  = 0.70;  // 최대 lookahead
 constexpr double kDefualtCarL          = 0.26;  // 차량 축간 거리 (m)
 
 // speed: cmd_vel.linear.x = 0 ~ 50 근처 사용
-constexpr double kDefaultBaseSpeed     = 20.0;  // 직선 기준 속도
-constexpr double kDefaultMinSpeed      = 10.0;  // 너무 느리면 제어 불안정하니 10 이상
+constexpr double kDefaultBaseSpeed     = 30.0;  // 직선 기준 속도
+constexpr double kDefaultMinSpeed      = 15.0;  // 너무 느리면 제어 불안정하니 10 이상
 constexpr double kDefaultMaxSpeed      = 50.0;  // 하드웨어 상한
 
 // steer
@@ -108,7 +108,7 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   const double dt = std::max(1e-3, (now - last_update_time_).seconds());
   last_update_time_ = now;
 
-  // 1) Path → (x=lateral, y=forward)
+  // Path → (x=lateral, y=forward)
   std::vector<Point2D> path_points; // 차량 기준 좌표계 포인트 저장 vector  
   path_points.reserve(msg->poses.size()); // 메모리 미리 할당
   for (const auto & pose : msg->poses)
@@ -293,7 +293,7 @@ double ControlNode::update_speed_command(double slope, double dt)
   const double derivative = (error - prev_slope_) / dt;
   prev_slope_ = error;
 
-  // PID 계산
+  // PID 계산 --> 직선이면 correction 값이 거의 0 
   const double correction = speed_kp_ * error + speed_ki_ * slope_integral_ + speed_kd_ * derivative;
 
   // base_speed_ 에서 correction 만큼 빼고, [min_speed_, max_speed_]로 제한
