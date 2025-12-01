@@ -32,15 +32,15 @@ constexpr double kDefaultMaxSpeed      = 50.0;  // 하드웨어 상한
 constexpr double kDefaultMaxAngular    = 1.0;
 
 // 속도 제어용 PID 파라미터 
-constexpr double kDefaultSpeedKp       = 10.0;
+constexpr double kDefaultSpeedKp       = 8.0;
 constexpr double kDefaultSpeedKi       = 0.001;
-constexpr double kDefaultSpeedKd       = 0.7;
+constexpr double kDefaultSpeedKd       = 0.5;
 constexpr double kDefaultIntegralLimit = 5.0; // 적분 항 클램프 한계
 
 // 조향 민감도 (curvature → steer 로 보낼 때 gain)
 constexpr double kSteerGain            = 2.293;
 // 조향 신뢰도 체크 
-constexpr double kDefaultMaxSteerRate  = 4.0; // rad/s, 한 프레임당 변화율 제한
+constexpr double kDefaultMaxSteerRate  = 4.5; // rad/s, 한 프레임당 변화율 제한
 constexpr double kDefaultMaxSteerJump  = 0.7; // 변화량 제한값
 
 
@@ -105,7 +105,7 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   }
 
   const rclcpp::Time now = this->now();
-  const double dt = std::max(1e-3, (now - last_update_time_).seconds()); // planning/path토픽의 hz의 역수 (30hz 이내)
+  const double dt = std::max(1e-3, (now - last_update_time_).seconds()); // planning/path토픽의 hz의 역수 (30hz ~45)
   last_update_time_ = now;
 
   // Path → (x=lateral, y=forward)
@@ -373,7 +373,7 @@ double ControlNode::filter_steering(double raw_steer, double dt)
     return prev_steer_cmd_;
   }
 
-  // 정상 범위 내에서는 변화율 제한 (rate limiting) , dt는 0.033정도
+  // 정상 범위 내에서는 변화율 제한 (rate limiting) , dt는 0.033~0.025
   const double max_delta = max_steer_rate_ * dt; // 이번 프레임에서 허용 가능한 최대 변화량 --> 0.12정도 
   double limited_delta = delta;
   if (std::abs(limited_delta) > max_delta)
