@@ -1558,7 +1558,7 @@ bool EnforceLaneConsistencyAnchor(LANE_COEFFICIENT& left,
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<CameraProcessing>()); // 객체 생성 및 spin(이벤트 루프 홀출)
+  rclcpp::spin(std::make_shared<perception::CameraProcessing>()); // 객체 생성 및 spin(이벤트 루프 홀출)
   rclcpp::shutdown();
   return 0;
 }
