@@ -2,6 +2,7 @@
 
 #include "perception/CamNode.hpp"
 #include "perception/msg/lane_pnt.hpp"
+#include <cv_bridge/cv_bridge.h>
 
 //################################################## Global parameter ##################################################//
 
@@ -77,15 +78,15 @@ static bool ComputeLaneWidthAngle(const LANE_COEFFICIENT& left,
 // RealSense 이미지 토픽을 구독하고 시각화 창을 준비하는 ROS 노드 생성자
 CameraProcessing::CameraProcessing() : rclcpp::Node("CameraProcessing_node") // rclcpp node 상속 클래스 
 {
-  declare_parameter<std::string>("image_topic", "/camera/camera/color/image_raw/compressed");
+  declare_parameter<std::string>("image_topic", "/camera/camera/color/image_raw");
   const auto image_topic = get_parameter("image_topic").as_string();
 
   LoadParam(&static_camera_data);          // cameardata param load
   LoadMappingParam(&static_camera_data);   // cameradata IPM 맵 로드
 
   //img subscriber
-  image_subscription_ = create_subscription<sensor_msgs::msg::CompressedImage>(image_topic, rclcpp::SensorDataQoS(),
-    std::bind(&CameraProcessing::on_image, this, std::placeholders::_1)); // 콜백 함수 바인딩 : on_image
+  image_subscription_ = create_subscription<sensor_msgs::msg::Image>(image_topic, rclcpp::SensorDataQoS(),
+    std::bind(&CameraProcessing::on_image, this, std::placeholders::_1));
 
   lane_left_pub_ = create_publisher<perception::msg::Lane>("/lane/left", rclcpp::QoS(10));
   lane_right_pub_ = create_publisher<perception::msg::Lane>("/lane/right", rclcpp::QoS(10));
@@ -121,13 +122,15 @@ CameraProcessing::~CameraProcessing()
 //################################################## CameraProcessing img sub function ##################################################//
 
 
-// 압축 이미지를 디코딩하고 프레임을 미리보기로 띄우는 콜백
-void CameraProcessing::on_image(const sensor_msgs::msg::CompressedImage::ConstSharedPtr msg)
+// 이미지 토픽 콜백: 수신된 이미지를 OpenCV 창으로 출력
+void CameraProcessing::on_image(const sensor_msgs::msg::Image::ConstSharedPtr msg)
 {
   //예외처리 
   try
   {
-    cv::Mat img = cv::imdecode(msg->data, cv::IMREAD_COLOR); // cv:Mat 형식 디코딩 
+    // encoding은 RealSense 설정에 따라 bgr8 또는 rgb8
+    cv_bridge::CvImageConstPtr cv_ptr = cv_bridge::toCvShare(msg, "bgr8");  
+    const cv::Mat& img = cv_ptr->image;    // 복사 없이 참조만
 
     ImgProcessing(img,&static_camera_data); // img processing main pipeline function
     publish_lane_messages();
@@ -137,6 +140,12 @@ void CameraProcessing::on_image(const sensor_msgs::msg::CompressedImage::ConstSh
   {
     RCLCPP_ERROR_THROTTLE(
       get_logger(), *get_clock(), 2000, "OpenCV exception during decode: %s", e.what());
+  }
+  catch (const std::exception& e)
+  {
+    RCLCPP_ERROR_THROTTLE(
+      get_logger(), *get_clock(), 2000,
+      "Image callback exception: %s", e.what());
   }
 }
 

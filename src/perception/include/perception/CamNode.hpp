@@ -8,6 +8,7 @@
 #include "rclcpp/qos.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/compressed_image.hpp"
+#include "sensor_msgs/msg/image.hpp"
 #include "perception/msg/lane.hpp"
 
 // RealSense 이미지 토픽을 구독해 OpenCV 창으로 출력하는 간단한 지각 노드
@@ -18,11 +19,11 @@ public:
   ~CameraProcessing() override;
 
 private:
-  void on_image(const sensor_msgs::msg::CompressedImage::ConstSharedPtr msg);
+  void on_image(const sensor_msgs::msg::Image::ConstSharedPtr msg);
   void publish_lane_messages();
 
   std::string window_name_;
-  rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr image_subscription_;
+  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_subscription_;
   rclcpp::Publisher<perception::msg::Lane>::SharedPtr lane_left_pub_;
   rclcpp::Publisher<perception::msg::Lane>::SharedPtr lane_right_pub_;
 };
