@@ -135,11 +135,7 @@ static bool ComputeLaneWidthAngle(const LANE_COEFFICIENT& left,
                                   double& width_px,
                                   double& angle_diff_deg);
 
-perception::msg::Lane build_lane_msg_from_coef(
-    const LANE_COEFFICIENT& coef,
-    int img_width,
-    int img_height,
-    int num_samples = 30);
+perception::msg::Lane build_lane_message(const CAMERA_LANEINFO & lane_info);
 
 
 }  // namespace perception
