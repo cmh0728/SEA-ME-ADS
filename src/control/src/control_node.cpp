@@ -76,7 +76,7 @@ ControlNode::ControlNode(): rclcpp::Node("control_node"),
   has_prev_steer_(false)
 {
   const std::string path_topic = declare_parameter("path_topic", std::string("/planning/path"));
-  auto qos = rclcpp::QoS(rclcpp::KeepLast(10));
+  auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
 
   // path sub
   path_sub_ = create_subscription<nav_msgs::msg::Path>(

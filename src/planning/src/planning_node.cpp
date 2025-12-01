@@ -64,7 +64,8 @@ PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
   last_right_stamp_ = this->now();
 
   // ros qos 설정 
-  auto qos = rclcpp::QoS(rclcpp::KeepLast(10));
+  auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
+
 
   // subscriber 선언
   lane_left_sub_ = create_subscription<perception::msg::Lane>(
