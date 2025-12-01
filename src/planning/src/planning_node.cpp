@@ -10,7 +10,8 @@
 
 // Planning namespace 
 namespace planning {
-namespace{
+
+  namespace{
 // LanePoint(차량 기준 좌표계) → geometry_msgs::Point 
 // LanePoint:
 //   x: lateral  (왼쪽 + / 오른쪽 -)

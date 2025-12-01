@@ -4,8 +4,9 @@
 #include "perception/msg/lane_pnt.hpp"
 #include <cv_bridge/cv_bridge.h>
 
-//################################################## Global parameter ##################################################//
 
+namespace perception
+{
 // IPM 맵
 cv::Mat st_IPMX;
 cv::Mat st_IPMY;
@@ -31,8 +32,6 @@ struct RansacRandomInit {
 
 //################################################## helper function ##################################################//
 
-namespace
-{
 perception::msg::Lane build_lane_message(const CAMERA_LANEINFO & lane_info)
 {
     perception::msg::Lane lane_msg;
@@ -52,7 +51,7 @@ perception::msg::Lane build_lane_message(const CAMERA_LANEINFO & lane_info)
 
     return lane_msg;
 }
-}  // namespace
+
 
 // ======= 전역 설정값 (트랙바랑 연결할 애들) =======
 int g_thresh      = 160;  // 이진화 임계값
@@ -64,13 +63,6 @@ void on_trackbar(int, void*)
 {
     // 트랙바 콜백은 안 써도 됨. 값은 전역 변수에 자동으로 들어감.
 }
-
-// 픽셀폭 계산
-static bool ComputeLaneWidthAngle(const LANE_COEFFICIENT& left,
-                                  const LANE_COEFFICIENT& right,
-                                  int img_height,
-                                  double& width_px,
-                                  double& angle_diff_deg);
 
 //################################################## CameraProcessing class functions ##################################################//
 
@@ -1559,6 +1551,7 @@ bool EnforceLaneConsistencyAnchor(LANE_COEFFICIENT& left,
     return true;
 }
 
+}  // namespace perception
 
 //################################################## Camera node main function ##################################################//
 

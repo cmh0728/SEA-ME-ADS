@@ -11,7 +11,9 @@
 #include "sensor_msgs/msg/image.hpp"
 #include "perception/msg/lane.hpp"
 
-// RealSense 이미지 토픽을 구독해 OpenCV 창으로 출력하는 간단한 지각 노드
+// CameraProcessing 클래스: 이미지 구독, 차선 메시지 발행, 시각화 관리
+namespace perception
+{
 class CameraProcessing : public rclcpp::Node
 {
 public:
@@ -98,7 +100,6 @@ void DrawDrivingLane(cv::Mat& st_ResultImage,
 void MakeKalmanStateBasedLaneCoef(const LANE_KALMAN& st_KalmanObject,
                                   LANE_COEFFICIENT& st_LaneCoefficient);
 
-// ====================== 새로 추가된 Lane 메시지 관련 helper들 ======================
 
 // RANSAC / Kalman으로 얻은 직선 계수 → Lane 메시지로 샘플 포인트 생성
 perception::msg::Lane build_lane_msg_from_coef(
@@ -126,3 +127,19 @@ bool EnforceLaneConsistencyAnchor(LANE_COEFFICIENT& left,
                                   double alpha_other_pos    = 0.7,
                                   double alpha_anchor_slope = 0.2,
                                   double alpha_other_slope  = 0.6);
+
+// 픽셀폭 계산
+static bool ComputeLaneWidthAngle(const LANE_COEFFICIENT& left,
+                                  const LANE_COEFFICIENT& right,
+                                  int img_height,
+                                  double& width_px,
+                                  double& angle_diff_deg);
+
+perception::msg::Lane build_lane_msg_from_coef(
+    const LANE_COEFFICIENT& coef,
+    int img_width,
+    int img_height,
+    int num_samples = 30);
+
+
+}  // namespace perception
