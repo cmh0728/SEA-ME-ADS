@@ -24,8 +24,8 @@ constexpr double kDefaultMaxLookahead  = 0.70;  // 최대 lookahead
 constexpr double kDefualtCarL          = 0.26;  // 차량 축간 거리 (m)
 
 // speed: cmd_vel.linear.x = 0 ~ 50 근처 사용
-constexpr double kDefaultBaseSpeed     = 30.0;  // 직선 기준 속도
-constexpr double kDefaultMinSpeed      = 15.0;  // 너무 느리면 제어 불안정하니 10 이상
+constexpr double kDefaultBaseSpeed     = 20.0;  // 직선 기준 속도
+constexpr double kDefaultMinSpeed      = 10.0;  // 너무 느리면 제어 불안정하니 10 이상
 constexpr double kDefaultMaxSpeed      = 50.0;  // 하드웨어 상한
 
 // steer
