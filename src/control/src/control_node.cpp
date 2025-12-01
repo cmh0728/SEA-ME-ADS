@@ -77,6 +77,8 @@ ControlNode::ControlNode(): rclcpp::Node("control_node"),
 {
   const std::string path_topic = declare_parameter("path_topic", std::string("/planning/path"));
   auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
+  auto qos2 = rclcpp::QoS(rclcpp::KeepLast(10));
+
 
   // path sub
   path_sub_ = create_subscription<nav_msgs::msg::Path>(
@@ -84,7 +86,7 @@ ControlNode::ControlNode(): rclcpp::Node("control_node"),
     std::bind(&ControlNode::on_path, this, std::placeholders::_1));
 
   // cmd pub
-  cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", qos);
+  cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", qos2);
 
   // ld pub
   target_marker_pub_ =
