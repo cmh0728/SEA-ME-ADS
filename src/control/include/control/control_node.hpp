@@ -84,13 +84,6 @@ private:
   double prev_steer_cmd_;
   bool   has_prev_steer_;
 
-
-  // speed filter
-  double prev_speed_cmd_;
-  bool   has_prev_speed_;
-  double max_accel_;   // m/s^2 비슷한 느낌, cmd 단위에 맞춰
-
-
   // 조향 필터 함수
   double filter_steering(double raw_steer, double dt);
 

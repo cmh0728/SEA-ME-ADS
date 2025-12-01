@@ -40,9 +40,8 @@ constexpr double kDefaultIntegralLimit = 5.0; // 적분 항 클램프 한계
 // 조향 민감도 (curvature → steer 로 보낼 때 gain)
 constexpr double kSteerGain            = 2.293;
 // 조향 신뢰도 체크 
-constexpr double kDefaultMaxSteerRate  = 4.5; // rad/s, 한 프레임당 변화율 제한
+constexpr double kDefaultMaxSteerRate  = 4.0; // rad/s, 한 프레임당 변화율 제한
 constexpr double kDefaultMaxSteerJump  = 0.7; // 변화량 제한값
-
 
 
 
@@ -74,11 +73,7 @@ ControlNode::ControlNode(): rclcpp::Node("control_node"),
   max_steer_rate_(declare_parameter("max_steer_rate", kDefaultMaxSteerRate)),
   max_steer_jump_(declare_parameter("max_steer_jump", kDefaultMaxSteerJump)),
   prev_steer_cmd_(0.0),
-  has_prev_steer_(false),
-  prev_speed_cmd_(kDefaultBaseSpeed),
-  has_prev_speed_(false),
-  max_accel_(declare_parameter("max_accel", 60.0))  // 프레임당 변화량 제어용
-
+  has_prev_steer_(false)
 {
   const std::string path_topic = declare_parameter("path_topic", std::string("/planning/path"));
   auto qos = rclcpp::QoS(rclcpp::KeepLast(10));
@@ -302,28 +297,10 @@ double ControlNode::update_speed_command(double slope, double dt)
   // PID 계산 --> 직선이면 correction 값이 거의 0 
   const double correction = speed_kp_ * error + speed_ki_ * slope_integral_ + speed_kd_ * derivative;
 
-  double raw_command = std::clamp(
-    base_speed_ - correction,
-    min_speed_,
-    max_speed_);
+  // base_speed_ 에서 correction 만큼 빼고, [min_speed_, max_speed_]로 제한
+  const double command = std::clamp(base_speed_ - correction, min_speed_, max_speed_);
 
-  if (!has_prev_speed_) {
-    prev_speed_cmd_ = raw_command;
-    has_prev_speed_ = true;
-    return raw_command;
-  }
-
-  // dt는 on_path에서 넘어온 그대로 사용
-  const double max_delta = max_accel_ * dt;  // "가속도" 상한 느낌
-  double delta_v = raw_command - prev_speed_cmd_;
-  if (std::abs(delta_v) > max_delta) {
-    delta_v = (delta_v > 0.0 ? 1.0 : -1.0) * max_delta;
-  }
-
-  const double filtered_cmd = prev_speed_cmd_ + delta_v;
-  prev_speed_cmd_ = filtered_cmd;
-  return filtered_cmd;
-
+  return command;
 }
 
 //================================================== build_cmd func ==================================================//
