@@ -31,7 +31,7 @@ private:
 };
 
 // 메인 파이프라인: CV::Mat → 차선 Kalman 업데이트까지 전체 흐름 제어
-void ImgProcessing(const cv::Mat& frame, CAMERA_DATA* camera_data);   // 메인 파이프라인
+void Lane_detector(const cv::Mat& frame, CAMERA_DATA* camera_data);   // 메인 파이프라인
 
 // 파라미터/맵 로더: 카메라 세팅, IPM 맵 변경 시 이 함수 구현 수정
 void LoadParam(CAMERA_DATA *pst_CameraData);         // 파라미터 로드
