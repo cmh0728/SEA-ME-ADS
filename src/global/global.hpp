@@ -157,6 +157,14 @@ struct RAW_IMU_DATA
   int32_t s32_IMUHeader;
 };
 
+// 차선 요소 기울기 
+struct LANE_COEFFICIENT
+{
+  float64_t f64_Slope;
+  float64_t f64_Intercept;
+  bool b_IsLeft = false;
+};
+
 // 검출한 차선 정보 
 struct CAMERA_LANEINFO
 {
@@ -166,12 +174,12 @@ struct CAMERA_LANEINFO
   bool b_IsLeft = false;
 };
 
-// 차선 요소 기울기 
-struct LANE_COEFFICIENT
+struct KALMAN_STATE
 {
-  float64_t f64_Slope;
-  float64_t f64_Intercept;
-  bool b_IsLeft = false;
+  float64_t f64_Distance;
+  float64_t f64_Angle;
+  float64_t f64_DeltaDistance;
+  float64_t f64_DeltaAngle;
 };
 
 // lane kalman 
@@ -196,13 +204,6 @@ struct LANE_KALMAN
   KALMAN_STATE st_LaneState;
 };
 
-struct KALMAN_STATE
-{
-  float64_t f64_Distance;
-  float64_t f64_Angle;
-  float64_t f64_DeltaDistance;
-  float64_t f64_DeltaAngle;
-};
 
 
 struct CAMERA_PARAM
