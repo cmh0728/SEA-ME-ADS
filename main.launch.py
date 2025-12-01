@@ -13,6 +13,7 @@ def generate_launch_description() -> LaunchDescription:
         executable="CameraProcessing",
         name="CameraProcessing_node",
         output="screen",
+        # parameters=["src/Params/camera_params.yaml"],
     )
 
     PlanningNode = Node(

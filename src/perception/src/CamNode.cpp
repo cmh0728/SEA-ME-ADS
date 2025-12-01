@@ -6,7 +6,7 @@
 
 //################################################## Global parameter ##################################################//
 
-
+// IPM 맵
 cv::Mat st_IPMX;
 cv::Mat st_IPMY;
 
@@ -22,7 +22,6 @@ CAMERA_LANEINFO st_LaneInfoRightMain{};
 // 시각화 옵션
 bool visualize = false;
 bool track_bar = false;
-bool vis_slidingwindow = true; // sliding window 시각화 --> 성능에 영향을 주고있음 --> ture 냅두기 
 static CAMERA_DATA static_camera_data;
 
 // ransac 난수 초기화 전역설정
@@ -78,8 +77,8 @@ static bool ComputeLaneWidthAngle(const LANE_COEFFICIENT& left,
 // RealSense 이미지 토픽을 구독하고 시각화 창을 준비하는 ROS 노드 생성자
 CameraProcessing::CameraProcessing() : rclcpp::Node("CameraProcessing_node") // rclcpp node 상속 클래스 
 {
-  declare_parameter<std::string>("image_topic", "/camera/camera/color/image_raw");
-  const auto image_topic = get_parameter("image_topic").as_string();
+  const std::string image_topic = "/camera/camera/color/image_raw";
+  visualize = this->declare_parameter<bool>("visualize", false);
 
   LoadParam(&static_camera_data);          // cameardata param load
   LoadMappingParam(&static_camera_data);   // cameradata IPM 맵 로드
@@ -132,6 +131,7 @@ void CameraProcessing::on_image(const sensor_msgs::msg::Image::ConstSharedPtr ms
     cv_bridge::CvImageConstPtr cv_ptr = cv_bridge::toCvShare(msg, "bgr8");  
     const cv::Mat& img = cv_ptr->image;    // 복사 없이 참조만
 
+    visualize = get_parameter("visualize").as_bool();
     ImgProcessing(img,&static_camera_data); // img processing main pipeline function
     publish_lane_messages();
     
@@ -1028,16 +1028,13 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
                     }
                 }
 
-                // 디버그용 윈도우 시각화
-                if(vis_slidingwindow)
-                {
                 cv::rectangle(
                     st_EdgeImage,
                     cv::Point(s32_WindowMinWidthLeft,  s32_WindowMinHeight),
                     cv::Point(s32_WindowMaxWidthLeft,  s32_WindowHeight),
                     cv::Scalar(255, 255, 255),
                     2);
-                }
+                
             }
 
             // ---- 이번 윈도우에서 유효한 차선 조각을 못 찾은 경우 ----
@@ -1117,15 +1114,13 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
                     }
                 }
 
-                if(vis_slidingwindow)
-                {
                 cv::rectangle(
                     st_EdgeImage,
                     cv::Point(s32_WindowMinWidthRight,  s32_WindowMinHeight),
                     cv::Point(s32_WindowMaxWidthRight,  s32_WindowHeight),
                     cv::Scalar(255, 255, 255),
                     2);
-                }
+                
             }
 
             if (!b_CheckValidWindowRight)
