@@ -298,7 +298,7 @@ double ControlNode::update_speed_command(double slope, double dt)
   const double correction = speed_kp_ * error + speed_ki_ * slope_integral_ + speed_kd_ * derivative;
 
   // base_speed_ 에서 correction 만큼 빼고, [min_speed_, max_speed_]로 제한
-  const double command = std::clamp(base_speed_ - correction, min_speed_, max_speed_);
+  const double command = std::clamp(base_speed_ - correction, min_speed_, base_speed_);
 
   return command;
 }
