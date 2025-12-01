@@ -1,5 +1,4 @@
 // lane detection v2
-
 #include "perception/CamNode.hpp"
 #include "perception/msg/lane_pnt.hpp"
 #include <cv_bridge/cv_bridge.h>
@@ -7,7 +6,7 @@
 
 namespace perception
 {
-// IPM 맵
+// IPM map 
 cv::Mat st_IPMX;
 cv::Mat st_IPMY;
 
@@ -20,48 +19,23 @@ bool b_NoLaneRight = false;
 CAMERA_LANEINFO st_LaneInfoLeftMain{};
 CAMERA_LANEINFO st_LaneInfoRightMain{};
 
+// trackbar init praram
+int g_thresh      = 160;  // 이진화 임계값
+int g_canny_low   = 140;  // Canny low
+int g_canny_high  = 330;  // Canny high
+int g_dilate_ksize = 8;   // 팽창 커널 크기
+
 // 시각화 옵션
 bool visualize = false;
 bool track_bar = false;
 static CAMERA_DATA static_camera_data;
 
 // ransac 난수 초기화 전역설정
-struct RansacRandomInit {
-    RansacRandomInit() { std::srand(static_cast<unsigned int>(std::time(nullptr))); }
-} g_ransacRandomInit;
-
-//################################################## helper function ##################################################//
-
-perception::msg::Lane build_lane_message(const CAMERA_LANEINFO & lane_info)
-{
-    perception::msg::Lane lane_msg;
-    const int32_t max_samples = static_cast<int32_t>(sizeof(lane_info.arst_LaneSample) /
-                                                    sizeof(lane_info.arst_LaneSample[0]));
-    const int32_t clamped_samples = std::min(lane_info.s32_SampleCount, max_samples);
-    lane_msg.lane_points.reserve(clamped_samples);
-
-    for (int32_t i = 0; i < clamped_samples; ++i)
-    {
-        const cv::Point & sample = lane_info.arst_LaneSample[i];
-        perception::msg::LanePnt point_msg;
-        point_msg.x = static_cast<float>(sample.x);
-        point_msg.y = static_cast<float>(sample.y);
-        lane_msg.lane_points.push_back(point_msg);
-    }
-
-    return lane_msg;
-}
-
-
-// ======= 전역 설정값 (트랙바랑 연결할 애들) =======
-int g_thresh      = 160;  // 이진화 임계값
-int g_canny_low   = 140;  // Canny low
-int g_canny_high  = 330;  // Canny high
-int g_dilate_ksize = 8;   // 팽창 커널 크기
+struct RansacRandomInit {RansacRandomInit() { std::srand(static_cast<unsigned int>(std::time(nullptr))); }} g_ransacRandomInit;
 
 void on_trackbar(int, void*)
 {
-    // 트랙바 콜백은 안 써도 됨. 값은 전역 변수에 자동으로 들어감.
+    // 트랙바 콜백은 안 써도 됨. 
 }
 
 //################################################## CameraProcessing class functions ##################################################//
@@ -1549,6 +1523,28 @@ bool EnforceLaneConsistencyAnchor(LANE_COEFFICIENT& left,
     right.f64_Intercept = cR_new;
 
     return true;
+}
+
+//################################################## build_lane_message function ##################################################//
+
+perception::msg::Lane build_lane_message(const CAMERA_LANEINFO & lane_info)
+{
+    perception::msg::Lane lane_msg;
+    const int32_t max_samples = static_cast<int32_t>(sizeof(lane_info.arst_LaneSample) /
+                                                    sizeof(lane_info.arst_LaneSample[0]));
+    const int32_t clamped_samples = std::min(lane_info.s32_SampleCount, max_samples);
+    lane_msg.lane_points.reserve(clamped_samples);
+
+    for (int32_t i = 0; i < clamped_samples; ++i)
+    {
+        const cv::Point & sample = lane_info.arst_LaneSample[i];
+        perception::msg::LanePnt point_msg;
+        point_msg.x = static_cast<float>(sample.x);
+        point_msg.y = static_cast<float>(sample.y);
+        lane_msg.lane_points.push_back(point_msg);
+    }
+
+    return lane_msg;
 }
 
 }  // namespace perception

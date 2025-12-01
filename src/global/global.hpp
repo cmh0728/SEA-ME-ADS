@@ -139,7 +139,7 @@ const uint8_t c_CONTROL_FLAG_OVERTAKING = 3;
 
 const int32_t c_CONTROL_HORIZON = 10;
 
-
+//###################################### camera node #########################################//
 
 struct RAW_CAMERA_DATA
 {
@@ -157,12 +157,13 @@ struct RAW_IMU_DATA
   int32_t s32_IMUHeader;
 };
 
-struct KALMAN_STATE
+// 검출한 차선 정보 
+struct CAMERA_LANEINFO
 {
-  float64_t f64_Distance;
-  float64_t f64_Angle;
-  float64_t f64_DeltaDistance;
-  float64_t f64_DeltaAngle;
+  cv::Point arst_LaneSample[40]; // 최대 40개의 차선 샘플 포인트
+  int32_t s32_SampleCount;
+  LANE_COEFFICIENT st_LaneCoefficient; // 차선 정보 (기울기)
+  bool b_IsLeft = false;
 };
 
 // 차선 요소 기울기 
@@ -173,6 +174,7 @@ struct LANE_COEFFICIENT
   bool b_IsLeft = false;
 };
 
+// lane kalman 
 struct LANE_KALMAN
 {
   MatrixXf st_A = MatrixXf(4,4);          // 시스템 모델 행렬
@@ -194,6 +196,14 @@ struct LANE_KALMAN
   KALMAN_STATE st_LaneState;
 };
 
+struct KALMAN_STATE
+{
+  float64_t f64_Distance;
+  float64_t f64_Angle;
+  float64_t f64_DeltaDistance;
+  float64_t f64_DeltaAngle;
+};
+
 
 struct CAMERA_PARAM
 {
@@ -209,16 +219,6 @@ struct CAMERA_PARAM
     int32_t s32_RemapHeight;
     int32_t s32_RemapWidth;
 };
-
-// 검출한 차선 정보 
-struct CAMERA_LANEINFO
-{
-  cv::Point arst_LaneSample[40]; // 최대 40개의 차선 샘플 포인트
-  int32_t s32_SampleCount;
-  LANE_COEFFICIENT st_LaneCoefficient; // 차선 정보 (기울기)
-  bool b_IsLeft = false;
-};
-
 
 // 카메라 데이터 구조체 선언 
 struct CAMERA_DATA {
@@ -236,6 +236,8 @@ struct CAMERA_DATA {
     bool b_ThereIsLeft = false;
     bool b_ThereIsRight = false;
 };
+
+//###################################### IMU #########################################//
 
 struct IMU_DATA
 {
