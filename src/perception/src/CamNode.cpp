@@ -96,7 +96,8 @@ void CameraProcessing::on_image(const sensor_msgs::msg::Image::ConstSharedPtr ms
     const cv::Mat& img = cv_ptr->image;    // 복사 없이 참조만
 
     visualize = get_parameter("visualize").as_bool();
-    ImgProcessing(img,&static_camera_data); // img processing main pipeline function
+    Lane_detector(img,&static_camera_data); // img processing main pipeline function
+    // Obj_detector(img); // 향후 카메라 기반 객체인식 
     publish_lane_messages();
     
   }
@@ -116,7 +117,7 @@ void CameraProcessing::on_image(const sensor_msgs::msg::Image::ConstSharedPtr ms
 
 //################################################## img processing functions ##################################################//
 // RAW 카메라 버퍼에서 차선 정보까지 계산하는 메인 파이프라인
-void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
+void Lane_detector(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
 {
     // kalman filter variables
     CAMERA_LANEINFO st_LaneInfoLeft, st_LaneInfoRight; // sliding window에서 검출된 차선 정보 담는 구조체 
