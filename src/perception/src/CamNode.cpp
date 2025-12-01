@@ -43,36 +43,37 @@ void on_trackbar(int, void*)
 // RealSense 이미지 토픽을 구독하고 시각화 창을 준비하는 ROS 노드 생성자
 CameraProcessing::CameraProcessing() : rclcpp::Node("CameraProcessing_node") // rclcpp node 상속 클래스 
 {
-  const std::string image_topic = "/camera/camera/color/image_raw";
-  visualize = this->declare_parameter<bool>("visualize", false);
+    const std::string image_topic = "/camera/camera/color/image_raw";
+    visualize = this->declare_parameter<bool>("visualize", false);
 
-  LoadParam(&static_camera_data);          // cameardata param load
-  LoadMappingParam(&static_camera_data);   // cameradata IPM 맵 로드
+    LoadParam(&static_camera_data);          // cameardata param load
+    LoadMappingParam(&static_camera_data);   // cameradata IPM 맵 로드
 
-  //img subscriber
-  image_subscription_ = create_subscription<sensor_msgs::msg::Image>(image_topic, rclcpp::SensorDataQoS(),
+    //img subscriber
+    image_subscription_ = create_subscription<sensor_msgs::msg::Image>(image_topic, rclcpp::SensorDataQoS(),
     std::bind(&CameraProcessing::on_image, this, std::placeholders::_1));
 
-  lane_left_pub_ = create_publisher<perception::msg::Lane>("/lane/left", rclcpp::QoS(10));
-  lane_right_pub_ = create_publisher<perception::msg::Lane>("/lane/right", rclcpp::QoS(10));
+    // lane pub 
+    lane_left_pub_ = create_publisher<perception::msg::Lane>("/lane/left", rclcpp::QoS(10));
+    lane_right_pub_ = create_publisher<perception::msg::Lane>("/lane/right", rclcpp::QoS(10));
 
 
-  RCLCPP_INFO(get_logger(), "Perception node subscribing to %s", image_topic.c_str()); //debug msg
+    RCLCPP_INFO(get_logger(), "Perception node subscribing to %s", image_topic.c_str()); //debug msg
 
-  if (track_bar)
-  {
-    // 디버그용 윈도우 + 트랙바 컨트롤 창
-    cv::namedWindow("IPM");
-    cv::namedWindow("Temp_Img");
-    cv::namedWindow("st_ResultImage");
-    cv::namedWindow("PreprocessControl");
+    if (track_bar)
+    {
+        // 디버그용 윈도우 + 트랙바 컨트롤 창
+        cv::namedWindow("IPM");
+        cv::namedWindow("Temp_Img");
+        cv::namedWindow("st_ResultImage");
+        cv::namedWindow("PreprocessControl");
 
-    cv::createTrackbar("Threshold", "PreprocessControl", nullptr, 255, on_trackbar);
-    cv::createTrackbar("CannyLow",  "PreprocessControl", nullptr, 500, on_trackbar);
-    cv::createTrackbar("CannyHigh", "PreprocessControl", nullptr, 500, on_trackbar);
-    cv::createTrackbar("DilateK",   "PreprocessControl", nullptr, 31,  on_trackbar);
+        cv::createTrackbar("Threshold", "PreprocessControl", nullptr, 255, on_trackbar);
+        cv::createTrackbar("CannyLow",  "PreprocessControl", nullptr, 500, on_trackbar);
+        cv::createTrackbar("CannyHigh", "PreprocessControl", nullptr, 500, on_trackbar);
+        cv::createTrackbar("DilateK",   "PreprocessControl", nullptr, 31,  on_trackbar);
 
-  }
+    }
 }
 
 // OpenCV 창을 정리하는 소멸자
@@ -84,10 +85,7 @@ CameraProcessing::~CameraProcessing()
   }
 }
 
-//################################################## CameraProcessing img sub function ##################################################//
-
-
-// 이미지 토픽 콜백: 수신된 이미지를 OpenCV 창으로 출력
+// sub callback function
 void CameraProcessing::on_image(const sensor_msgs::msg::Image::ConstSharedPtr msg)
 {
   //예외처리 
@@ -114,75 +112,6 @@ void CameraProcessing::on_image(const sensor_msgs::msg::Image::ConstSharedPtr ms
       "Image callback exception: %s", e.what());
   }
 }
-
-// ############################################# publish_lane_messages func #############################################//
-
-
-void CameraProcessing::publish_lane_messages()
-{
-    LANE_COEFFICIENT left_coef, right_coef;
-    bool has_left = false, has_right = false;
-
-    get_lane_coef_from_kalman(static_camera_data,
-                              left_coef, right_coef,
-                              has_left, has_right);
-
-    const int H = static_camera_data.st_CameraParameter.s32_RemapHeight;
-    const int W = static_camera_data.st_CameraParameter.s32_RemapWidth;
-
-    if (lane_left_pub_ && has_left)
-    {
-        auto lane_msg = build_lane_msg_from_coef(left_coef, W, H);
-        if (!lane_msg.lane_points.empty())
-        {
-            lane_left_pub_->publish(lane_msg);
-        }
-    }
-
-    if (lane_right_pub_ && has_right)
-    {
-        auto lane_msg = build_lane_msg_from_coef(right_coef, W, H);
-        if (!lane_msg.lane_points.empty())
-        {
-            lane_right_pub_->publish(lane_msg);
-        }
-    }
-}
-
-
-// ############################################# build_lane_msg_from_coef func #############################################//
-
-perception::msg::Lane build_lane_msg_from_coef(const LANE_COEFFICIENT& coef,
-                                               int img_width,
-                                               int img_height,
-                                               int num_samples )
-{
-    perception::msg::Lane lane_msg;
-
-    // 너무 수평이면 일단은 보내되, 나중에 필터에서 처리하게 두는게 좋음
-    if (!std::isfinite(coef.f64_Slope)) {
-        return lane_msg; // 완전 이상한 경우만 버리기
-    }
-
-    for (int i = 0; i < num_samples; ++i)
-    {
-        double y_img = (img_height - 1)
-                     - (img_height - 1) * (static_cast<double>(i) / (num_samples - 1));
-        double x_img = (y_img - coef.f64_Intercept) / coef.f64_Slope;
-
-        // 화면 밖이면 skip
-        if (x_img < 0 || x_img >= img_width) continue;
-
-        perception::msg::LanePnt p;
-        p.x = static_cast<float>(x_img);
-        p.y = static_cast<float>((img_height - 1) - y_img);
-
-        lane_msg.lane_points.push_back(p);
-    }
-
-    return lane_msg;
-}
-
 
 
 //################################################## img processing functions ##################################################//
@@ -1523,6 +1452,74 @@ bool EnforceLaneConsistencyAnchor(LANE_COEFFICIENT& left,
     right.f64_Intercept = cR_new;
 
     return true;
+}
+
+// ############################################# publish_lane_messages func #############################################//
+
+
+void CameraProcessing::publish_lane_messages()
+{
+    LANE_COEFFICIENT left_coef, right_coef;
+    bool has_left = false, has_right = false;
+
+    get_lane_coef_from_kalman(static_camera_data,
+                              left_coef, right_coef,
+                              has_left, has_right);
+
+    const int H = static_camera_data.st_CameraParameter.s32_RemapHeight;
+    const int W = static_camera_data.st_CameraParameter.s32_RemapWidth;
+
+    if (lane_left_pub_ && has_left)
+    {
+        auto lane_msg = build_lane_msg_from_coef(left_coef, W, H);
+        if (!lane_msg.lane_points.empty())
+        {
+            lane_left_pub_->publish(lane_msg);
+        }
+    }
+
+    if (lane_right_pub_ && has_right)
+    {
+        auto lane_msg = build_lane_msg_from_coef(right_coef, W, H);
+        if (!lane_msg.lane_points.empty())
+        {
+            lane_right_pub_->publish(lane_msg);
+        }
+    }
+}
+
+
+// ############################################# build_lane_msg_from_coef func #############################################//
+
+perception::msg::Lane build_lane_msg_from_coef(const LANE_COEFFICIENT& coef,
+                                               int img_width,
+                                               int img_height,
+                                               int num_samples )
+{
+    perception::msg::Lane lane_msg;
+
+    // 너무 수평이면 일단은 보내되, 나중에 필터에서 처리하게 두는게 좋음
+    if (!std::isfinite(coef.f64_Slope)) {
+        return lane_msg; // 완전 이상한 경우만 버리기
+    }
+
+    for (int i = 0; i < num_samples; ++i)
+    {
+        double y_img = (img_height - 1)
+                     - (img_height - 1) * (static_cast<double>(i) / (num_samples - 1));
+        double x_img = (y_img - coef.f64_Intercept) / coef.f64_Slope;
+
+        // 화면 밖이면 skip
+        if (x_img < 0 || x_img >= img_width) continue;
+
+        perception::msg::LanePnt p;
+        p.x = static_cast<float>(x_img);
+        p.y = static_cast<float>((img_height - 1) - y_img);
+
+        lane_msg.lane_points.push_back(p);
+    }
+
+    return lane_msg;
 }
 
 //################################################## build_lane_message function ##################################################//
