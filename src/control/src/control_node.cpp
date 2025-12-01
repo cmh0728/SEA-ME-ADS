@@ -32,15 +32,15 @@ constexpr double kDefaultMaxSpeed      = 50.0;  // 하드웨어 상한
 constexpr double kDefaultMaxAngular    = 1.0;
 
 // 속도 제어용 PID 파라미터 
-constexpr double kDefaultSpeedKp       = 8.0;
+constexpr double kDefaultSpeedKp       = 10.0;
 constexpr double kDefaultSpeedKi       = 0.001;
-constexpr double kDefaultSpeedKd       = 0.5;
+constexpr double kDefaultSpeedKd       = 0.7;
 constexpr double kDefaultIntegralLimit = 5.0; // 적분 항 클램프 한계
 
 // 조향 민감도 (curvature → steer 로 보낼 때 gain)
 constexpr double kSteerGain            = 2.293;
 // 조향 신뢰도 체크 
-constexpr double kDefaultMaxSteerRate  = 4.0; // rad/s, 한 프레임당 변화율 제한
+constexpr double kDefaultMaxSteerRate  = 5.0; // rad/s, 한 프레임당 변화율 제한
 constexpr double kDefaultMaxSteerJump  = 0.7; // 변화량 제한값
 
 
