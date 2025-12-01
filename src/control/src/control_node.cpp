@@ -150,7 +150,7 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   // Pure Pursuit 곡률 계산
   const double curvature = (2.0 * target.x) / std::max(1e-3, selected_lookahead * selected_lookahead);
   
-  // std::cout << "curvature : " << curvature << std::endl;
+  std::cout << "curvature : " << curvature << std::endl;
   // 조향각 계산 --> slope에 따라서 다른 게인 적용 
   double raw_steer = std::atan(kDefualtCarL * curvature); 
 
@@ -163,7 +163,7 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   if (abs_slope > 0.30) {
     // 많이 꺾인 곡선 → 게인 크게
     gain_factor *= 2;   // 필요하면 1.8, 2.0 등으로 더 키워도 됨
-  } else if (abs_slope > 0.10) {
+  } else if (abs_slope > 0.15) {
     // 중간 정도 곡선
     gain_factor *= 1.5;
   } else {
