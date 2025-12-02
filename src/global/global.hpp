@@ -28,17 +28,20 @@
 
 #include <limits>  // std::numeric_limits
 
-#include "opencv2/opencv.hpp"       
+#include "opencv2/opencv.hpp"    
+#include <yaml-cpp/yaml.h>   
+
+
 
 // 제어 최적화 라이브러리 casadi
 // #include "casadi/casadi.hpp" 
 // #include "casadi/core/sparsity_interface.hpp"
-
+// #include <mlpack.hpp> // 머신러닝 라이브러리 통합 헤더 
 // #include "Integration/GNSSInfo.h"
 // #include "Integration/object_msg_arr.h"
 
-#include <yaml-cpp/yaml.h>
-// #include <mlpack.hpp> // 머신러닝 라이브러리 통합 헤더 
+
+
 
 
 #define NONE -1e9
@@ -136,7 +139,7 @@ const uint8_t c_CONTROL_FLAG_OVERTAKING = 3;
 
 const int32_t c_CONTROL_HORIZON = 10;
 
-
+//###################################### camera node #########################################//
 
 struct RAW_CAMERA_DATA
 {
@@ -154,14 +157,6 @@ struct RAW_IMU_DATA
   int32_t s32_IMUHeader;
 };
 
-struct KALMAN_STATE
-{
-  float64_t f64_Distance;
-  float64_t f64_Angle;
-  float64_t f64_DeltaDistance;
-  float64_t f64_DeltaAngle;
-};
-
 // 차선 요소 기울기 
 struct LANE_COEFFICIENT
 {
@@ -170,6 +165,24 @@ struct LANE_COEFFICIENT
   bool b_IsLeft = false;
 };
 
+// 검출한 차선 정보 
+struct CAMERA_LANEINFO
+{
+  cv::Point arst_LaneSample[40]; // 최대 40개의 차선 샘플 포인트
+  int32_t s32_SampleCount;
+  LANE_COEFFICIENT st_LaneCoefficient; // 차선 정보 (기울기)
+  bool b_IsLeft = false;
+};
+
+struct KALMAN_STATE
+{
+  float64_t f64_Distance;
+  float64_t f64_Angle;
+  float64_t f64_DeltaDistance;
+  float64_t f64_DeltaAngle;
+};
+
+// lane kalman 
 struct LANE_KALMAN
 {
   MatrixXf st_A = MatrixXf(4,4);          // 시스템 모델 행렬
@@ -192,6 +205,7 @@ struct LANE_KALMAN
 };
 
 
+
 struct CAMERA_PARAM
 {
     std::string s_IPMParameterX;
@@ -206,16 +220,6 @@ struct CAMERA_PARAM
     int32_t s32_RemapHeight;
     int32_t s32_RemapWidth;
 };
-
-// 검출한 차선 정보 
-struct CAMERA_LANEINFO
-{
-  cv::Point arst_LaneSample[40]; // 최대 40개의 차선 샘플 포인트
-  int32_t s32_SampleCount;
-  LANE_COEFFICIENT st_LaneCoefficient; // 차선 정보 (기울기)
-  bool b_IsLeft = false;
-};
-
 
 // 카메라 데이터 구조체 선언 
 struct CAMERA_DATA {
@@ -233,6 +237,8 @@ struct CAMERA_DATA {
     bool b_ThereIsLeft = false;
     bool b_ThereIsRight = false;
 };
+
+//###################################### IMU #########################################//
 
 struct IMU_DATA
 {

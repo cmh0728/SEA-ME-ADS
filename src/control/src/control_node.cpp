@@ -40,8 +40,9 @@ constexpr double kDefaultIntegralLimit = 5.0; // 적분 항 클램프 한계
 // 조향 민감도 (curvature → steer 로 보낼 때 gain)
 constexpr double kSteerGain            = 2.293;
 // 조향 신뢰도 체크 
-constexpr double kDefaultMaxSteerRate  = 2.0; // rad/s, 한 프레임당 변화율 제한
-constexpr double kDefaultMaxSteerJump  = 0.6; // rad, 한 번에 이만큼 튀면 아예 버림 (outlier)
+constexpr double kDefaultMaxSteerRate  = 8.0; // rad/s, 한 프레임당 변화율 제한
+constexpr double kDefaultMaxSteerJump  = 1.5; // 변화량 제한값
+
 
 
 }  // namespace
@@ -75,7 +76,9 @@ ControlNode::ControlNode(): rclcpp::Node("control_node"),
   has_prev_steer_(false)
 {
   const std::string path_topic = declare_parameter("path_topic", std::string("/planning/path"));
-  auto qos = rclcpp::QoS(rclcpp::KeepLast(10));
+  auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
+  auto qos2 = rclcpp::QoS(rclcpp::KeepLast(10));
+
 
   // path sub
   path_sub_ = create_subscription<nav_msgs::msg::Path>(
@@ -83,7 +86,7 @@ ControlNode::ControlNode(): rclcpp::Node("control_node"),
     std::bind(&ControlNode::on_path, this, std::placeholders::_1));
 
   // cmd pub
-  cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", qos);
+  cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", qos2);
 
   // ld pub
   target_marker_pub_ =
@@ -105,10 +108,10 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   }
 
   const rclcpp::Time now = this->now();
-  const double dt = std::max(1e-3, (now - last_update_time_).seconds());
+  const double dt = std::max(1e-3, (now - last_update_time_).seconds()); // planning/path토픽의 hz의 역수 (30hz ~45)
   last_update_time_ = now;
 
-  // 1) Path → (x=lateral, y=forward)
+  // Path → (x=lateral, y=forward)
   std::vector<Point2D> path_points; // 차량 기준 좌표계 포인트 저장 vector  
   path_points.reserve(msg->poses.size()); // 메모리 미리 할당
   for (const auto & pose : msg->poses)
@@ -155,6 +158,7 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
 
   // 곡선구간 steer 보정 (민감도 up)
   const double abs_slope = std::abs(slope);
+  // std::cout << "abs_slope : " << abs_slope << std::endl; 
   double gain_factor = kSteerGain;
 
   // 곡선 정도에 따라 추가 게인
@@ -162,9 +166,9 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   if (abs_slope > 0.30) {
     // 많이 꺾인 곡선 → 게인 크게
     gain_factor *= 2;   // 필요하면 1.8, 2.0 등으로 더 키워도 됨
-  } else if (abs_slope > 0.10) {
+  } else if (abs_slope > 0.1) {
     // 중간 정도 곡선
-    gain_factor *= 1.5;
+    gain_factor *= 1.2;
   } else {
     // 거의 직선
     gain_factor *= 1.0;
@@ -293,11 +297,11 @@ double ControlNode::update_speed_command(double slope, double dt)
   const double derivative = (error - prev_slope_) / dt;
   prev_slope_ = error;
 
-  // PID 계산
+  // PID 계산 --> 직선이면 correction 값이 거의 0 
   const double correction = speed_kp_ * error + speed_ki_ * slope_integral_ + speed_kd_ * derivative;
 
   // base_speed_ 에서 correction 만큼 빼고, [min_speed_, max_speed_]로 제한
-  const double command = std::clamp(base_speed_ - correction, min_speed_, max_speed_);
+  const double command = std::clamp(base_speed_ - correction, min_speed_, base_speed_);
 
   return command;
 }
@@ -361,9 +365,9 @@ double ControlNode::filter_steering(double raw_steer, double dt)
     return raw_steer;
   }
 
-  const double delta = raw_steer - prev_steer_cmd_;
+  const double delta = raw_steer - prev_steer_cmd_; // 조향값 변화량 
 
-  // 1) 완전 말도 안되는 점프 감지 → 이번 프레임은 버리고 이전 값 유지
+  // 완전 말도 안되는 조향값 감지 → 이번 프레임은 버리고 이전 값 유지
   if (std::abs(delta) > max_steer_jump_)
   {
     RCLCPP_WARN(
@@ -373,8 +377,8 @@ double ControlNode::filter_steering(double raw_steer, double dt)
     return prev_steer_cmd_;
   }
 
-  // 2) 정상 범위 내에서는 변화율 제한 (rate limiting)
-  const double max_delta = max_steer_rate_ * dt; // 이번 프레임에서 허용 가능한 최대 변화량
+  // 정상 범위 내에서는 변화율 제한 (rate limiting) , dt는 0.033~0.025
+  const double max_delta = max_steer_rate_ * dt; // 이번 프레임에서 허용 가능한 최대 변화량 --> 0.12정도 
   double limited_delta = delta;
   if (std::abs(limited_delta) > max_delta)
   {

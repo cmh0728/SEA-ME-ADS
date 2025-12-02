@@ -1,11 +1,12 @@
 // lane detection v2
-
 #include "perception/CamNode.hpp"
 #include "perception/msg/lane_pnt.hpp"
+#include <cv_bridge/cv_bridge.h>
 
-//################################################## Global parameter ##################################################//
 
-
+namespace perception
+{
+// IPM map 
 cv::Mat st_IPMX;
 cv::Mat st_IPMY;
 
@@ -18,95 +19,61 @@ bool b_NoLaneRight = false;
 CAMERA_LANEINFO st_LaneInfoLeftMain{};
 CAMERA_LANEINFO st_LaneInfoRightMain{};
 
-// 시각화 옵션
-bool visualize = false;
-bool track_bar = false;
-bool vis_slidingwindow = true; // sliding window 시각화 --> 성능에 영향을 주고있음 --> ture 냅두기 
-static CAMERA_DATA static_camera_data;
-
-// ransac 난수 초기화 전역설정
-struct RansacRandomInit {
-    RansacRandomInit() { std::srand(static_cast<unsigned int>(std::time(nullptr))); }
-} g_ransacRandomInit;
-
-//################################################## helper function ##################################################//
-
-namespace
-{
-perception::msg::Lane build_lane_message(const CAMERA_LANEINFO & lane_info)
-{
-    perception::msg::Lane lane_msg;
-    const int32_t max_samples = static_cast<int32_t>(sizeof(lane_info.arst_LaneSample) /
-                                                    sizeof(lane_info.arst_LaneSample[0]));
-    const int32_t clamped_samples = std::min(lane_info.s32_SampleCount, max_samples);
-    lane_msg.lane_points.reserve(clamped_samples);
-
-    for (int32_t i = 0; i < clamped_samples; ++i)
-    {
-        const cv::Point & sample = lane_info.arst_LaneSample[i];
-        perception::msg::LanePnt point_msg;
-        point_msg.x = static_cast<float>(sample.x);
-        point_msg.y = static_cast<float>(sample.y);
-        lane_msg.lane_points.push_back(point_msg);
-    }
-
-    return lane_msg;
-}
-}  // namespace
-
-// ======= 전역 설정값 (트랙바랑 연결할 애들) =======
+// trackbar init praram
 int g_thresh      = 160;  // 이진화 임계값
 int g_canny_low   = 140;  // Canny low
 int g_canny_high  = 330;  // Canny high
 int g_dilate_ksize = 8;   // 팽창 커널 크기
 
+// 시각화 옵션
+bool visualize = false;
+bool track_bar = false;
+static CAMERA_DATA static_camera_data;
+
+// ransac 난수 초기화 전역설정
+struct RansacRandomInit {RansacRandomInit() { std::srand(static_cast<unsigned int>(std::time(nullptr))); }} g_ransacRandomInit;
+
 void on_trackbar(int, void*)
 {
-    // 트랙바 콜백은 안 써도 됨. 값은 전역 변수에 자동으로 들어감.
+    // 트랙바 콜백은 안 써도 됨. 
 }
-
-// 픽셀폭 계산
-static bool ComputeLaneWidthAngle(const LANE_COEFFICIENT& left,
-                                  const LANE_COEFFICIENT& right,
-                                  int img_height,
-                                  double& width_px,
-                                  double& angle_diff_deg);
 
 //################################################## CameraProcessing class functions ##################################################//
 
 // RealSense 이미지 토픽을 구독하고 시각화 창을 준비하는 ROS 노드 생성자
 CameraProcessing::CameraProcessing() : rclcpp::Node("CameraProcessing_node") // rclcpp node 상속 클래스 
 {
-  declare_parameter<std::string>("image_topic", "/camera/camera/color/image_raw/compressed");
-  const auto image_topic = get_parameter("image_topic").as_string();
+    const std::string image_topic = "/camera/camera/color/image_raw/compressed";
+    visualize = this->declare_parameter<bool>("visualize", false);
 
-  LoadParam(&static_camera_data);          // cameardata param load
-  LoadMappingParam(&static_camera_data);   // cameradata IPM 맵 로드
+    LoadParam(&static_camera_data);          // cameardata param load
+    LoadMappingParam(&static_camera_data);   // cameradata IPM 맵 로드
 
-  //img subscriber
-  image_subscription_ = create_subscription<sensor_msgs::msg::CompressedImage>(image_topic, rclcpp::SensorDataQoS(),
-    std::bind(&CameraProcessing::on_image, this, std::placeholders::_1)); // 콜백 함수 바인딩 : on_image
+    //img subscriber
+    image_subscription_ = create_subscription<sensor_msgs::msg::CompressedImage>(image_topic, rclcpp::SensorDataQoS(),
+    std::bind(&CameraProcessing::on_image, this, std::placeholders::_1));
 
-  lane_left_pub_ = create_publisher<perception::msg::Lane>("/lane/left", rclcpp::QoS(10));
-  lane_right_pub_ = create_publisher<perception::msg::Lane>("/lane/right", rclcpp::QoS(10));
+    // lane pub 
+    lane_left_pub_ = create_publisher<perception::msg::Lane>("/lane/left", rclcpp::QoS(10));
+    lane_right_pub_ = create_publisher<perception::msg::Lane>("/lane/right", rclcpp::QoS(10));
 
 
-  RCLCPP_INFO(get_logger(), "Perception node subscribing to %s", image_topic.c_str()); //debug msg
+    RCLCPP_INFO(get_logger(), "Perception node subscribing to %s", image_topic.c_str()); //debug msg
 
-  if (track_bar)
-  {
-    // 디버그용 윈도우 + 트랙바 컨트롤 창
-    cv::namedWindow("IPM");
-    cv::namedWindow("Temp_Img");
-    cv::namedWindow("st_ResultImage");
-    cv::namedWindow("PreprocessControl");
+    if (track_bar)
+    {
+        // 디버그용 윈도우 + 트랙바 컨트롤 창
+        cv::namedWindow("IPM");
+        cv::namedWindow("Temp_Img");
+        cv::namedWindow("st_ResultImage");
+        cv::namedWindow("PreprocessControl");
 
-    cv::createTrackbar("Threshold", "PreprocessControl", nullptr, 255, on_trackbar);
-    cv::createTrackbar("CannyLow",  "PreprocessControl", nullptr, 500, on_trackbar);
-    cv::createTrackbar("CannyHigh", "PreprocessControl", nullptr, 500, on_trackbar);
-    cv::createTrackbar("DilateK",   "PreprocessControl", nullptr, 31,  on_trackbar);
+        cv::createTrackbar("Threshold", "PreprocessControl", nullptr, 255, on_trackbar);
+        cv::createTrackbar("CannyLow",  "PreprocessControl", nullptr, 500, on_trackbar);
+        cv::createTrackbar("CannyHigh", "PreprocessControl", nullptr, 500, on_trackbar);
+        cv::createTrackbar("DilateK",   "PreprocessControl", nullptr, 31,  on_trackbar);
 
-  }
+    }
 }
 
 // OpenCV 창을 정리하는 소멸자
@@ -118,18 +85,20 @@ CameraProcessing::~CameraProcessing()
   }
 }
 
-//################################################## CameraProcessing img sub function ##################################################//
-
-
-// 압축 이미지를 디코딩하고 프레임을 미리보기로 띄우는 콜백
+// sub callback function
 void CameraProcessing::on_image(const sensor_msgs::msg::CompressedImage::ConstSharedPtr msg)
 {
   //예외처리 
   try
   {
-    cv::Mat img = cv::imdecode(msg->data, cv::IMREAD_COLOR); // cv:Mat 형식 디코딩 
+    cv::Mat img = cv::imdecode(msg->data, cv::IMREAD_COLOR); // cv:Mat 형식 디코딩
+    // // encoding은 RealSense 설정에 따라 bgr8 또는 rgb8(raw image)
+    // cv_bridge::CvImageConstPtr cv_ptr = cv_bridge::toCvShare(msg, "bgr8");  
+    // const cv::Mat& img = cv_ptr->image;    // 복사 없이 참조만
 
-    ImgProcessing(img,&static_camera_data); // img processing main pipeline function
+    visualize = get_parameter("visualize").as_bool();
+    Lane_detector(img,&static_camera_data); // img processing main pipeline function
+    // Obj_detector(img); // 향후 카메라 기반 객체인식 
     publish_lane_messages();
     
   }
@@ -138,81 +107,18 @@ void CameraProcessing::on_image(const sensor_msgs::msg::CompressedImage::ConstSh
     RCLCPP_ERROR_THROTTLE(
       get_logger(), *get_clock(), 2000, "OpenCV exception during decode: %s", e.what());
   }
+  catch (const std::exception& e)
+  {
+    RCLCPP_ERROR_THROTTLE(
+      get_logger(), *get_clock(), 2000,
+      "Image callback exception: %s", e.what());
+  }
 }
-
-// ############################################# publish_lane_messages func #############################################//
-
-
-void CameraProcessing::publish_lane_messages()
-{
-    LANE_COEFFICIENT left_coef, right_coef;
-    bool has_left = false, has_right = false;
-
-    get_lane_coef_from_kalman(static_camera_data,
-                              left_coef, right_coef,
-                              has_left, has_right);
-
-    const int H = static_camera_data.st_CameraParameter.s32_RemapHeight;
-    const int W = static_camera_data.st_CameraParameter.s32_RemapWidth;
-
-    if (lane_left_pub_ && has_left)
-    {
-        auto lane_msg = build_lane_msg_from_coef(left_coef, W, H);
-        if (!lane_msg.lane_points.empty())
-        {
-            lane_left_pub_->publish(lane_msg);
-        }
-    }
-
-    if (lane_right_pub_ && has_right)
-    {
-        auto lane_msg = build_lane_msg_from_coef(right_coef, W, H);
-        if (!lane_msg.lane_points.empty())
-        {
-            lane_right_pub_->publish(lane_msg);
-        }
-    }
-}
-
-
-// ############################################# build_lane_msg_from_coef func #############################################//
-
-perception::msg::Lane build_lane_msg_from_coef(const LANE_COEFFICIENT& coef,
-                                               int img_width,
-                                               int img_height,
-                                               int num_samples )
-{
-    perception::msg::Lane lane_msg;
-
-    // 너무 수평이면 일단은 보내되, 나중에 필터에서 처리하게 두는게 좋음
-    if (!std::isfinite(coef.f64_Slope)) {
-        return lane_msg; // 완전 이상한 경우만 버리기
-    }
-
-    for (int i = 0; i < num_samples; ++i)
-    {
-        double y_img = (img_height - 1)
-                     - (img_height - 1) * (static_cast<double>(i) / (num_samples - 1));
-        double x_img = (y_img - coef.f64_Intercept) / coef.f64_Slope;
-
-        // 화면 밖이면 skip
-        if (x_img < 0 || x_img >= img_width) continue;
-
-        perception::msg::LanePnt p;
-        p.x = static_cast<float>(x_img);
-        p.y = static_cast<float>((img_height - 1) - y_img);
-
-        lane_msg.lane_points.push_back(p);
-    }
-
-    return lane_msg;
-}
-
 
 
 //################################################## img processing functions ##################################################//
 // RAW 카메라 버퍼에서 차선 정보까지 계산하는 메인 파이프라인
-void ImgProcessing(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
+void Lane_detector(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
 {
     // kalman filter variables
     CAMERA_LANEINFO st_LaneInfoLeft, st_LaneInfoRight; // sliding window에서 검출된 차선 정보 담는 구조체 
@@ -1019,16 +925,13 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
                     }
                 }
 
-                // 디버그용 윈도우 시각화
-                if(vis_slidingwindow)
-                {
                 cv::rectangle(
                     st_EdgeImage,
                     cv::Point(s32_WindowMinWidthLeft,  s32_WindowMinHeight),
                     cv::Point(s32_WindowMaxWidthLeft,  s32_WindowHeight),
                     cv::Scalar(255, 255, 255),
                     2);
-                }
+                
             }
 
             // ---- 이번 윈도우에서 유효한 차선 조각을 못 찾은 경우 ----
@@ -1108,15 +1011,13 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
                     }
                 }
 
-                if(vis_slidingwindow)
-                {
                 cv::rectangle(
                     st_EdgeImage,
                     cv::Point(s32_WindowMinWidthRight,  s32_WindowMinHeight),
                     cv::Point(s32_WindowMaxWidthRight,  s32_WindowHeight),
                     cv::Scalar(255, 255, 255),
                     2);
-                }
+                
             }
 
             if (!b_CheckValidWindowRight)
@@ -1555,13 +1456,104 @@ bool EnforceLaneConsistencyAnchor(LANE_COEFFICIENT& left,
     return true;
 }
 
+// ############################################# publish_lane_messages func #############################################//
+
+
+void CameraProcessing::publish_lane_messages()
+{
+    LANE_COEFFICIENT left_coef, right_coef;
+    bool has_left = false, has_right = false;
+
+    get_lane_coef_from_kalman(static_camera_data,
+                              left_coef, right_coef,
+                              has_left, has_right);
+
+    const int H = static_camera_data.st_CameraParameter.s32_RemapHeight;
+    const int W = static_camera_data.st_CameraParameter.s32_RemapWidth;
+
+    if (lane_left_pub_ && has_left)
+    {
+        auto lane_msg = build_lane_msg_from_coef(left_coef, W, H);
+        if (!lane_msg.lane_points.empty())
+        {
+            lane_left_pub_->publish(lane_msg);
+        }
+    }
+
+    if (lane_right_pub_ && has_right)
+    {
+        auto lane_msg = build_lane_msg_from_coef(right_coef, W, H);
+        if (!lane_msg.lane_points.empty())
+        {
+            lane_right_pub_->publish(lane_msg);
+        }
+    }
+}
+
+
+// ############################################# build_lane_msg_from_coef func #############################################//
+
+perception::msg::Lane build_lane_msg_from_coef(const LANE_COEFFICIENT& coef,
+                                               int img_width,
+                                               int img_height,
+                                               int num_samples )
+{
+    perception::msg::Lane lane_msg;
+
+    // 너무 수평이면 일단은 보내되, 나중에 필터에서 처리하게 두는게 좋음
+    if (!std::isfinite(coef.f64_Slope)) {
+        return lane_msg; // 완전 이상한 경우만 버리기
+    }
+
+    for (int i = 0; i < num_samples; ++i)
+    {
+        double y_img = (img_height - 1)
+                     - (img_height - 1) * (static_cast<double>(i) / (num_samples - 1));
+        double x_img = (y_img - coef.f64_Intercept) / coef.f64_Slope;
+
+        // 화면 밖이면 skip
+        if (x_img < 0 || x_img >= img_width) continue;
+
+        perception::msg::LanePnt p;
+        p.x = static_cast<float>(x_img);
+        p.y = static_cast<float>((img_height - 1) - y_img);
+
+        lane_msg.lane_points.push_back(p);
+    }
+
+    return lane_msg;
+}
+
+//################################################## build_lane_message function ##################################################//
+
+perception::msg::Lane build_lane_message(const CAMERA_LANEINFO & lane_info)
+{
+    perception::msg::Lane lane_msg;
+    const int32_t max_samples = static_cast<int32_t>(sizeof(lane_info.arst_LaneSample) /
+                                                    sizeof(lane_info.arst_LaneSample[0]));
+    const int32_t clamped_samples = std::min(lane_info.s32_SampleCount, max_samples);
+    lane_msg.lane_points.reserve(clamped_samples);
+
+    for (int32_t i = 0; i < clamped_samples; ++i)
+    {
+        const cv::Point & sample = lane_info.arst_LaneSample[i];
+        perception::msg::LanePnt point_msg;
+        point_msg.x = static_cast<float>(sample.x);
+        point_msg.y = static_cast<float>(sample.y);
+        lane_msg.lane_points.push_back(point_msg);
+    }
+
+    return lane_msg;
+}
+
+}  // namespace perception
 
 //################################################## Camera node main function ##################################################//
 
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<CameraProcessing>()); // 객체 생성 및 spin(이벤트 루프 홀출)
+  rclcpp::spin(std::make_shared<perception::CameraProcessing>()); // 객체 생성 및 spin(이벤트 루프 홀출)
   rclcpp::shutdown();
   return 0;
 }
