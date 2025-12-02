@@ -156,7 +156,7 @@ void PlanningNode::process_lanes()
   // centerline 으로 path + markers 퍼블리시
 
   // 거의 0 값이면 , path는 중앙인데, 차가 오른쪽에 있는것, 
-  // -0.03~0.08정도 나오는거면 path 자체가 오른쪽으로 밀려있는 것. 
+  // -0.03~0.08정도 나오는거면 path 자체가 오른쪽으로 밀려있는 것. --> 0
   if (!centerline.empty()) {
   // forward ~0.5m 근처 포인트 찾기
   double target_y = 0.5;
@@ -171,6 +171,8 @@ void PlanningNode::process_lanes()
   }
   RCLCPP_INFO(get_logger(), "centerline at 0.5m: lateral=%.3f m", best_x);
   }
+
+  
 
 
   publish_path(centerline);
