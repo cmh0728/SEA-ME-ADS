@@ -42,7 +42,7 @@ constexpr double kSteerGain            = 2.293;
 // 조향 신뢰도 체크 
 constexpr double kDefaultMaxSteerRate  = 8.0; // rad/s, 한 프레임당 변화율 제한
 constexpr double kDefaultMaxSteerJump  = 1.5; // 변화량 제한값
-
+bool debug = false;
 
 
 }  // namespace
@@ -75,7 +75,7 @@ ControlNode::ControlNode(): rclcpp::Node("control_node"),
   prev_steer_cmd_(0.0),
   has_prev_steer_(false)
 {
-  bool debug = declare_parameter("debug",false) ;
+  debug = declare_parameter("debug",false) ;
   const std::string path_topic = declare_parameter("path_topic", std::string("/planning/path"));
   auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
   auto qos2 = rclcpp::QoS(rclcpp::KeepLast(10));
