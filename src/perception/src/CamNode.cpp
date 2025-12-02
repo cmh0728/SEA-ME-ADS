@@ -43,14 +43,14 @@ void on_trackbar(int, void*)
 // RealSense 이미지 토픽을 구독하고 시각화 창을 준비하는 ROS 노드 생성자
 CameraProcessing::CameraProcessing() : rclcpp::Node("CameraProcessing_node") // rclcpp node 상속 클래스 
 {
-    const std::string image_topic = "/camera/camera/color/image_raw";
+    const std::string image_topic = "/camera/camera/color/image_raw/compressed";
     visualize = this->declare_parameter<bool>("visualize", false);
 
     LoadParam(&static_camera_data);          // cameardata param load
     LoadMappingParam(&static_camera_data);   // cameradata IPM 맵 로드
 
     //img subscriber
-    image_subscription_ = create_subscription<sensor_msgs::msg::Image>(image_topic, rclcpp::SensorDataQoS(),
+    image_subscription_ = create_subscription<sensor_msgs::msg::CompressedImage>(image_topic, rclcpp::SensorDataQoS(),
     std::bind(&CameraProcessing::on_image, this, std::placeholders::_1));
 
     // lane pub 
@@ -86,14 +86,15 @@ CameraProcessing::~CameraProcessing()
 }
 
 // sub callback function
-void CameraProcessing::on_image(const sensor_msgs::msg::Image::ConstSharedPtr msg)
+void CameraProcessing::on_image(const sensor_msgs::msg::CompressedImage::ConstSharedPtr msg)
 {
   //예외처리 
   try
   {
-    // encoding은 RealSense 설정에 따라 bgr8 또는 rgb8
-    cv_bridge::CvImageConstPtr cv_ptr = cv_bridge::toCvShare(msg, "bgr8");  
-    const cv::Mat& img = cv_ptr->image;    // 복사 없이 참조만
+    cv::Mat img = cv::imdecode(msg->data, cv::IMREAD_COLOR); // cv:Mat 형식 디코딩
+    // // encoding은 RealSense 설정에 따라 bgr8 또는 rgb8(raw image)
+    // cv_bridge::CvImageConstPtr cv_ptr = cv_bridge::toCvShare(msg, "bgr8");  
+    // const cv::Mat& img = cv_ptr->image;    // 복사 없이 참조만
 
     visualize = get_parameter("visualize").as_bool();
     Lane_detector(img,&static_camera_data); // img processing main pipeline function
