@@ -2,7 +2,8 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/serialization.hpp>
-#include <std_msgs/msg/string.hpp>
+
+#include <sensor_msgs/msg/compressed_image.hpp>   // ★ 추가
 
 #include <rosbag2_cpp/writer.hpp>
 
@@ -17,20 +18,22 @@ public:
     // rosbag2 writer 생성
     writer_ = std::make_unique<rosbag2_cpp::Writer>();
 
-    // 그냥 이름만 주고 open (기본 storage 옵션: sqlite3)
-    writer_->open("my_bag");
+    // bag 파일 폴더 이름 (공백 없는 이름을 권장)
+    writer_->open("final_test1");
 
-    // String 타입으로 평범하게 subscribe
-    subscription_ = this->create_subscription<std_msgs::msg::String>(
-      "chatter", 10,
+    // /camera/camera/color/image_raw/compressed 토픽 구독
+    subscription_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(
+      "/camera/camera/color/image_raw/compressed",
+      10, // 필요하면 rclcpp::SensorDataQoS() 로 바꿀 수도 있음
       std::bind(&SimpleBagRecorder::topic_callback, this, _1));
   }
 
 private:
-  void topic_callback(const std_msgs::msg::String::SharedPtr msg) const
+  // ★ const 제거 (writer_ 사용 때문에)
+  void topic_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg)
   {
-    // 1) std_msgs::msg::String → rclcpp::SerializedMessage 로 직렬화
-    rclcpp::Serialization<std_msgs::msg::String> serializer;
+    // 1) sensor_msgs::msg::CompressedImage → rclcpp::SerializedMessage 직렬화
+    rclcpp::Serialization<sensor_msgs::msg::CompressedImage> serializer;
     rclcpp::SerializedMessage serialized_msg;
     serializer.serialize_message(msg.get(), &serialized_msg);
 
@@ -42,12 +45,12 @@ private:
     //                  const std::string& type, const rclcpp::Time& time)
     writer_->write(
       serialized_msg,
-      "chatter",
-      "std_msgs/msg/String",
+      "/camera/camera/color/image_raw/compressed",   // 토픽 이름
+      "sensor_msgs/msg/CompressedImage",            // 타입 이름 (중요)
       time_stamp);
   }
 
-  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr subscription_;
+  rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr subscription_;
   std::unique_ptr<rosbag2_cpp::Writer> writer_;
 };
 
