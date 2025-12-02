@@ -44,10 +44,10 @@ private:
     //    Writer::write(const rclcpp::SerializedMessage&, const std::string& topic,
     //                  const std::string& type, const rclcpp::Time& time)
     writer_->write(
-      serialized_msg,
-      "/camera/camera/color/image_raw/compressed",   // 토픽 이름
-      "sensor_msgs/msg/CompressedImage",            // 타입 이름 (중요)
-      time_stamp);
+    serialized_msg,
+    "/camera/camera/color/image_raw/compressed",
+    "sensor_msgs/msg/CompressedImage",
+    time_stamp);
   }
 
   rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr subscription_;
