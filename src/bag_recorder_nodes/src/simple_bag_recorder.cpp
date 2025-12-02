@@ -6,6 +6,8 @@
 #include <sensor_msgs/msg/compressed_image.hpp>
 
 #include <rosbag2_cpp/writer.hpp>
+#include <rosbag2_cpp/converter_options.hpp>
+#include <rosbag2_storage/storage_options.hpp>
 
 using std::placeholders::_1;
 
@@ -15,39 +17,46 @@ public:
   SimpleBagRecorder()
   : Node("simple_bag_recorder")
   {
-    // rosbag2 writer 생성
+    // 1) StorageOptions / ConverterOptions 설정
+    rosbag2_storage::StorageOptions storage_options;
+    storage_options.uri = "final_test1";   // 폴더 이름
+    storage_options.storage_id = "sqlite3";
+
+    rosbag2_cpp::ConverterOptions converter_options;
+    converter_options.input_serialization_format  = "cdr";
+    converter_options.output_serialization_format = "cdr";
+
+    // 2) writer 생성 + open
     writer_ = std::make_unique<rosbag2_cpp::Writer>();
+    writer_->open(storage_options, converter_options);
 
-    // bag 파일 폴더 이름 (공백 없는 이름을 권장)
-    // Humble에서는 이 open(const std::string&)은 아직 써도 됨.
-    writer_->open("final_test1");
+    // (선택) 미리 topic 등록 – 없어도 write()가 알아서 등록해주긴 함
+    // writer_->create_topic({
+    //   "/camera/camera/color/image_raw/compressed",
+    //   "sensor_msgs/msg/CompressedImage",
+    //   "cdr",
+    //   ""
+    // });
 
-    // /camera/camera/color/image_raw/compressed 토픽 구독
+    // 3) /camera/camera/color/image_raw/compressed 구독
     subscription_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(
       "/camera/camera/color/image_raw/compressed",
-      10, // 필요하면 rclcpp::SensorDataQoS() 로 바꿀 수도 있음
+      10,  // 필요하면 rclcpp::SensorDataQoS() 로 변경 가능
       std::bind(&SimpleBagRecorder::topic_callback, this, _1));
   }
 
 private:
   void topic_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg)
   {
-    // 1) sensor_msgs::msg::CompressedImage → rclcpp::SerializedMessage 직렬화
+    // 1) 메시지 → SerializedMessage로 직렬화
     rclcpp::Serialization<sensor_msgs::msg::CompressedImage> serializer;
-
-    // ★ 새 API에 맞게 shared_ptr<SerializedMessage> 사용
     auto serialized_msg = std::make_shared<rclcpp::SerializedMessage>();
     serializer.serialize_message(msg.get(), serialized_msg.get());
 
-    // 2) 타임스탬프 (수신 시각 사용)
+    // 2) 타임스탬프
     rclcpp::Time time_stamp = this->now();
 
-    // 3) bag에 쓰기 - 새 write API 사용
-    //
-    // void write(std::shared_ptr<rclcpp::SerializedMessage> message,
-    //            const std::string & topic_name,
-    //            const std::string & type_name,
-    //            const rclcpp::Time & time);
+    // 3) rosbag에 쓰기 (새 API: shared_ptr<SerializedMessage> 사용)
     writer_->write(
       serialized_msg,
       "/camera/camera/color/image_raw/compressed",
