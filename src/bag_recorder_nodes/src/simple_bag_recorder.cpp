@@ -3,7 +3,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/serialization.hpp>
 
-#include <sensor_msgs/msg/compressed_image.hpp>   
+#include <sensor_msgs/msg/compressed_image.hpp>
 
 #include <rosbag2_cpp/writer.hpp>
 
@@ -19,6 +19,7 @@ public:
     writer_ = std::make_unique<rosbag2_cpp::Writer>();
 
     // bag 파일 폴더 이름 (공백 없는 이름을 권장)
+    // Humble에서는 이 open(const std::string&)은 아직 써도 됨.
     writer_->open("final_test1");
 
     // /camera/camera/color/image_raw/compressed 토픽 구독
@@ -29,25 +30,29 @@ public:
   }
 
 private:
-  // ★ const 제거 (writer_ 사용 때문에)
   void topic_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg)
   {
     // 1) sensor_msgs::msg::CompressedImage → rclcpp::SerializedMessage 직렬화
     rclcpp::Serialization<sensor_msgs::msg::CompressedImage> serializer;
-    rclcpp::SerializedMessage serialized_msg;
-    serializer.serialize_message(msg.get(), &serialized_msg);
+
+    // ★ 새 API에 맞게 shared_ptr<SerializedMessage> 사용
+    auto serialized_msg = std::make_shared<rclcpp::SerializedMessage>();
+    serializer.serialize_message(msg.get(), serialized_msg.get());
 
     // 2) 타임스탬프 (수신 시각 사용)
     rclcpp::Time time_stamp = this->now();
 
-    // 3) bag에 쓰기
-    //    Writer::write(const rclcpp::SerializedMessage&, const std::string& topic,
-    //                  const std::string& type, const rclcpp::Time& time)
+    // 3) bag에 쓰기 - 새 write API 사용
+    //
+    // void write(std::shared_ptr<rclcpp::SerializedMessage> message,
+    //            const std::string & topic_name,
+    //            const std::string & type_name,
+    //            const rclcpp::Time & time);
     writer_->write(
-    serialized_msg,
-    "/camera/camera/color/image_raw/compressed",
-    "sensor_msgs/msg/CompressedImage",
-    time_stamp);
+      serialized_msg,
+      "/camera/camera/color/image_raw/compressed",
+      "sensor_msgs/msg/CompressedImage",
+      time_stamp);
   }
 
   rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr subscription_;
