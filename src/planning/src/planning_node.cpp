@@ -44,7 +44,7 @@ PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
   // 차량 중심이랑 카메라 위치는 9cm정도 차이 남. 카메라가 차량중심에서 9cm 뒤에 있음
   // 카메라 , 차량 중심 offset
   origin_offset_x_m_ = declare_parameter("origin_offset_x_m", 0.09);  // forward offset
-  origin_offset_y_m_ = declare_parameter("origin_offset_y_m", - 0.013);  // lateral offset , 1.3cm(오른쪽이 -)
+  origin_offset_y_m_ = declare_parameter("origin_offset_y_m", - 0.01);  // lateral offset , 1cm(오른쪽이 -)
   frame_id_       = declare_parameter("frame_id", "base_link");
   lane_half_width_  = declare_parameter("lane_half_width", 0.175); // 실제 차폭의 절반 
   resample_step_    = declare_parameter("resample_step", 0.02);  // 2 cm 간격으로 centerline 샘플링
