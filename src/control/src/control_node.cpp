@@ -75,6 +75,7 @@ ControlNode::ControlNode(): rclcpp::Node("control_node"),
   prev_steer_cmd_(0.0),
   has_prev_steer_(false)
 {
+  bool debug = declare_parameter("debug",false) ;
   const std::string path_topic = declare_parameter("path_topic", std::string("/planning/path"));
   auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
   auto qos2 = rclcpp::QoS(rclcpp::KeepLast(10));
@@ -200,10 +201,16 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
     target.x, target.y, selected_lookahead,
     slope, cmd.linear.x, cmd.angular.z);
 
-  RCLCPP_INFO(
-  get_logger(),
-  "PP target=(x=%.3f, y=%.3f), L=%.3f, steer=%.3f, v=%.2f",
-  target.x, target.y, selected_lookahead, steer_cmd, cmd.linear.x);
+  // target, steer debugging
+  debug = get_parameter("debug").as_bool();
+
+  if(debug)
+  {
+    RCLCPP_INFO(
+    get_logger(),
+    "PP target=(x=%.3f, y=%.3f), L=%.3f, steer=%.3f, v=%.2f",
+    target.x, target.y, selected_lookahead, steer_cmd, cmd.linear.x);
+  }
 }
 
 
