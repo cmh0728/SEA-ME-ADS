@@ -8,7 +8,7 @@ H = np.array(data["H_ground_to_image"], dtype=np.float64)
 
 # --- IPM 영역 (바닥 좌표계: X=앞, Y=좌(+), 우(-)) ---
 X_MIN, X_MAX = -0.25 , 0.05 # max가 차량 뒤쪽, min이 앞쪽
-Y_MIN, Y_MAX = -0.28 , 0.21   # max가 차량 왼쪽 
+Y_MIN, Y_MAX = -0.26 , 0.26   # max가 차량 왼쪽 
 
 # --- camera.yaml 과 동일 ---
 H_ipm = 320

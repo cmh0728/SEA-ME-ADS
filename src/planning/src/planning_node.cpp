@@ -44,7 +44,7 @@ PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
   // 차량 중심이랑 카메라 위치는 9cm정도 차이 남. 카메라가 차량중심에서 9cm 뒤에 있음
   // 카메라 , 차량 중심 offset
   origin_offset_x_m_ = declare_parameter("origin_offset_x_m", 0.09);  // forward offset
-  origin_offset_y_m_ = declare_parameter("origin_offset_y_m", 0.0);  // lateral offset
+  origin_offset_y_m_ = declare_parameter("origin_offset_y_m", 0.013);  // lateral offset , 1.3cm
   frame_id_       = declare_parameter("frame_id", "base_link");
   lane_half_width_  = declare_parameter("lane_half_width", 0.175); // 실제 차폭의 절반 
   resample_step_    = declare_parameter("resample_step", 0.02);  // 2 cm 간격으로 centerline 샘플링
@@ -59,7 +59,7 @@ PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
   start_offset_y_   = declare_parameter("start_offset_y", 0.42); // path의 시작 지점 
   marker_z_         = declare_parameter("marker_z", 0.0); // rviz markr z 높이 
   lane_timeout_sec_ = declare_parameter("lane_timeout_sec", 0.2); // 차선 메시지 타임아웃(오래된 차선 버림 )
-  centerline_offset_ = declare_parameter("centerline_offset", 0.01);
+  // centerline_offset_ = declare_parameter("centerline_offset", 0.01);
 
 
   // 타임스탬프 초기화 
@@ -328,8 +328,8 @@ bool PlanningNode::build_centerline(
     {
       // ===== 1) 양쪽 차선이 모두 있는 구간: 진짜 중앙선 =====
       double center_x = (*left_x + *right_x) * 0.5;
-      // pt.x = center_x;
-      pt.x = center_x + centerline_offset_;
+      pt.x = center_x;
+      // pt.x = center_x + centerline_offset_;
 
       centerline.push_back(pt);
       prev_center_x = center_x;
@@ -367,8 +367,8 @@ bool PlanningNode::build_centerline(
       }
 
       double center_x = base_x + single_lane_offset;
-      // pt.x = center_x;
-      pt.x = center_x + centerline_offset_;
+      pt.x = center_x;
+      // pt.x = center_x + centerline_offset_;
 
       centerline.push_back(pt);
       prev_center_x = center_x;

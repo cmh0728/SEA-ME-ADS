@@ -200,10 +200,10 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
     target.x, target.y, selected_lookahead,
     slope, cmd.linear.x, cmd.angular.z);
 
-  // RCLCPP_INFO(
-  // get_logger(),
-  // "PP target=(x=%.3f, y=%.3f), L=%.3f, steer=%.3f, v=%.2f",
-  // target.x, target.y, selected_lookahead, steer_cmd, cmd.linear.x);
+  RCLCPP_INFO(
+  get_logger(),
+  "PP target=(x=%.3f, y=%.3f), L=%.3f, steer=%.3f, v=%.2f",
+  target.x, target.y, selected_lookahead, steer_cmd, cmd.linear.x);
 }
 
 
