@@ -4,13 +4,6 @@
 #include <cmath>
 #include <functional>
 
-// =======================================
-// ControlNode main flow
-// 1) /planning/path 로 전달된 중앙 경로를 Pure Pursuit 로 추종하여 조향각(ang.z)을 계산.
-// 2) 경로 기울기를 이용해 속도 PID 보정을 수행하고, 곡선에서는 감속.
-// 3) 최종 Twist(/cmd_vel)를 발행해 차량 조향 + 속도 제어.
-// =======================================
-
 namespace control
 {
 namespace

@@ -1,13 +1,5 @@
 #include "planning/planning_node.hpp"
 
-// =======================================
-// PlanningNode main flow
-// 1) /lane/left, /lane/right 차선 메시지(IPM 픽셀 좌표)를 수신
-// 2) IPM 픽셀 → 차량 기준 [m] 좌표로 변환 (convert_lane)
-// 3) 좌/우 차선으로부터 중앙선(centerline) 생성 (build_centerline)
-// 4) nav_msgs/Path + MarkerArray 퍼블리시 → RViz에서 확인
-// =======================================
-
 // Planning namespace 
 namespace planning {
 
@@ -17,7 +9,7 @@ namespace planning {
 //   x: lateral  (왼쪽 + / 오른쪽 -)
 //   y: forward  (앞쪽 +)
 // ROS Point:
-//   x: forward, y: left/right 로 쓰겠다는 약속
+//   x: forward, y: left/right 
 
 // 좌표 변환 헬퍼
 geometry_msgs::msg::Point to_point(const PlanningNode::LanePoint & lane_pt, double z)
