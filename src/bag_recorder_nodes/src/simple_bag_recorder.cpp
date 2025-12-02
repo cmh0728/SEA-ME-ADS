@@ -3,7 +3,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/serialization.hpp>
 
-#include <sensor_msgs/msg/compressed_image.hpp>   // ★ 추가
+#include <sensor_msgs/msg/compressed_image.hpp>   
 
 #include <rosbag2_cpp/writer.hpp>
 
