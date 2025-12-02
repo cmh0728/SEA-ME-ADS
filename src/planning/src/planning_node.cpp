@@ -59,6 +59,8 @@ PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
   start_offset_y_   = declare_parameter("start_offset_y", 0.42); // path의 시작 지점 
   marker_z_         = declare_parameter("marker_z", 0.0); // rviz markr z 높이 
   lane_timeout_sec_ = declare_parameter("lane_timeout_sec", 0.2); // 차선 메시지 타임아웃(오래된 차선 버림 )
+  centerline_offset_ = declare_parameter("centerline_offset", 0.01);
+
 
   // 타임스탬프 초기화 
   last_left_stamp_  = this->now();
@@ -156,21 +158,21 @@ void PlanningNode::process_lanes()
   // centerline 으로 path + markers 퍼블리시
 
   // 거의 0 값이면 , path는 중앙인데, 차가 오른쪽에 있는것, 
-  // -0.03~0.08정도 나오는거면 path 자체가 오른쪽으로 밀려있는 것. --> 0
-  if (!centerline.empty()) {
-  // forward ~0.5m 근처 포인트 찾기
-  double target_y = 0.5;
-  double best_dy = 1e9;
-  double best_x = 0.0;
-  for (const auto& p : centerline) {
-    double dy = std::abs(p.y - target_y);
-    if (dy < best_dy) {
-      best_dy = dy;
-      best_x = p.x;
-    }
-  }
-  RCLCPP_INFO(get_logger(), "centerline at 0.5m: lateral=%.3f m", best_x);
-  }
+  // -0.03~0.08정도 나오는거면 path 자체가 오른쪽으로 밀려있는 것. --> 0.007정도 의미없는 값 나옴. path는 정상 
+  // if (!centerline.empty()) {
+  // // forward ~0.5m 근처 포인트 찾기
+  // double target_y = 0.5;
+  // double best_dy = 1e9;
+  // double best_x = 0.0;
+  // for (const auto& p : centerline) {
+  //   double dy = std::abs(p.y - target_y);
+  //   if (dy < best_dy) {
+  //     best_dy = dy;
+  //     best_x = p.x;
+  //   }
+  // }
+  // RCLCPP_INFO(get_logger(), "centerline at 0.5m: lateral=%.3f m", best_x);
+  // }
 
   
 
@@ -326,7 +328,8 @@ bool PlanningNode::build_centerline(
     {
       // ===== 1) 양쪽 차선이 모두 있는 구간: 진짜 중앙선 =====
       double center_x = (*left_x + *right_x) * 0.5;
-      pt.x = center_x;
+      // pt.x = center_x;
+      pt.x = center_x + centerline_offset_;
 
       centerline.push_back(pt);
       prev_center_x = center_x;
@@ -364,7 +367,8 @@ bool PlanningNode::build_centerline(
       }
 
       double center_x = base_x + single_lane_offset;
-      pt.x = center_x;
+      // pt.x = center_x;
+      pt.x = center_x + centerline_offset_;
 
       centerline.push_back(pt);
       prev_center_x = center_x;

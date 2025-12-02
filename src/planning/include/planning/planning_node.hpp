@@ -99,6 +99,9 @@ private:
   double origin_offset_x_m_;
   double origin_offset_y_m_;
 
+  double centerline_offset_;  // +면 왼쪽, -면 오른쪽
+
+
   // ROS 통신
   rclcpp::Subscription<perception::msg::Lane>::SharedPtr lane_left_sub_;
   rclcpp::Subscription<perception::msg::Lane>::SharedPtr lane_right_sub_;
