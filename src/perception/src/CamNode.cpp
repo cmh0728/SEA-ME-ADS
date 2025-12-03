@@ -801,10 +801,10 @@ void InitializeKalmanObject(LANE_KALMAN& st_KalmanObject)
                             0   , 0   , 0   , 0.00013;
 
     // R 측정 노이즈 공분산 행렬 --> 값이 크면 측정값 신뢰도 낮음 
-    st_KalmanObject.st_R << 5   , 0   , 0   , 0,
-                            0   , 10   , 0   , 0,
-                            0   , 0   , 20   , 0,
-                            0   , 0   , 0   , 30;
+    st_KalmanObject.st_R << 2.5   , 0   , 0   , 0,
+                            0   , 5   , 0   , 0,
+                            0   , 0   , 10   , 0,
+                            0   , 0   , 0   , 15;
 
     st_KalmanObject.st_X.setZero();
     st_KalmanObject.st_PrevX.setZero();
