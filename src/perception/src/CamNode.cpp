@@ -207,7 +207,7 @@ void Lane_detector(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     int32_t s32_WindowCentorLeft  = 0; // 인덱스 0으로 초기화 
     int32_t s32_WindowCentorRight = 0;
 
-    // =======================  히스토그램 기반 시작 위치 ================== --> 중앙과 가까운 인덱스 찾는과정 (차선 시작점 )
+    // =======================  히스토그램 기반 시작 위치 탐색 ================== 
     FindLaneStartPositions(g_TempImg,
                            s32_WindowCentorLeft, //0
                            s32_WindowCentorRight, // 0
@@ -1192,49 +1192,43 @@ int32_t FindClosestToMidPoint(const int32_t points[5], int32_t s32_MidPoint)
 
 //###################################### FindLaneStartPositions func ##################################################//
 
-// 히스토그램 분석으로 좌·우 슬라이딩 윈도 시작 위치를 계산
-void FindLaneStartPositions(const cv::Mat& st_Edge, int32_t& s32_WindowCentorLeft, int32_t& s32_WindowCentorRight, bool& b_NoLaneLeft, bool& b_NoLaneRight) 
+// 히스토그램 분석으로 좌·우 슬라이딩 윈도 시작 위치를 계산 --> 중앙과 가까운 차선을 찾고있음. 
+void FindLaneStartPositions(const cv::Mat& st_Edge,
+                            int32_t& s32_WindowCentorLeft,
+                            int32_t& s32_WindowCentorRight,
+                            bool& b_NoLaneLeft,
+                            bool& b_NoLaneRight) 
 {
+    // 0으로 초기화된 히스토그램
+    std::vector<int32_t> histogram(st_Edge.cols, 0);
 
-    int32_t s32_col, s32_row, s32_I; //col : y , row : x
-
-    // Histogram 계산
-    int32_t* ps32_Histogram = new int32_t[st_Edge.cols](); // 동적 할당, cols는 가로방향 픽셀 개수 만큼 배열 생성 , 모두 0으로 초기화 ; cols가 x
-
-    // 이미지 하단 30프로  열에 해당하는 행 데이터들을 각 열별로 다 더한 후 최대가 되는 x좌표(행) 추출 --> height가 700이상이여야 작동한다. 
-    for (s32_row = 0; s32_row < st_Edge.cols; ++s32_row) {
-        for (s32_col = st_Edge.rows*0.7 ; s32_col < st_Edge.rows; ++s32_col) {
-            ps32_Histogram[s32_row] += st_Edge.at<uchar>(s32_col, s32_row) > 0 ? 1 : 0; //검정색이 아닌 픽셀을 카운트 
+    for (int32_t col = 0; col < st_Edge.cols; ++col) {
+        for (int32_t row = st_Edge.rows * 0.7; row < st_Edge.rows; ++row) {
+            histogram[col] += st_Edge.at<uchar>(row, col) > 0 ? 1 : 0;
         }
     }
 
     int32_t ars32_LeftCandidate[5], ars32_RightCandidate[5];
 
-    //왼쪽 차선 시작점 
-    // 왼쪽 및 오른쪽 최대 5개 인덱스 찾기
-    FindTop5MaxIndices(ps32_Histogram, st_Edge.cols / 2, ars32_LeftCandidate, b_NoLaneLeft);
-    if(!b_NoLaneLeft) // 왼쪽 차선이 감지된 경우
-    {
-        //가장 가까운 히스토그램 인덱스를 반환  int32_t type
+    FindTop5MaxIndices(histogram.data(), st_Edge.cols / 2, ars32_LeftCandidate, b_NoLaneLeft);
+    if (!b_NoLaneLeft) {
         s32_WindowCentorLeft = FindClosestToMidPoint(ars32_LeftCandidate, st_Edge.cols / 2);
     }
 
-    //오른쪽 차선 시작점 : 절반 부터 시작 
-    FindTop5MaxIndices(ps32_Histogram + st_Edge.cols / 2, st_Edge.cols - st_Edge.cols / 2, ars32_RightCandidate, b_NoLaneRight);
-    if(!b_NoLaneRight) //오른쪽 차선 감지된 경우 
-    {
-        // 오른쪽 인덱스 보정
-        for (s32_I = 0; s32_I < 5; ++s32_I) {
-            if (ars32_RightCandidate[s32_I] != -1) {
-                ars32_RightCandidate[s32_I] += st_Edge.cols / 2; // 절반 오프셋 추가 -->원래 좌표계로 보정 
+    FindTop5MaxIndices(histogram.data() + st_Edge.cols / 2,
+                       st_Edge.cols - st_Edge.cols / 2,
+                       ars32_RightCandidate,
+                       b_NoLaneRight);
+    if (!b_NoLaneRight) {
+        for (int i = 0; i < 5; ++i) {
+            if (ars32_RightCandidate[i] != -1) {
+                ars32_RightCandidate[i] += st_Edge.cols / 2;
             }
         }
-
         s32_WindowCentorRight = FindClosestToMidPoint(ars32_RightCandidate, st_Edge.cols / 2);
     }
-
-    delete[] ps32_Histogram; // 동적 할당 해제 
 }
+
 
 //###################################### Parameter loader ##################################################//
 
