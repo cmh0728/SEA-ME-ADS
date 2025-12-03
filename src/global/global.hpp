@@ -236,6 +236,14 @@ struct CAMERA_DATA {
     float32_t f32_LastAngleRight{};
     bool b_ThereIsLeft = false;
     bool b_ThereIsRight = false;
+
+    // for sliding window px limited
+    int32_t last_left_start_x  = -1;
+    int32_t last_right_start_x = -1;
+    bool has_last_left_start   = false;
+    bool has_last_right_start  = false;
+
+
 };
 
 //###################################### IMU #########################################//
