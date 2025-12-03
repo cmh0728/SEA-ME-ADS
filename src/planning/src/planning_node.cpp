@@ -23,6 +23,7 @@ geometry_msgs::msg::Point to_point(const PlanningNode::LanePoint & lane_pt, doub
 }  // namespace
 
 bool path_debug = false;
+bool vis_marker = false;
 
 
 PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
@@ -30,7 +31,8 @@ PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
   LoadParam(); // 나중에 yaml 파일로 정리, 타입 정리 
   frame_id_ = "base_link";
   // --------------------- planning parameter ---------------------------------
-  path_debug = declare_parameter("path_debug",false);
+  path_debug = declare_parameter("path_debug",false); // path info 출력
+  vis_marker = declare_parameter("vis_marker",false); // rviz 마커 연산 + 시각화 
 
   // 타임스탬프 초기화 
   last_left_stamp_  = this->now();
@@ -80,7 +82,7 @@ void PlanningNode::process_lanes()
 {
   const auto now = this->now(); // 현재 시각
   const rclcpp::Duration timeout = rclcpp::Duration::from_seconds(lane_timeout_sec_); // 0.2 초
-
+  vis_marker = get_parameter("vis_marker").as_bool();
   std::vector<LanePoint> left_pts;
   std::vector<LanePoint> right_pts;
 
@@ -102,12 +104,15 @@ void PlanningNode::process_lanes()
     empty_path.header.frame_id = frame_id_;
     path_pub_->publish(empty_path);
 
+    if(vis_marker)
+    {
     // Marker 전부 삭제 (id 0,1,2)
     visualization_msgs::msg::MarkerArray del_array;
     del_array.markers.push_back(make_delete_marker(0, "lane_left"));
     del_array.markers.push_back(make_delete_marker(1, "lane_right"));
     del_array.markers.push_back(make_delete_marker(2, "centerline"));
     marker_pub_->publish(del_array);
+    }
 
     return;
   }
@@ -118,9 +123,11 @@ void PlanningNode::process_lanes()
     RCLCPP_DEBUG(get_logger(), "Insufficient lane data for path");
 
     // centerline 이 아예 안 만들어졌으면 centerline marker만 삭제
+    if (vis_marker) {
     visualization_msgs::msg::MarkerArray del_array;
     del_array.markers.push_back(make_delete_marker(2, "centerline"));
     marker_pub_->publish(del_array);
+    }
     return;
   }
 
@@ -147,11 +154,11 @@ void PlanningNode::process_lanes()
     }
   }
 
-  
-
-
   publish_path(centerline);
-  publish_markers(left_pts, right_pts, centerline);
+  if(vis_marker)
+  {
+    publish_markers(left_pts, right_pts, centerline);
+  }
 }
 
 //################################################## convert_lane func ##################################################//
@@ -308,9 +315,8 @@ bool PlanningNode::build_centerline(
       prev_center_x = center_x;
       has_prev_center = true;
 
-      // 양쪽 차선이 다시 보이기 시작하면, 단일 차선 offset은 초기화해도 됨
-      // (필요 없으면 이 줄은 생략해도 됨)
-      // offset_initialized = false;
+      // 양쪽 차선이 다시 보이기 시작하면, 단일 차선 offset은 초기화
+      offset_initialized = false;
     }
     else
     {
