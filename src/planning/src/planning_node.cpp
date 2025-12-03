@@ -22,6 +22,7 @@ geometry_msgs::msg::Point to_point(const PlanningNode::LanePoint & lane_pt, doub
 }
 }  // namespace
 
+bool path_debug = false;
 
 PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
 {
@@ -52,6 +53,8 @@ PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
   marker_z_         = declare_parameter("marker_z", 0.0); // rviz markr z 높이 
   lane_timeout_sec_ = declare_parameter("lane_timeout_sec", 0.2); // 차선 메시지 타임아웃(오래된 차선 버림 )
   // centerline_offset_ = declare_parameter("centerline_offset", 0.01);
+
+  path_debug = declare_parameter("path_debug",false);
 
 
   // 타임스탬프 초기화 
@@ -151,20 +154,23 @@ void PlanningNode::process_lanes()
 
   // 거의 0 값이면 , path는 중앙인데, 차가 오른쪽에 있는것, 
   // -0.03~0.08정도 나오는거면 path 자체가 오른쪽으로 밀려있는 것. --> 0.007정도 의미없는 값 나옴. path는 정상 
-  // if (!centerline.empty()) {
-  // // forward ~0.5m 근처 포인트 찾기
-  // double target_y = 0.5;
-  // double best_dy = 1e9;
-  // double best_x = 0.0;
-  // for (const auto& p : centerline) {
-  //   double dy = std::abs(p.y - target_y);
-  //   if (dy < best_dy) {
-  //     best_dy = dy;
-  //     best_x = p.x;
-  //   }
-  // }
-  // RCLCPP_INFO(get_logger(), "centerline at 0.5m: lateral=%.3f m", best_x);
-  // }
+  path_debug = get_parameter("path_debug").as_bool();
+  if(path_debug){
+    if (!centerline.empty()) {
+    // forward ~0.5m 근처 포인트 찾기
+    double target_y = 0.5;
+    double best_dy = 1e9;
+    double best_x = 0.0;
+    for (const auto& p : centerline) {
+      double dy = std::abs(p.y - target_y);
+      if (dy < best_dy) {
+        best_dy = dy;
+        best_x = p.x;
+      }
+    }
+    RCLCPP_INFO(get_logger(), "centerline at 0.5m: lateral=%.3f m", best_x);
+    }
+  }
 
   
 
