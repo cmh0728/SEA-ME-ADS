@@ -1,7 +1,7 @@
 x_min_m: 0.42 # 이미지 하단 거리 (m)
-x_max_m: 0.73 # 이미지 상단 거리 (m)
-y_min_m: -0.26 # 이미지 오른쪽 (m)
-y_max_m: 0.26 # 이미지 왼쪽(m)
+x_max_m: 0.78 # 이미지 상단 거리 (m)
+y_min_m: -0.3 # 이미지 오른쪽 (m)
+y_max_m: 0.3 # 이미지 왼쪽(m)
 ipm_width: 400.0 
 ipm_height: 320.0
 
@@ -20,7 +20,7 @@ resample_step: 0.02 # 2cm 간격으로 centerline 샘플링
 # //     대략 0.42 ~ 0.73 m까지만 사용하게 된다.
 # //   - 여기서는 기본값을 0.31으로 맞춰둠 (필요하면 parameter로 조정).
 
-max_path_length: 0.31 # path의 최대 길이(m)
+max_path_length: 0.36 # path의 최대 길이(m)
 start_offset_y: 0.42 # path의 시작 지점 (m)
 
 marker_z: 0.0 # rviz상의 marker z 값

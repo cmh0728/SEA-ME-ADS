@@ -36,22 +36,22 @@ PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
   last_left_stamp_  = this->now();
   last_right_stamp_ = this->now();
 
-  // ros qos 설정 
-  auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
-
+  // ros2 qos 설정 
+  auto lane_qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort(); // best effort
+  auto vis_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable(); // reliable
 
   // subscriber 선언
   lane_left_sub_ = create_subscription<perception::msg::Lane>(
-    "/lane/left", qos,
+    "/lane/left", lane_qos,
     std::bind(&PlanningNode::on_left_lane, this, std::placeholders::_1));
 
   lane_right_sub_ = create_subscription<perception::msg::Lane>(
-    "/lane/right", qos,
+    "/lane/right", lane_qos,
     std::bind(&PlanningNode::on_right_lane, this, std::placeholders::_1));
 
   // path, marker publisher 선언
-  path_pub_ = create_publisher<nav_msgs::msg::Path>("/planning/path", qos);
-  marker_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>("/planning/markers", qos);
+  path_pub_ = create_publisher<nav_msgs::msg::Path>("/planning/path", vis_qos);
+  marker_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>("/planning/markers", vis_qos);
 
   RCLCPP_INFO(get_logger(), "Planning node ready (frame: %s)", frame_id_.c_str());
 }
