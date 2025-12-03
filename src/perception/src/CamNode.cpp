@@ -35,6 +35,11 @@ static CAMERA_DATA static_camera_data;
 struct RansacRandomInit {RansacRandomInit() { std::srand(static_cast<unsigned int>(std::time(nullptr))); }} g_ransacRandomInit;
 
 void on_trackbar(int, void*){}
+static bool ComputeLaneWidthAngle(const LANE_COEFFICIENT& left,
+                                  const LANE_COEFFICIENT& right,
+                                  int img_height,
+                                  double& width_px,
+                                  double& angle_diff_deg);
 
 //################################################## CameraProcessing class functions ##################################################//
 CameraProcessing::CameraProcessing() : rclcpp::Node("CameraProcessing_node") // rclcpp node 상속 클래스 
@@ -1318,7 +1323,6 @@ bool get_lane_coef_from_kalman(const CAMERA_DATA& cam_data,
     return has_left || has_right;
 }
 // ======================= Lane pair consistency (anchor 기반) ======================= //
-
 // 두 직선에서 폭/각도 계산
 static bool ComputeLaneWidthAngle(const LANE_COEFFICIENT& left,
                                   const LANE_COEFFICIENT& right,
