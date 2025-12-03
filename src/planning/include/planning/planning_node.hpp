@@ -33,6 +33,7 @@ public:
   
   
 private:
+  PlanningConfig cfg_;
   // 콜백
   void on_left_lane(const perception::msg::Lane::ConstSharedPtr msg);
   void on_right_lane(const perception::msg::Lane::ConstSharedPtr msg);
