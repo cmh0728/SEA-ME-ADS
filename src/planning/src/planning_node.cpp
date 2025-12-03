@@ -24,24 +24,11 @@ geometry_msgs::msg::Point to_point(const PlanningNode::LanePoint & lane_pt, doub
 
 bool path_debug = false;
 
-double x_min_m_;
-double x_max_m_;
-double y_min_m_;
-double y_max_m_;
-double ipm_width_;
-double ipm_height_;
-double origin_offset_x_m_;
-double origin_offset_y_m_;
-double lane_half_width_;
-double resample_step_;
-double max_path_length_;
-double start_offset_y_;
-double marker_z_;
-double lane_timeout_sec_;
 
 PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
 {
   LoadParam(); // 나중에 yaml 파일로 정리, 타입 정리 
+  frame_id_ = "base_link"
   // --------------------- planning parameter ---------------------------------
   path_debug = declare_parameter("path_debug",false);
 
