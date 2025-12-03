@@ -50,7 +50,12 @@ void FindLaneStartPositions(const cv::Mat& st_Edge,
                             int32_t& s32_WindowCentorLeft,
                             int32_t& s32_WindowCentorRight,
                             bool& b_NoLaneLeft,
-                            bool& b_NoLaneRight);
+                            bool& b_NoLaneRight,
+                            int32_t& left_start_point,
+                            bool& has_left,
+                            int32_t& right_start_point,
+                            bool& has_right);
+
 
 void SlidingWindow(const cv::Mat& st_EdgeImage,
                    const cv::Mat& st_NonZeroPosition,
