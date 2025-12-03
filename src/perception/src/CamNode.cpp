@@ -209,10 +209,15 @@ void Lane_detector(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
 
     // =======================  히스토그램 기반 시작 위치 탐색 ================== 
     FindLaneStartPositions(g_TempImg,
-                           s32_WindowCentorLeft, //0
-                           s32_WindowCentorRight, // 0
-                           b_NoLaneLeft, // false
-                           b_NoLaneRight);
+                            s32_WindowCentorLeft, //0
+                            s32_WindowCentorRight, // 0
+                            b_NoLaneLeft, // false
+                            b_NoLaneRight,
+                            camera_data->last_left_start_x,
+                            camera_data->has_last_left_start,
+                            camera_data->last_right_start_x,
+                            camera_data->has_last_right_start);
+
 
     //히스토그램 로직에서 중앙에 있는 엉뚱한거를 차선으로 안 잡게 로직 추가하기 
 
@@ -569,6 +574,18 @@ void Lane_detector(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             }
         }
     }
+
+    // sliding window update
+    if (!b_NoLaneLeft) {
+    camera_data->last_left_start_x = s32_WindowCentorLeft;
+    camera_data->has_last_left_start = true;
+    }
+
+    if (!b_NoLaneRight) {
+        camera_data->last_right_start_x = s32_WindowCentorRight;
+        camera_data->has_last_right_start = true;
+    }
+
 
     // =======================  (H) Debug GUI ================================
     if (visualize)
@@ -1197,7 +1214,11 @@ void FindLaneStartPositions(const cv::Mat& st_Edge,
                             int32_t& s32_WindowCentorLeft,
                             int32_t& s32_WindowCentorRight,
                             bool& b_NoLaneLeft,
-                            bool& b_NoLaneRight) 
+                            bool& b_NoLaneRight,
+                            int32_t prev_left_start,
+                            bool has_prev_left,
+                            int32_t prev_right_start,
+                            bool has_prev_right)
 {
     // 0으로 초기화된 히스토그램
     std::vector<int32_t> histogram(st_Edge.cols, 0);
@@ -1227,6 +1248,25 @@ void FindLaneStartPositions(const cv::Mat& st_Edge,
         }
         s32_WindowCentorRight = FindClosestToMidPoint(ars32_RightCandidate, st_Edge.cols / 2);
     }
+
+    const int max_jump_px = 40;  // 프레임당 허용 이동량 (튜닝 포인트)
+
+    if (!b_NoLaneLeft && has_prev_left) {
+        int dx = s32_WindowCentorLeft - prev_left_start;
+        if (std::abs(dx) > max_jump_px) {
+            // 새 히스토그램 peak가 너무 멀리 떨어져 있으면,
+            // 이전 위치 근처까지만 따라가도록 clamp
+            s32_WindowCentorLeft = prev_left_start + (dx > 0 ? max_jump_px : -max_jump_px);
+        }
+    }
+
+    if (!b_NoLaneRight && has_prev_right) {
+        int dx = s32_WindowCentorRight - prev_right_start;
+        if (std::abs(dx) > max_jump_px) {
+            s32_WindowCentorRight = prev_right_start + (dx > 0 ? max_jump_px : -max_jump_px);
+        }
+    }
+
 }
 
 
