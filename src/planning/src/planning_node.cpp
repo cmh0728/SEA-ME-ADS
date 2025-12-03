@@ -509,35 +509,35 @@ void PlanningNode::LoadParam()
     YAML::Node node = YAML::LoadFile("src/Params/Planning.yaml");
     std::cout << "Loading Planning Parameter from YAML File..." << std::endl;
 
-    if (node["x_min_m"])        cfg_.x_min_m        = node["x_min_m"].as<double>();
-    if (node["x_max_m"])        cfg_.x_max_m        = node["x_max_m"].as<double>();
-    if (node["y_min_m"])        cfg_.y_min_m        = node["y_min_m"].as<double>();
-    if (node["y_max_m"])        cfg_.y_max_m        = node["y_max_m"].as<double>();
-    if (node["ipm_width"])      cfg_.ipm_width      = node["ipm_width"].as<double>();
-    if (node["ipm_height"])     cfg_.ipm_height     = node["ipm_height"].as<double>();
+    if (node["x_min_m"])        x_min_m_        = node["x_min_m"].as<double>();
+    if (node["x_max_m"])        x_max_m_        = node["x_max_m"].as<double>();
+    if (node["y_min_m"])        y_min_m_        = node["y_min_m"].as<double>();
+    if (node["y_max_m"])        y_max_m_        = node["y_max_m"].as<double>();
+    if (node["ipm_width"])      ipm_width_      = node["ipm_width"].as<double>();
+    if (node["ipm_height"])     ipm_height_     = node["ipm_height"].as<double>();
 
     if (node["origin_offset_x_m"])
-      cfg_.origin_offset_x_m = node["origin_offset_x_m"].as<double>();
+      origin_offset_x_m_ = node["origin_offset_x_m"].as<double>();
     if (node["origin_offset_y_m"])
-      cfg_.origin_offset_y_m = node["origin_offset_y_m"].as<double>();
+      origin_offset_y_m_ = node["origin_offset_y_m"].as<double>();
 
     if (node["lane_half_width"])
-      cfg_.lane_half_width   = node["lane_half_width"].as<double>();
+      lane_half_width_   = node["lane_half_width"].as<double>();
     if (node["resample_step"])
-      cfg_.resample_step     = node["resample_step"].as<double>();
+      resample_step_     = node["resample_step"].as<double>();
 
     if (node["max_path_length"])
-      cfg_.max_path_length   = node["max_path_length"].as<double>();
+      max_path_length_   = node["max_path_length"].as<double>();
     if (node["start_offset_y"])
-      cfg_.start_offset_y    = node["start_offset_y"].as<double>();
+      start_offset_y_    = node["start_offset_y"].as<double>();
 
     if (node["marker_z"])
-      cfg_.marker_z          = node["marker_z"].as<double>();
+      marker_z_          = node["marker_z"].as<double>();
     if (node["lane_timeout_sec"])
-      cfg_.lane_timeout_sec  = node["lane_timeout_sec"].as<double>();
+      lane_timeout_sec_  = node["lane_timeout_sec"].as<double>();
 
     if (node["path_debug"])
-      cfg_.path_debug        = node["path_debug"].as<bool>();
+      path_debug         = node["path_debug"].as<bool>();
 
     std::cout << "Success to Load Planning Parameter!" << std::endl;
   }
@@ -548,6 +548,7 @@ void PlanningNode::LoadParam()
               << " (use built-in defaults)" << std::endl;
   }
 }
+
 
 
 }  // namespace planning

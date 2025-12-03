@@ -373,38 +373,6 @@ typedef struct _State
 } State_t;
 
 
-// ############################ planning ##############################
-struct PlanningConfig
-{
-  double x_min_m    = 0.42;
-  double x_max_m    = 0.73;
-  double y_min_m    = -0.26;
-  double y_max_m    = 0.26;
-  double ipm_width  = 400.0;
-  double ipm_height = 320.0;
-
-  double origin_offset_x_m = 0.09;
-  double origin_offset_y_m = -0.01;
-
-  double lane_half_width   = 0.175;
-  double resample_step     = 0.02;
-
-  // max_path_length_:
-  //   - start_offset_y_에서 시작해서 몇 m까지 centerline을 만들지
-  //   - 카메라 기준 0.42 ~ 0.73 m 구간을 보고 있다면,
-  //     start_offset_y_를 0.42, max_path_length_를 0.31 정도로 두면
-  //     대략 0.42 ~ 0.73 m까지만 사용하게 된다.
-  //   - 여기서는 기본값을 0.31으로 맞춰둠 (필요하면 parameter로 조정).
-  double max_path_length   = 0.31;
-  double start_offset_y    = 0.42;
-
-  double marker_z          = 0.0;
-  double lane_timeout_sec  = 0.2;
-  bool   path_debug        = false;
-};
-
-
-
 uint64_t getMillisecond();
 float32_t deg2rad(float32_t f32_Degree);
 float32_t rad2deg(float32_t f32_Radian);
