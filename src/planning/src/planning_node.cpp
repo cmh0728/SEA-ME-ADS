@@ -28,7 +28,7 @@ bool path_debug = false;
 PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
 {
   LoadParam(); // 나중에 yaml 파일로 정리, 타입 정리 
-  frame_id_ = "base_link"
+  frame_id_ = "base_link";
   // --------------------- planning parameter ---------------------------------
   path_debug = declare_parameter("path_debug",false);
 
