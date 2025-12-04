@@ -1,7 +1,7 @@
 #pragma once
 
 #include <vector>
-
+#include "global/global.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/path.hpp"
