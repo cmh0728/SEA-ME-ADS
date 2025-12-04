@@ -613,7 +613,7 @@ void Lane_detector(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
         // =======================  RANSAC 디버그 창 ===========================
 
         // // ---------- IPM 상 차선 폭 계산 + 출력 ---------- //
-        if(cal_lane_width)
+        if(cal_lane_width) // 약 262 px 
         {
             LANE_COEFFICIENT kalman_left, kalman_right;
             bool has_left = false, has_right = false;
