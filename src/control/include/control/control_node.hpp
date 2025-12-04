@@ -80,6 +80,8 @@ private:
   // 조향 필터링 
   double max_steer_rate_;
   double max_steer_jump_;
+  double g_steergain ;
+
 
   double prev_steer_cmd_;
   bool   has_prev_steer_;

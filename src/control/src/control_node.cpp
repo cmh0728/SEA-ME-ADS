@@ -28,7 +28,7 @@ double g_integral_limit     = 5.0; // 적분 항 클램프 한계
 double g_max_steer_rate     = 8.0; // rad/s, 한 프레임당 변화율 제한
 double g_max_steer_jump     = 1.5; // 변화량 제한값
 // 조향 민감도 (curvature → steer 로 보낼 때 gain)
-double KsteerGain = 2.293;
+double g_steergain = 2.293;
 
 bool   g_debug_default      = false;
 std::string g_path_topic    = "/planning/path";
@@ -131,7 +131,7 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   // 곡선구간 steer 보정 (민감도 up)
   const double abs_slope = std::abs(slope);
   // std::cout << "abs_slope : " << abs_slope << std::endl; 
-  double gain_factor = kSteerGain;
+  double gain_factor = g_steergain;
 
   // 곡선 정도에 따라 추가 게인
   // slope 대략 값: 직선 ~0.01, 완만 곡선 ~0.1~0.3, 강한 곡선 ~0.4 이상이라고 했으니까 그 기준으로.
