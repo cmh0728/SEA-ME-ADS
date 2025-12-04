@@ -1,20 +1,25 @@
-lookahead_distance: 0.45
-min_lookahead: 0.40
-max_lookahead: 0.70
-car_L: 0.26
+# pure pursuit param
+lookahead_distance: 0.45 # 기본 lookahead (m)
+min_lookahead: 0.40 # 최소 lookahead
+max_lookahead: 0.70 # 최대 lookahead
+car_L: 0.26 # 차량 축간 거리 (m)
 
-base_speed: 30.0
-min_speed: 10.0
-max_speed: 50.0
-max_angular_z: 1.0
+# speed: cmd_vel.linear.x = 0 ~ 50 근처 사용
+base_speed: 30.0 # 직선 기준 속도
+min_speed: 10.0 # 너무 느리면 제어 불안정하니 10 이상 사용하기 
+max_speed: 50.0 # 하드웨어 속도 상한값
+max_angular_z: 1.0  # steer max val
 
+# speed Pid params
 slope_speed_kp: 10.0
 slope_speed_ki: 0.001
 slope_speed_kd: 0.7
-slope_integral_limit: 5.0
+slope_integral_limit: 5.0 # 적분 항 클램프 한계
 
-max_steer_rate: 8.0
-max_steer_jump: 1.5
+# steer filter 조향 신뢰도 
+max_steer_rate: 8.0 # rad/s, 한 프레임당 변화율 제한
+max_steer_jump: 1.5 # 변화량 제한값
 
-debug: false
+steer_debug: false # debugging
 path_topic: "/planning/path"
+
