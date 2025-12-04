@@ -13,7 +13,6 @@ def generate_launch_description() -> LaunchDescription:
         executable="CameraProcessing",
         name="CameraProcessing_node",
         output="screen",
-        # parameters=["src/Params/camera_params.yaml"],
     )
 
     PlanningNode = Node(
@@ -26,7 +25,7 @@ def generate_launch_description() -> LaunchDescription:
     controlNode = Node(
         package="control",
         executable="control_node",
-        name="lane_follow_control",
+        name="control_node",
         output="screen",
     )
 

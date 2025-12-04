@@ -10,8 +10,8 @@ BOARD_COLS, BOARD_ROWS = 9, 7
 SQUARE_SIZE_M = 0.011  # 1.1 cm
 
 # IPM 영역/스케일 (체커보드 평면 기준 [X(앞), Y(좌/우)])
-X_MIN, X_MAX = -0.25 , 0.05 # max가 차량 뒤쪽, min이 앞쪽
-Y_MIN, Y_MAX = -0.28 , 0.21   # max가 차량 왼쪽 
+X_MIN, X_MAX = -0.3 , 0.05 # max가 차량 뒤쪽, min이 앞쪽
+Y_MIN, Y_MAX = -0.3 , 0.3   # max가 차량 왼쪽 
 W_target, H_target = 1280, 720  # 목표 IPM 크기 (픽셀)
 INTERVAL_X = (X_MAX - X_MIN) / W_target
 INTERVAL_Y = (Y_MAX - Y_MIN) / H_target
@@ -111,6 +111,19 @@ def main():
             Y = -col * SQUARE_SIZE_M       # 왼쪽(+Y) 되도록 col 증가에 -부호
             objp.append([X, Y, 0.0])
     objp = np.array(objp, dtype=np.float32)
+
+    objp = np.array(objp, dtype=np.float32)
+
+    # 🔥 5번째 코너(인덱스 4)를 원점으로 사용하고 싶을 때
+    origin_idx = 4      # 5번째 → 0-based index 4
+    origin = objp[origin_idx].copy()
+
+    # 모든 포인트에서 origin 좌표를 빼서, 해당 코너가 (0,0,0)이 되도록
+    objp -= origin
+
+    print("New object points (first 10):")
+    print(objp[:10])
+    print("Origin corner (index 4) after shift:", objp[origin_idx])
 
     print("Mapped checkerboard object points preview (first 10):")
     print(objp[:10])

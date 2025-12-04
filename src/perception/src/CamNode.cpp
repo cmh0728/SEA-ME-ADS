@@ -28,23 +28,25 @@ int g_dilate_ksize = 8;   // 팽창 커널 크기
 // 시각화 옵션
 bool visualize = false;
 bool track_bar = false;
+bool cal_lane_width = false ;
 static CAMERA_DATA static_camera_data;
 
 // ransac 난수 초기화 전역설정
 struct RansacRandomInit {RansacRandomInit() { std::srand(static_cast<unsigned int>(std::time(nullptr))); }} g_ransacRandomInit;
 
-void on_trackbar(int, void*)
-{
-    // 트랙바 콜백은 안 써도 됨. 
-}
+void on_trackbar(int, void*){}
+static bool ComputeLaneWidthAngle(const LANE_COEFFICIENT& left,
+                                  const LANE_COEFFICIENT& right,
+                                  int img_height,
+                                  double& width_px,
+                                  double& angle_diff_deg);
 
 //################################################## CameraProcessing class functions ##################################################//
-
-// RealSense 이미지 토픽을 구독하고 시각화 창을 준비하는 ROS 노드 생성자
 CameraProcessing::CameraProcessing() : rclcpp::Node("CameraProcessing_node") // rclcpp node 상속 클래스 
 {
     const std::string image_topic = "/camera/camera/color/image_raw/compressed";
     visualize = this->declare_parameter<bool>("visualize", false);
+    cal_lane_width = this->declare_parameter<bool>("cal_lane_width", false);
 
     LoadParam(&static_camera_data);          // cameardata param load
     LoadMappingParam(&static_camera_data);   // cameradata IPM 맵 로드
@@ -76,7 +78,6 @@ CameraProcessing::CameraProcessing() : rclcpp::Node("CameraProcessing_node") // 
     }
 }
 
-// OpenCV 창을 정리하는 소멸자
 CameraProcessing::~CameraProcessing()
 {
   if (!window_name_.empty()) // window있을때 
@@ -92,13 +93,15 @@ void CameraProcessing::on_image(const sensor_msgs::msg::CompressedImage::ConstSh
   try
   {
     cv::Mat img = cv::imdecode(msg->data, cv::IMREAD_COLOR); // cv:Mat 형식 디코딩
-    // // encoding은 RealSense 설정에 따라 bgr8 또는 rgb8(raw image)
-    // cv_bridge::CvImageConstPtr cv_ptr = cv_bridge::toCvShare(msg, "bgr8");  
-    // const cv::Mat& img = cv_ptr->image;    // 복사 없이 참조만
 
+    // ros parameter server setting 
     visualize = get_parameter("visualize").as_bool();
+    cal_lane_width = get_parameter("cal_lane_width").as_bool();
+
+    // img processing - lane detection
     Lane_detector(img,&static_camera_data); // img processing main pipeline function
-    // Obj_detector(img); // 향후 카메라 기반 객체인식 
+
+    // lane msg publish
     publish_lane_messages();
     
   }
@@ -115,9 +118,7 @@ void CameraProcessing::on_image(const sensor_msgs::msg::CompressedImage::ConstSh
   }
 }
 
-
 //################################################## img processing functions ##################################################//
-// RAW 카메라 버퍼에서 차선 정보까지 계산하는 메인 파이프라인
 void Lane_detector(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
 {
     // kalman filter variables
@@ -134,21 +135,21 @@ void Lane_detector(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     b_NoLaneLeft  = false;
     b_NoLaneRight = false;
 
-    // 1) IPM 결과 버퍼 준비 (카메라 해상도가 바뀔 수 있으니 create 사용)
+    // IPM 결과 버퍼 준비 (카메라 해상도가 바뀔 수 있으니 create 사용)
     g_IpmImg.create(
         camera_data->st_CameraParameter.s32_RemapHeight,
         camera_data->st_CameraParameter.s32_RemapWidth,
         img_frame.type()          // CV_8UC3
     );
 
-    // 2) Temp_Img (gray) 버퍼 준비
+    // Temp_Img (gray) 버퍼 준비
     g_TempImg.create(
         camera_data->st_CameraParameter.s32_RemapHeight,
         camera_data->st_CameraParameter.s32_RemapWidth,
         CV_8UC1
     );
 
-    // 3) 결과 이미지 버퍼 준비
+    // 결과 이미지 버퍼 준비
     g_ResultImage.create(
         camera_data->st_CameraParameter.s32_RemapHeight,
         camera_data->st_CameraParameter.s32_RemapWidth,
@@ -206,16 +207,17 @@ void Lane_detector(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     int32_t s32_WindowCentorLeft  = 0; // 인덱스 0으로 초기화 
     int32_t s32_WindowCentorRight = 0;
 
-    // (옵션) 아래 영역의 EdgeSum을 보고 디버깅하고 싶으면 사용
-    // cv::Mat HalfImage = g_TempImg(cv::Range(700, g_TempImg.rows), cv::Range(0, g_TempImg.cols));
-    // double totalSum = cv::sum(HalfImage)[0];
-
-    // =======================  히스토그램 기반 시작 위치 ================== --> 중앙과 가까운 인덱스 찾는과정 (차선 시작점 )
+    // =======================  히스토그램 기반 시작 위치 탐색 ================== 
     FindLaneStartPositions(g_TempImg,
-                           s32_WindowCentorLeft, //0
-                           s32_WindowCentorRight, // 0
-                           b_NoLaneLeft, // false
-                           b_NoLaneRight);
+                            s32_WindowCentorLeft, //0
+                            s32_WindowCentorRight, // 0
+                            b_NoLaneLeft, // false
+                            b_NoLaneRight,
+                            camera_data->last_left_start_x,
+                            camera_data->has_last_left_start,
+                            camera_data->last_right_start_x,
+                            camera_data->has_last_right_start);
+
 
     //히스토그램 로직에서 중앙에 있는 엉뚱한거를 차선으로 안 잡게 로직 추가하기 
 
@@ -294,13 +296,6 @@ void Lane_detector(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             // st_KalmanObject.b_IsLeft = (x_intercept < center_x - margin); // 아래쪽 차선이 센터-마진이면 왼쪽 
             st_KalmanObject.b_IsLeft = true ;
 
-            // 좌/우 판단 (x절편 계산)
-            // if (-(st_KalmanObject.st_LaneCoefficient.f64_Intercept /
-            //       st_KalmanObject.st_LaneCoefficient.f64_Slope) < 300)
-            //     st_KalmanObject.b_IsLeft = true;
-            // else
-            //     st_KalmanObject.b_IsLeft = false;
-
             // 전역 상태에 등록  + 결과 이미지에 그리기 
             st_KalmanObject.st_LaneState = st_KalmanStateLeft;
             camera_data->b_ThereIsLeft = true;
@@ -337,12 +332,6 @@ void Lane_detector(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             // 이거 로직 이상함. 수정해야할 수도 
             // st_KalmanObject.b_IsLeft = (x_intercept < center_x + margin);
             st_KalmanObject.b_IsLeft = false ;
-
-            // if (-(st_KalmanObject.st_LaneCoefficient.f64_Intercept /
-            //       st_KalmanObject.st_LaneCoefficient.f64_Slope) < 300)
-            //     st_KalmanObject.b_IsLeft = true;
-            // else
-            //     st_KalmanObject.b_IsLeft = false;
 
             st_KalmanObject.st_LaneState = st_KalmanStateRight;
             camera_data->b_ThereIsRight = true;
@@ -493,13 +482,6 @@ void Lane_detector(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             // st_KalmanObject.b_IsLeft = (x_intercept < center_x - margin); // 아래쪽 차선이 센터-마진이면 왼쪽 
             st_KalmanObject.b_IsLeft = true ;
 
-            // 좌/우 판단 (x절편 계산)
-            // if (-(st_KalmanObject.st_LaneCoefficient.f64_Intercept /
-            //       st_KalmanObject.st_LaneCoefficient.f64_Slope) < 300)
-            //     st_KalmanObject.b_IsLeft = true;
-            // else
-            //     st_KalmanObject.b_IsLeft = false;
-
             // 전역 상태에 등록  + 결과 이미지에 그리기 
             st_KalmanObject.st_LaneState = st_KalmanStateLeft;
             camera_data->b_ThereIsLeft = true;
@@ -534,12 +516,6 @@ void Lane_detector(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
             // 이거 로직 이상함. 수정해야할 수도 
             // st_KalmanObject.b_IsLeft = (x_intercept < center_x + margin);
             st_KalmanObject.b_IsLeft = false ;
-
-            // if (-(st_KalmanObject.st_LaneCoefficient.f64_Intercept /
-            //       st_KalmanObject.st_LaneCoefficient.f64_Slope) < 300)
-            //     st_KalmanObject.b_IsLeft = true;
-            // else
-            //     st_KalmanObject.b_IsLeft = false;
 
             st_KalmanObject.st_LaneState = st_KalmanStateRight;
             camera_data->b_ThereIsRight = true;
@@ -599,6 +575,18 @@ void Lane_detector(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
         }
     }
 
+    // sliding window update
+    if (!b_NoLaneLeft) {
+    camera_data->last_left_start_x = s32_WindowCentorLeft;
+    camera_data->has_last_left_start = true;
+    }
+
+    if (!b_NoLaneRight) {
+        camera_data->last_right_start_x = s32_WindowCentorRight;
+        camera_data->has_last_right_start = true;
+    }
+
+
     // =======================  (H) Debug GUI ================================
     if (visualize)
     {
@@ -625,31 +613,32 @@ void Lane_detector(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
         // =======================  RANSAC 디버그 창 ===========================
 
         // // ---------- IPM 상 차선 폭 계산 + 출력 ---------- //
-        // {
-        //     LANE_COEFFICIENT kalman_left, kalman_right;
-        //     bool has_left = false, has_right = false;
+        if(cal_lane_width) // 약 262 px 
+        {
+            LANE_COEFFICIENT kalman_left, kalman_right;
+            bool has_left = false, has_right = false;
 
-        //     if (get_lane_coef_from_kalman(*camera_data,
-        //                                   kalman_left, kalman_right,
-        //                                   has_left, has_right)
-        //         && has_left && has_right)
-        //     {
-        //         double width_px = 0.0;
-        //         double angle_diff_deg = 0.0;
-        //         int H = camera_data->st_CameraParameter.s32_RemapHeight;
+            if (get_lane_coef_from_kalman(*camera_data,
+                                          kalman_left, kalman_right,
+                                          has_left, has_right)
+                && has_left && has_right)
+            {
+                double width_px = 0.0;
+                double angle_diff_deg = 0.0;
+                int H = camera_data->st_CameraParameter.s32_RemapHeight;
 
-        //         if (ComputeLaneWidthAngle(kalman_left,
-        //                                   kalman_right,
-        //                                   H,
-        //                                   width_px,
-        //                                   angle_diff_deg))
-        //         {
-        //             // 콘솔 출력 --> 400/320기준 305px
-        //             std::cout << "[IPM] lane width: " << std::fixed << std::setprecision(1) << width_px << " px" << std::endl;
+                if (ComputeLaneWidthAngle(kalman_left,
+                                          kalman_right,
+                                          H,
+                                          width_px,
+                                          angle_diff_deg))
+                {
+                    // 콘솔 출력 --> 400/320기준 305px
+                    std::cout << "[IPM] lane width: " << std::fixed << std::setprecision(1) << width_px << " px" << std::endl;
 
-        //         }
-        //     }
-        // }
+                }
+            }
+        }
         // // ---------- 차폭계산 , 출력 --------------------------------- //
 
         cv::imshow("Kalman Result", g_ResultImage); // 차선 + Kalman 결과
@@ -672,8 +661,6 @@ void MakeKalmanStateBasedLaneCoef(const LANE_KALMAN& st_KalmanObject, LANE_COEFF
         // Calculate the slope (m) and y-intercept (c)
         st_LaneCoefficient.f64_Slope = -std::tan(f64_Theta_Radian);
         st_LaneCoefficient.f64_Intercept = st_KalmanObject.st_X[0] / std::cos(f64_Theta_Radian);
-
-        // printf("y=%f x + %f\n",st_LaneCoefficient.f64_Slope,st_LaneCoefficient.f64_Intercept);
         // std::cout << "y = " << st_LaneCoefficient.f64_Slope << "x + " << st_LaneCoefficient.f64_Intercept << std::endl;
     }
 }
@@ -712,9 +699,6 @@ void DeleteKalmanObject(CAMERA_DATA &pst_CameraData, int32_t& s32_KalmanObjectNu
 void CheckSameKalmanObject(LANE_KALMAN& st_KalmanObject, KALMAN_STATE st_KalmanStateLeft)
 {
     st_KalmanObject.b_MeasurementUpdateFlag = false;
-    // printf("Distance: Kalman Lane: %f, Real Time Liane: %f\n",st_KalmanObject.st_LaneState.f64_Distance,st_KalmanStateLeft.f64_Distance);
-    // printf("Angle   : Kalman Lane: %f, Real Time Lane: %f\n",st_KalmanObject.st_LaneState.f64_Angle,st_KalmanStateLeft.f64_Angle);
-
     // Parameter yaml에서 끌어오도록 수정 필요
     if (abs(st_KalmanObject.st_LaneState.f64_Distance - st_KalmanStateLeft.f64_Distance) < 40) // 40px
     {
@@ -817,10 +801,10 @@ void InitializeKalmanObject(LANE_KALMAN& st_KalmanObject)
                             0   , 0   , 0   , 0.00013;
 
     // R 측정 노이즈 공분산 행렬 --> 값이 크면 측정값 신뢰도 낮음 
-    st_KalmanObject.st_R << 5   , 0   , 0   , 0,
-                            0   , 10   , 0   , 0,
-                            0   , 0   , 20   , 0,
-                            0   , 0   , 0   , 30;
+    st_KalmanObject.st_R << 2.5   , 0   , 0   , 0,
+                            0   , 5   , 0   , 0,
+                            0   , 0   , 10   , 0,
+                            0   , 0   , 0   , 15;
 
     st_KalmanObject.st_X.setZero();
     st_KalmanObject.st_PrevX.setZero();
@@ -1065,7 +1049,6 @@ void SlidingWindow(const cv::Mat& st_EdgeImage,
 
             st_Contours.clear();
         }
-
         // ======================= 다음 윈도우로 이동 =======================
         s32_WindowHeight -= s32_MarginY;
     }
@@ -1226,56 +1209,73 @@ int32_t FindClosestToMidPoint(const int32_t points[5], int32_t s32_MidPoint)
 
 //###################################### FindLaneStartPositions func ##################################################//
 
-// 히스토그램 분석으로 좌·우 슬라이딩 윈도 시작 위치를 계산
-void FindLaneStartPositions(const cv::Mat& st_Edge, int32_t& s32_WindowCentorLeft, int32_t& s32_WindowCentorRight, bool& b_NoLaneLeft, bool& b_NoLaneRight) 
+// 히스토그램 분석으로 좌·우 슬라이딩 윈도 시작 위치를 계산 --> 중앙과 가까운 차선을 찾고있음. 
+void FindLaneStartPositions(const cv::Mat& st_Edge,
+                            int32_t& s32_WindowCentorLeft,
+                            int32_t& s32_WindowCentorRight,
+                            bool& b_NoLaneLeft,
+                            bool& b_NoLaneRight,
+                            int32_t prev_left_start,
+                            bool has_prev_left,
+                            int32_t prev_right_start,
+                            bool has_prev_right)
 {
+    // 0으로 초기화된 히스토그램
+    std::vector<int32_t> histogram(st_Edge.cols, 0);
 
-    int32_t s32_col, s32_row, s32_I; //col : y , row : x
-
-    // Histogram 계산
-    int32_t* ps32_Histogram = new int32_t[st_Edge.cols](); // 동적 할당, cols는 가로방향 픽셀 개수 만큼 배열 생성 , 모두 0으로 초기화 ; cols가 x
-
-    // 이미지 하단 30프로  열에 해당하는 행 데이터들을 각 열별로 다 더한 후 최대가 되는 x좌표(행) 추출 --> height가 700이상이여야 작동한다. 
-    for (s32_row = 0; s32_row < st_Edge.cols; ++s32_row) {
-        for (s32_col = st_Edge.rows*0.7 ; s32_col < st_Edge.rows; ++s32_col) {
-            ps32_Histogram[s32_row] += st_Edge.at<uchar>(s32_col, s32_row) > 0 ? 1 : 0; //검정색이 아닌 픽셀을 카운트 
+    for (int32_t col = 0; col < st_Edge.cols; ++col) {
+        for (int32_t row = st_Edge.rows * 0.7; row < st_Edge.rows; ++row) {
+            histogram[col] += st_Edge.at<uchar>(row, col) > 0 ? 1 : 0;
         }
     }
 
     int32_t ars32_LeftCandidate[5], ars32_RightCandidate[5];
 
-    //왼쪽 차선 시작점 
-    // 왼쪽 및 오른쪽 최대 5개 인덱스 찾기
-    FindTop5MaxIndices(ps32_Histogram, st_Edge.cols / 2, ars32_LeftCandidate, b_NoLaneLeft);
-    if(!b_NoLaneLeft) // 왼쪽 차선이 감지된 경우
-    {
-        //가장 가까운 히스토그램 인덱스를 반환  int32_t type
+    FindTop5MaxIndices(histogram.data(), st_Edge.cols / 2, ars32_LeftCandidate, b_NoLaneLeft);
+    if (!b_NoLaneLeft) {
         s32_WindowCentorLeft = FindClosestToMidPoint(ars32_LeftCandidate, st_Edge.cols / 2);
     }
 
-    //오른쪽 차선 시작점 : 절반 부터 시작 
-    FindTop5MaxIndices(ps32_Histogram + st_Edge.cols / 2, st_Edge.cols - st_Edge.cols / 2, ars32_RightCandidate, b_NoLaneRight);
-    if(!b_NoLaneRight) //오른쪽 차선 감지된 경우 
-    {
-        // 오른쪽 인덱스 보정
-        for (s32_I = 0; s32_I < 5; ++s32_I) {
-            if (ars32_RightCandidate[s32_I] != -1) {
-                ars32_RightCandidate[s32_I] += st_Edge.cols / 2; // 절반 오프셋 추가 -->원래 좌표계로 보정 
+    FindTop5MaxIndices(histogram.data() + st_Edge.cols / 2,
+                       st_Edge.cols - st_Edge.cols / 2,
+                       ars32_RightCandidate,
+                       b_NoLaneRight);
+    if (!b_NoLaneRight) {
+        for (int i = 0; i < 5; ++i) {
+            if (ars32_RightCandidate[i] != -1) {
+                ars32_RightCandidate[i] += st_Edge.cols / 2;
             }
         }
-
         s32_WindowCentorRight = FindClosestToMidPoint(ars32_RightCandidate, st_Edge.cols / 2);
     }
 
-    delete[] ps32_Histogram; // 동적 할당 해제 
+    const int max_jump_px = 40;  // 프레임당 허용 이동량 (튜닝 포인트)
+
+    if (!b_NoLaneLeft && has_prev_left) {
+        int dx = s32_WindowCentorLeft - prev_left_start;
+        if (std::abs(dx) > max_jump_px) {
+            // 새 히스토그램 peak가 너무 멀리 떨어져 있으면,
+            // 이전 위치 근처까지만 따라가도록 clamp
+            s32_WindowCentorLeft = prev_left_start + (dx > 0 ? max_jump_px : -max_jump_px);
+        }
+    }
+
+    if (!b_NoLaneRight && has_prev_right) {
+        int dx = s32_WindowCentorRight - prev_right_start;
+        if (std::abs(dx) > max_jump_px) {
+            s32_WindowCentorRight = prev_right_start + (dx > 0 ? max_jump_px : -max_jump_px);
+        }
+    }
+
 }
+
 
 //###################################### Parameter loader ##################################################//
 
 // YAML 카메라 설정을 로드하고 기본 상태를 초기화
 void LoadParam(CAMERA_DATA *CameraData)
 {
-    YAML::Node st_CameraParam = YAML::LoadFile("src/Params/Camera.yaml");
+    YAML::Node st_CameraParam = YAML::LoadFile("src/Params/config.yaml");
     std::cout << "Loading Camera Parameter from YAML File..." << std::endl;
 
     CameraData->st_CameraParameter.s_IPMParameterX = st_CameraParam["IPMParameterX"].as<std::string>();
@@ -1357,7 +1357,6 @@ bool get_lane_coef_from_kalman(const CAMERA_DATA& cam_data,
     return has_left || has_right;
 }
 // ======================= Lane pair consistency (anchor 기반) ======================= //
-
 // 두 직선에서 폭/각도 계산
 static bool ComputeLaneWidthAngle(const LANE_COEFFICIENT& left,
                                   const LANE_COEFFICIENT& right,

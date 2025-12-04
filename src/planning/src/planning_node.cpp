@@ -1,23 +1,15 @@
 #include "planning/planning_node.hpp"
 
-// =======================================
-// PlanningNode main flow
-// 1) /lane/left, /lane/right 차선 메시지(IPM 픽셀 좌표)를 수신
-// 2) IPM 픽셀 → 차량 기준 [m] 좌표로 변환 (convert_lane)
-// 3) 좌/우 차선으로부터 중앙선(centerline) 생성 (build_centerline)
-// 4) nav_msgs/Path + MarkerArray 퍼블리시 → RViz에서 확인
-// =======================================
-
 // Planning namespace 
 namespace planning {
 
-  namespace{
+namespace{
 // LanePoint(차량 기준 좌표계) → geometry_msgs::Point 
 // LanePoint:
 //   x: lateral  (왼쪽 + / 오른쪽 -)
 //   y: forward  (앞쪽 +)
 // ROS Point:
-//   x: forward, y: left/right 로 쓰겠다는 약속
+//   x: forward, y: left/right 
 
 // 좌표 변환 헬퍼
 geometry_msgs::msg::Point to_point(const PlanningNode::LanePoint & lane_pt, double z)
@@ -34,52 +26,30 @@ geometry_msgs::msg::Point to_point(const PlanningNode::LanePoint & lane_pt, doub
 PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
 {
   LoadParam(); // 나중에 yaml 파일로 정리, 타입 정리 
+  frame_id_ = "base_link";
   // --------------------- planning parameter ---------------------------------
-  x_min_m_    = declare_parameter("x_min_m", 0.42);     // near (이미지 하단)  0.42 m
-  x_max_m_    = declare_parameter("x_max_m", 0.73);     // far  (이미지 상단)  0.73 m
-  y_min_m_    = declare_parameter("y_min_m", -0.26);    // 오른쪽 -0.25 m
-  y_max_m_    = declare_parameter("y_max_m",  0.26);    // 왼쪽  +0.25 m
-  ipm_width_  = declare_parameter("ipm_width",  400.0); // IPM 가로 픽셀 수 (W)
-  ipm_height_ = declare_parameter("ipm_height", 320.0); // IPM 세로 픽셀 수 (H)
-  // 차량 중심이랑 카메라 위치는 9cm정도 차이 남. 카메라가 차량중심에서 9cm 뒤에 있음
-  // 카메라 , 차량 중심 offset
-  origin_offset_x_m_ = declare_parameter("origin_offset_x_m", 0.09);  // forward offset
-  origin_offset_y_m_ = declare_parameter("origin_offset_y_m", 0.0);  // lateral offset
-  frame_id_       = declare_parameter("frame_id", "base_link");
-  lane_half_width_  = declare_parameter("lane_half_width", 0.175); // 실제 차폭의 절반 
-  resample_step_    = declare_parameter("resample_step", 0.02);  // 2 cm 간격으로 centerline 샘플링
-
-  // max_path_length_:
-  //   - start_offset_y_에서 시작해서 몇 m까지 centerline을 만들지
-  //   - 카메라 기준 0.42 ~ 0.73 m 구간을 보고 있다면,
-  //     start_offset_y_를 0.42, max_path_length_를 0.31 정도로 두면
-  //     대략 0.42 ~ 0.73 m까지만 사용하게 된다.
-  //   - 여기서는 기본값을 0.31으로 맞춰둠 (필요하면 parameter로 조정).
-  max_path_length_  = declare_parameter("max_path_length", 0.31);
-  start_offset_y_   = declare_parameter("start_offset_y", 0.42); // path의 시작 지점 
-  marker_z_         = declare_parameter("marker_z", 0.0); // rviz markr z 높이 
-  lane_timeout_sec_ = declare_parameter("lane_timeout_sec", 0.2); // 차선 메시지 타임아웃(오래된 차선 버림 )
-
+  path_debug_ = declare_parameter("path_debug",path_debug_); // path info 출력
+  vis_marker_ = declare_parameter("vis_marker",vis_marker_); // rviz 마커 연산 + 시각화 
   // 타임스탬프 초기화 
   last_left_stamp_  = this->now();
   last_right_stamp_ = this->now();
 
-  // ros qos 설정 
-  auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
-
+  // ros2 qos 설정 
+  auto lane_qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort(); // best effort
+  auto vis_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable(); // reliable
 
   // subscriber 선언
   lane_left_sub_ = create_subscription<perception::msg::Lane>(
-    "/lane/left", qos,
+    "/lane/left", lane_qos,
     std::bind(&PlanningNode::on_left_lane, this, std::placeholders::_1));
 
   lane_right_sub_ = create_subscription<perception::msg::Lane>(
-    "/lane/right", qos,
+    "/lane/right", lane_qos,
     std::bind(&PlanningNode::on_right_lane, this, std::placeholders::_1));
 
   // path, marker publisher 선언
-  path_pub_ = create_publisher<nav_msgs::msg::Path>("/planning/path", qos);
-  marker_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>("/planning/markers", qos);
+  path_pub_ = create_publisher<nav_msgs::msg::Path>("/planning/path", vis_qos);
+  marker_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>("/planning/markers", vis_qos);
 
   RCLCPP_INFO(get_logger(), "Planning node ready (frame: %s)", frame_id_.c_str());
 }
@@ -108,7 +78,7 @@ void PlanningNode::process_lanes()
 {
   const auto now = this->now(); // 현재 시각
   const rclcpp::Duration timeout = rclcpp::Duration::from_seconds(lane_timeout_sec_); // 0.2 초
-
+  vis_marker_ = get_parameter("vis_marker").as_bool();
   std::vector<LanePoint> left_pts;
   std::vector<LanePoint> right_pts;
 
@@ -130,12 +100,15 @@ void PlanningNode::process_lanes()
     empty_path.header.frame_id = frame_id_;
     path_pub_->publish(empty_path);
 
+    if(vis_marker_)
+    {
     // Marker 전부 삭제 (id 0,1,2)
     visualization_msgs::msg::MarkerArray del_array;
     del_array.markers.push_back(make_delete_marker(0, "lane_left"));
     del_array.markers.push_back(make_delete_marker(1, "lane_right"));
     del_array.markers.push_back(make_delete_marker(2, "centerline"));
     marker_pub_->publish(del_array);
+    }
 
     return;
   }
@@ -146,16 +119,42 @@ void PlanningNode::process_lanes()
     RCLCPP_DEBUG(get_logger(), "Insufficient lane data for path");
 
     // centerline 이 아예 안 만들어졌으면 centerline marker만 삭제
+    if (vis_marker_) {
     visualization_msgs::msg::MarkerArray del_array;
     del_array.markers.push_back(make_delete_marker(2, "centerline"));
     marker_pub_->publish(del_array);
+    }
     return;
   }
 
   // centerline 생성 성공
   // centerline 으로 path + markers 퍼블리시
+
+  // 거의 0 값이면 , path는 중앙인데, 차가 오른쪽에 있는것, 
+  // -0.03~0.08정도 나오는거면 path 자체가 오른쪽으로 밀려있는 것. --> 0.007정도 의미없는 값 나옴. path는 정상 
+  path_debug_ = get_parameter("path_debug").as_bool();
+  if(path_debug_){
+    if (!centerline.empty()) {
+    // forward ~0.5m 근처 포인트 찾기
+    double target_y = 0.5;
+    double best_dy = 1e9;
+    double best_x = 0.0;
+    for (const auto& p : centerline) {
+      double dy = std::abs(p.y - target_y);
+      if (dy < best_dy) {
+        best_dy = dy;
+        best_x = p.x;
+      }
+    }
+    RCLCPP_INFO(get_logger(), "centerline at 0.5m: lateral=%.3f m", best_x);
+    }
+  }
+
   publish_path(centerline);
-  publish_markers(left_pts, right_pts, centerline);
+  if(vis_marker_)
+  {
+    publish_markers(left_pts, right_pts, centerline);
+  }
 }
 
 //################################################## convert_lane func ##################################################//
@@ -306,14 +305,14 @@ bool PlanningNode::build_centerline(
       // ===== 1) 양쪽 차선이 모두 있는 구간: 진짜 중앙선 =====
       double center_x = (*left_x + *right_x) * 0.5;
       pt.x = center_x;
+      // pt.x = center_x + centerline_offset_;
 
       centerline.push_back(pt);
       prev_center_x = center_x;
       has_prev_center = true;
 
-      // 양쪽 차선이 다시 보이기 시작하면, 단일 차선 offset은 초기화해도 됨
-      // (필요 없으면 이 줄은 생략해도 됨)
-      // offset_initialized = false;
+      // 양쪽 차선이 다시 보이기 시작하면, 단일 차선 offset은 초기화
+      offset_initialized = false;
     }
     else
     {
@@ -344,6 +343,7 @@ bool PlanningNode::build_centerline(
 
       double center_x = base_x + single_lane_offset;
       pt.x = center_x;
+      // pt.x = center_x + centerline_offset_;
 
       centerline.push_back(pt);
       prev_center_x = center_x;
@@ -493,13 +493,53 @@ visualization_msgs::msg::Marker PlanningNode::make_delete_marker(
 // YAML palnning 설정을 로드하고 기본 상태를 초기화
 void PlanningNode::LoadParam()
 {
-    YAML::Node st_PlanningParam = YAML::LoadFile("src/Params/Planning.yaml");
+  try
+  {
+    YAML::Node node = YAML::LoadFile("src/Params/config.yaml");
     std::cout << "Loading Planning Parameter from YAML File..." << std::endl;
 
-   
-    std::cout << "Sucess to Load Planning Parameter!" << std::endl;
-    
-}  
+    if (node["x_min_m"])        x_min_m_        = node["x_min_m"].as<double>();
+    if (node["x_max_m"])        x_max_m_        = node["x_max_m"].as<double>();
+    if (node["y_min_m"])        y_min_m_        = node["y_min_m"].as<double>();
+    if (node["y_max_m"])        y_max_m_        = node["y_max_m"].as<double>();
+    if (node["ipm_width"])      ipm_width_      = node["ipm_width"].as<double>();
+    if (node["ipm_height"])     ipm_height_     = node["ipm_height"].as<double>();
+
+    if (node["origin_offset_x_m"])
+      origin_offset_x_m_ = node["origin_offset_x_m"].as<double>();
+    if (node["origin_offset_y_m"])
+      origin_offset_y_m_ = node["origin_offset_y_m"].as<double>();
+
+    if (node["lane_half_width"])
+      lane_half_width_   = node["lane_half_width"].as<double>();
+    if (node["resample_step"])
+      resample_step_     = node["resample_step"].as<double>();
+
+    if (node["max_path_length"])
+      max_path_length_   = node["max_path_length"].as<double>();
+    if (node["start_offset_y"])
+      start_offset_y_    = node["start_offset_y"].as<double>();
+
+    if (node["marker_z"])
+      marker_z_          = node["marker_z"].as<double>();
+    if (node["lane_timeout_sec"])
+      lane_timeout_sec_  = node["lane_timeout_sec"].as<double>();
+
+    if (node["path_debug"])
+      path_debug_         = node["path_debug"].as<bool>();
+
+
+    std::cout << "Success to Load Planning Parameter!" << std::endl;
+  }
+  catch (const std::exception & e)
+  {
+    std::cerr << "[PlanningNode] Failed to load config.yaml: "
+              << e.what()
+              << " (use built-in defaults)" << std::endl;
+  }
+}
+
+
 
 }  // namespace planning
 

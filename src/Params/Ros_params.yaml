@@ -1,5 +1,0 @@
-CameraProcessing_node:
-  ros__parameters:
-    visualize: false
-    
-    

@@ -4,89 +4,29 @@
 #include <cmath>
 #include <functional>
 
-// =======================================
-// ControlNode main flow
-// 1) /planning/path 로 전달된 중앙 경로를 Pure Pursuit 로 추종하여 조향각(ang.z)을 계산.
-// 2) 경로 기울기를 이용해 속도 PID 보정을 수행하고, 곡선에서는 감속.
-// 3) 최종 Twist(/cmd_vel)를 발행해 차량 조향 + 속도 제어.
-// =======================================
-
 namespace control
 {
-namespace
-{
-
-// 나중에 yaml 파일로 정리 
-// ----- pure pursuit params -----
-constexpr double kDefaultLookahead     = 0.45;  // 기본 lookahead (m)
-constexpr double kDefaultMinLookahead  = 0.40;  // 최소 lookahead
-constexpr double kDefaultMaxLookahead  = 0.70;  // 최대 lookahead
-constexpr double kDefualtCarL          = 0.26;  // 차량 축간 거리 (m)
-
-// speed: cmd_vel.linear.x = 0 ~ 50 근처 사용
-constexpr double kDefaultBaseSpeed     = 20.0;  // 직선 기준 속도
-constexpr double kDefaultMinSpeed      = 10.0;  // 너무 느리면 제어 불안정하니 10 이상
-constexpr double kDefaultMaxSpeed      = 50.0;  // 하드웨어 상한
-
-// steer
-constexpr double kDefaultMaxAngular    = 1.0;
-
-// 속도 제어용 PID 파라미터 
-constexpr double kDefaultSpeedKp       = 10.0;
-constexpr double kDefaultSpeedKi       = 0.001;
-constexpr double kDefaultSpeedKd       = 0.7;
-constexpr double kDefaultIntegralLimit = 5.0; // 적분 항 클램프 한계
-
-// 조향 민감도 (curvature → steer 로 보낼 때 gain)
-constexpr double kSteerGain            = 2.293;
-// 조향 신뢰도 체크 
-constexpr double kDefaultMaxSteerRate  = 8.0; // rad/s, 한 프레임당 변화율 제한
-constexpr double kDefaultMaxSteerJump  = 1.5; // 변화량 제한값
-
-
-
-}  // namespace
-
 //================================================== ctor ==================================================//
 
 ControlNode::ControlNode(): rclcpp::Node("control_node"),
-  // Ld
-  lookahead_distance_(declare_parameter("lookahead_distance", kDefaultLookahead)),
-  min_lookahead_(declare_parameter("min_lookahead", kDefaultMinLookahead)),
-  max_lookahead_(declare_parameter("max_lookahead", kDefaultMaxLookahead)),
-  car_L(declare_parameter("car_L", kDefualtCarL)),
-
-  // speed / steer limits
-  base_speed_(declare_parameter("base_speed", kDefaultBaseSpeed)),
-  min_speed_(declare_parameter("min_speed", kDefaultMinSpeed)),
-  max_speed_(declare_parameter("max_speed", kDefaultMaxSpeed)),
-  max_angular_z_(declare_parameter("max_angular_z", kDefaultMaxAngular)),
-  // PID params
-  speed_kp_(declare_parameter("slope_speed_kp", kDefaultSpeedKp)),
-  speed_ki_(declare_parameter("slope_speed_ki", kDefaultSpeedKi)),
-  speed_kd_(declare_parameter("slope_speed_kd", kDefaultSpeedKd)),
-  integral_limit_(declare_parameter("slope_integral_limit", kDefaultIntegralLimit)),
-  slope_integral_(0.0),
-  prev_slope_(0.0),
-  last_update_time_(this->now()),
-    // ===== 조향 필터용 파라미터 & 상태 =====
-  max_steer_rate_(declare_parameter("max_steer_rate", kDefaultMaxSteerRate)),
-  max_steer_jump_(declare_parameter("max_steer_jump", kDefaultMaxSteerJump)),
-  prev_steer_cmd_(0.0),
-  has_prev_steer_(false)
+  // 상태 변수 초기화 
+  last_update_time_(this->now())
 {
-  const std::string path_topic = declare_parameter("path_topic", std::string("/planning/path"));
-  auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
-  auto qos2 = rclcpp::QoS(rclcpp::KeepLast(10));
+  LoadParam();
+  steer_debug_ = declare_parameter("steer_debug", steer_debug_);
+  path_topic_  = declare_parameter("path_topic",  path_topic_);
 
+  // ros qos 설정
+  auto path_qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort(); // best effort
+  auto cmd_qos = rclcpp::QoS(rclcpp::KeepLast(10)); // reliable
 
   // path sub
   path_sub_ = create_subscription<nav_msgs::msg::Path>(
-    path_topic, qos,
+    path_topic_, path_qos,
     std::bind(&ControlNode::on_path, this, std::placeholders::_1));
 
   // cmd pub
-  cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", qos2);
+  cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", cmd_qos);
 
   // ld pub
   target_marker_pub_ =
@@ -154,12 +94,12 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   
   // std::cout << "curvature : " << curvature << std::endl;
   // 조향각 계산 --> slope에 따라서 다른 게인 적용 
-  double raw_steer = std::atan(kDefualtCarL * curvature); 
+  double raw_steer = std::atan(car_L * curvature); 
 
   // 곡선구간 steer 보정 (민감도 up)
   const double abs_slope = std::abs(slope);
   // std::cout << "abs_slope : " << abs_slope << std::endl; 
-  double gain_factor = kSteerGain;
+  double gain_factor = g_steergain;
 
   // 곡선 정도에 따라 추가 게인
   // slope 대략 값: 직선 ~0.01, 완만 곡선 ~0.1~0.3, 강한 곡선 ~0.4 이상이라고 했으니까 그 기준으로.
@@ -200,6 +140,16 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
     target.x, target.y, selected_lookahead,
     slope, cmd.linear.x, cmd.angular.z);
 
+  // target, steer debugging
+  steer_debug_ = get_parameter("steer_debug").as_bool();
+
+  if(steer_debug_)
+  {
+    RCLCPP_INFO(
+    get_logger(),
+    "PP target=(x=%.3f, y=%.3f), L=%.3f, steer=%.3f, v=%.2f",
+    target.x, target.y, selected_lookahead, steer_cmd, cmd.linear.x);
+  }
 }
 
 
@@ -389,6 +339,60 @@ double ControlNode::filter_steering(double raw_steer, double dt)
 
   prev_steer_cmd_ = filtered;
   return filtered;
+}
+
+void ControlNode::LoadParam()
+{
+  try
+  {
+    YAML::Node node = YAML::LoadFile("src/Params/config.yaml");
+    std::cout << "Loading Control Parameter from YAML File..." << std::endl;
+
+    if (node["lookahead_distance"])
+      lookahead_distance_ = node["lookahead_distance"].as<double>();
+    if (node["min_lookahead"])
+      min_lookahead_      = node["min_lookahead"].as<double>();
+    if (node["max_lookahead"])
+      max_lookahead_      = node["max_lookahead"].as<double>();
+    if (node["car_L"])
+      car_L               = node["car_L"].as<double>();
+
+    if (node["base_speed"])
+      base_speed_         = node["base_speed"].as<double>();
+    if (node["min_speed"])
+      min_speed_          = node["min_speed"].as<double>();
+    if (node["max_speed"])
+      max_speed_          = node["max_speed"].as<double>();
+    if (node["max_angular_z"])
+      max_angular_z_      = node["max_angular_z"].as<double>();
+
+    if (node["slope_speed_kp"])
+      speed_kp_           = node["slope_speed_kp"].as<double>();
+    if (node["slope_speed_ki"])
+      speed_ki_           = node["slope_speed_ki"].as<double>();
+    if (node["slope_speed_kd"])
+      speed_kd_           = node["slope_speed_kd"].as<double>();
+    if (node["slope_integral_limit"])
+      integral_limit_     = node["slope_integral_limit"].as<double>();
+
+    if (node["max_steer_rate"])
+      max_steer_rate_     = node["max_steer_rate"].as<double>();
+    if (node["max_steer_jump"])
+      max_steer_jump_     = node["max_steer_jump"].as<double>();
+
+    if (node["steer_debug"])
+      steer_debug_        = node["steer_debug"].as<bool>();
+    if (node["path_topic"])
+      path_topic_         = node["path_topic"].as<std::string>();
+
+    std::cout << "Success to Load Control Parameter!" << std::endl;
+  }
+  catch (const std::exception & e)
+  {
+    std::cerr << "[ControlNode] Failed to load Control.yaml: "
+              << e.what()
+              << " (use built-in defaults)" << std::endl;
+  }
 }
 
 
