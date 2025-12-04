@@ -22,18 +22,14 @@ geometry_msgs::msg::Point to_point(const PlanningNode::LanePoint & lane_pt, doub
 }
 }  // namespace
 
-bool path_debug = false;
-bool vis_marker = false;
-
 
 PlanningNode::PlanningNode() : rclcpp::Node("planning_node")
 {
   LoadParam(); // 나중에 yaml 파일로 정리, 타입 정리 
   frame_id_ = "base_link";
   // --------------------- planning parameter ---------------------------------
-  path_debug = declare_parameter("path_debug",false); // path info 출력
-  vis_marker = declare_parameter("vis_marker",false); // rviz 마커 연산 + 시각화 
-
+  path_debug_ = declare_parameter("path_debug",path_debug_); // path info 출력
+  vis_marker_ = declare_parameter("vis_marker",vis_marker_); // rviz 마커 연산 + 시각화 
   // 타임스탬프 초기화 
   last_left_stamp_  = this->now();
   last_right_stamp_ = this->now();
@@ -82,7 +78,7 @@ void PlanningNode::process_lanes()
 {
   const auto now = this->now(); // 현재 시각
   const rclcpp::Duration timeout = rclcpp::Duration::from_seconds(lane_timeout_sec_); // 0.2 초
-  vis_marker = get_parameter("vis_marker").as_bool();
+  vis_marker_ = get_parameter("vis_marker").as_bool();
   std::vector<LanePoint> left_pts;
   std::vector<LanePoint> right_pts;
 
@@ -104,7 +100,7 @@ void PlanningNode::process_lanes()
     empty_path.header.frame_id = frame_id_;
     path_pub_->publish(empty_path);
 
-    if(vis_marker)
+    if(vis_marker_)
     {
     // Marker 전부 삭제 (id 0,1,2)
     visualization_msgs::msg::MarkerArray del_array;
@@ -123,7 +119,7 @@ void PlanningNode::process_lanes()
     RCLCPP_DEBUG(get_logger(), "Insufficient lane data for path");
 
     // centerline 이 아예 안 만들어졌으면 centerline marker만 삭제
-    if (vis_marker) {
+    if (vis_marker_) {
     visualization_msgs::msg::MarkerArray del_array;
     del_array.markers.push_back(make_delete_marker(2, "centerline"));
     marker_pub_->publish(del_array);
@@ -136,8 +132,8 @@ void PlanningNode::process_lanes()
 
   // 거의 0 값이면 , path는 중앙인데, 차가 오른쪽에 있는것, 
   // -0.03~0.08정도 나오는거면 path 자체가 오른쪽으로 밀려있는 것. --> 0.007정도 의미없는 값 나옴. path는 정상 
-  path_debug = get_parameter("path_debug").as_bool();
-  if(path_debug){
+  path_debug_ = get_parameter("path_debug").as_bool();
+  if(path_debug_){
     if (!centerline.empty()) {
     // forward ~0.5m 근처 포인트 찾기
     double target_y = 0.5;
@@ -155,7 +151,7 @@ void PlanningNode::process_lanes()
   }
 
   publish_path(centerline);
-  if(vis_marker)
+  if(vis_marker_)
   {
     publish_markers(left_pts, right_pts, centerline);
   }
@@ -530,13 +526,14 @@ void PlanningNode::LoadParam()
       lane_timeout_sec_  = node["lane_timeout_sec"].as<double>();
 
     if (node["path_debug"])
-      path_debug         = node["path_debug"].as<bool>();
+      path_debug_         = node["path_debug"].as<bool>();
+
 
     std::cout << "Success to Load Planning Parameter!" << std::endl;
   }
   catch (const std::exception & e)
   {
-    std::cerr << "[PlanningNode] Failed to load Planning.yaml: "
+    std::cerr << "[PlanningNode] Failed to load config.yaml: "
               << e.what()
               << " (use built-in defaults)" << std::endl;
   }

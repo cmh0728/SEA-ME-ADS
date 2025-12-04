@@ -77,29 +77,32 @@ private:
     const std::string & ns) const;
 
 private:
-  // IPM 월드 영역 정의 [m]
-  double x_min_m_;
-  double x_max_m_;
-  double y_min_m_;
-  double y_max_m_;
-
-  // IPM 이미지 크기 [px]
-  double ipm_width_;
-  double ipm_height_;
-
-  // 기존에 있던 것들
   std::string frame_id_;
 
-  double lane_half_width_;
-  double resample_step_;
-  double max_path_length_;
-  double start_offset_y_;
-  double marker_z_;
-  double lane_timeout_sec_;
-  double origin_offset_x_m_;
-  double origin_offset_y_m_;
+  // IPM 월드 영역 정의 [m]
+  double x_min_m_  = 0.42;
+  double x_max_m_  = 0.78;
+  double y_min_m_  = -0.335;
+  double y_max_m_  = 0.335;
 
-  double centerline_offset_;  // +면 왼쪽, -면 오른쪽
+  // IPM 이미지 크기 [px]
+  double ipm_width_  = 400.0;
+  double ipm_height_ = 320.0;
+
+  // ...
+  double lane_half_width_    = 0.175;
+  double resample_step_      = 0.02;
+  double max_path_length_    = 0.36;
+  double start_offset_y_     = 0.42;
+  double marker_z_           = 0.0;
+  double lane_timeout_sec_   = 0.2;
+  double origin_offset_x_m_  = 0.09;
+  double origin_offset_y_m_  = -0.01;
+
+  double centerline_offset_  = 0.0;  // 아직 안 쓰고 있으니 0으로
+
+  bool path_debug_  = false;
+  bool vis_marker_  = false;
 
 
   // ROS 통신
