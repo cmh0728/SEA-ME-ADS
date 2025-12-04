@@ -119,9 +119,9 @@ max_speed: 50.0 # 하드웨어 속도 상한값
 max_angular_z: 1.0  # steer max val
 
 # speed Pid params
-slope_speed_kp: 10.0
-slope_speed_ki: 0.001
-slope_speed_kd: 0.7
+slope_speed_kp: 6.0
+slope_speed_ki: 0.0005
+slope_speed_kd: 0.2
 slope_integral_limit: 5.0 # 적분 항 클램프 한계
 
 # steer filter 조향 신뢰도 

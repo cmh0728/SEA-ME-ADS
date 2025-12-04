@@ -54,15 +54,22 @@ private:
   double max_angular_z_ = 1.0;
 
   // --- Speed PID ---
-  double speed_kp_       = 10.0;
-  double speed_ki_       = 0.001;
-  double speed_kd_       = 0.7;
+  double speed_kp_       = 6.0;
+  double speed_ki_       = 0.0005;
+  double speed_kd_       = 0.2;
   double integral_limit_ = 5.0;
 
   // --- Steering filter ---
   double max_steer_rate_ = 8.0;
   double max_steer_jump_ = 1.5;
   double g_steergain     = 2.293;  // 필요하면 YAML로 뺄 수 있음
+
+  // --- Speed rate limiting ---
+  double max_speed_rate_   = 50.0;  // [speed 단위 / s], 예: 한 초에 최대 50만 변화
+  double max_speed_jump_   = 20.0;  // 말도 안 되는 점프 컷할 때 쓰고 싶으면
+
+  double prev_speed_cmd_   = 0.0;
+  bool   has_prev_speed_   = false;
 
   // debug / topic
   bool steer_debug_      = false;
@@ -75,8 +82,12 @@ private:
   double prev_slope_     = 0.0;
   rclcpp::Time last_update_time_;
 
-  // 조향 필터 함수
+  // 조향 변화량 필터 함수
   double filter_steering(double raw_steer, double dt);
+
+  // 속도 변화량 필터링 
+  double filter_speed(double raw_speed, double dt);
+
 
   // ---- ROS 통신 ----
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr path_sub_;
