@@ -1,0 +1,20 @@
+lookahead_distance: 0.45
+min_lookahead: 0.40
+max_lookahead: 0.70
+car_L: 0.26
+
+base_speed: 30.0
+min_speed: 10.0
+max_speed: 50.0
+max_angular_z: 1.0
+
+slope_speed_kp: 10.0
+slope_speed_ki: 0.001
+slope_speed_kd: 0.7
+slope_integral_limit: 5.0
+
+max_steer_rate: 8.0
+max_steer_jump: 1.5
+
+debug: false
+path_topic: "/planning/path"

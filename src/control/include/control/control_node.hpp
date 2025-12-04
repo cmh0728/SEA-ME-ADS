@@ -101,7 +101,8 @@ private:
 
   // 타겟 포인트 마커 퍼블리시 함수
   void publish_target_marker(const Point2D & target, const std::string & frame_id);
-
+  
+  void LoadParam();
 };
 
 }  // namespace control
