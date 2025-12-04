@@ -126,7 +126,7 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   
   // std::cout << "curvature : " << curvature << std::endl;
   // 조향각 계산 --> slope에 따라서 다른 게인 적용 
-  double raw_steer = std::atan(kDefualtCarL * curvature); 
+  double raw_steer = std::atan(g_car_L * curvature); 
 
   // 곡선구간 steer 보정 (민감도 up)
   const double abs_slope = std::abs(slope);
@@ -426,7 +426,6 @@ void ControlNode::LoadParam()
               << " (use built-in defaults)" << std::endl;
   }
 }
-
 
 
 }  // namespace control
