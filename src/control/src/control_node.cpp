@@ -345,7 +345,7 @@ void ControlNode::LoadParam()
 {
   try
   {
-    YAML::Node node = YAML::LoadFile("src/Params/Control.yaml");
+    YAML::Node node = YAML::LoadFile("src/Params/config.yaml");
     std::cout << "Loading Control Parameter from YAML File..." << std::endl;
 
     if (node["lookahead_distance"])

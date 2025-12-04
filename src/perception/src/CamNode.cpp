@@ -1275,7 +1275,7 @@ void FindLaneStartPositions(const cv::Mat& st_Edge,
 // YAML 카메라 설정을 로드하고 기본 상태를 초기화
 void LoadParam(CAMERA_DATA *CameraData)
 {
-    YAML::Node st_CameraParam = YAML::LoadFile("src/Params/Camera.yaml");
+    YAML::Node st_CameraParam = YAML::LoadFile("src/Params/config.yaml");
     std::cout << "Loading Camera Parameter from YAML File..." << std::endl;
 
     CameraData->st_CameraParameter.s_IPMParameterX = st_CameraParam["IPMParameterX"].as<std::string>();

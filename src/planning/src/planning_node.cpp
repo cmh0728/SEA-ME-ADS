@@ -499,7 +499,7 @@ void PlanningNode::LoadParam()
 {
   try
   {
-    YAML::Node node = YAML::LoadFile("src/Params/Planning.yaml");
+    YAML::Node node = YAML::LoadFile("src/Params/config.yaml");
     std::cout << "Loading Planning Parameter from YAML File..." << std::endl;
 
     if (node["x_min_m"])        x_min_m_        = node["x_min_m"].as<double>();
