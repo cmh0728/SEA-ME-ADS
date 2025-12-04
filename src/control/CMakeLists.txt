@@ -16,6 +16,8 @@ find_package(visualization_msgs REQUIRED)
 
 add_executable(control_node 
   src/control_node.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../global/global.cpp
+
   )
 
 add_executable(pid_control
