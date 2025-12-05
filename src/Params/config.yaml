@@ -105,7 +105,7 @@ marker_z: 0.0 # rviz상의 marker z 값
 lane_timeout_sec: 0.2 # 차선 메시지 타임아웃 
 path_debug: false
 
-centerline_offset: 0.012  #(m)
+centerline_offset: 0.008  #(m)
 
 ################################################ control params ##############################################################
 # pure pursuit param
