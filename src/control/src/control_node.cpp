@@ -100,7 +100,7 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
 
   // 곡선구간 steer 보정 (민감도 up)
   const double abs_slope = std::abs(slope);
-  // std::cout << "abs_slope : " << abs_slope << std::endl; 
+  std::cout << "abs_slope : " << abs_slope << std::endl; 
   double gain_factor = g_steergain;
 
   // 곡선 정도에 따라 추가 게인
@@ -108,9 +108,9 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   if (abs_slope > 0.30) {
     // 많이 꺾인 곡선 → 게인 크게
     gain_factor *= 1.4;   
-  } else if (abs_slope > 0.2) {
+  } else if (abs_slope > 0.15) {
     // 중간 정도 곡선
-    gain_factor *= 1.0;
+    gain_factor *= 1.2;
   } else {
     // 거의 직선
     gain_factor *= 1.0;
