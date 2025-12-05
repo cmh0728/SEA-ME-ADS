@@ -108,7 +108,7 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   if (abs_slope > 0.30) {
     // 많이 꺾인 곡선 → 게인 크게
     gain_factor *= 1.4;   
-  } else if (abs_slope > 0.1) {
+  } else if (abs_slope > 0.2) {
     // 중간 정도 곡선
     gain_factor *= 1.1;
   } else {
