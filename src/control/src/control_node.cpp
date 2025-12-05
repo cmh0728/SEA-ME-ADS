@@ -110,7 +110,7 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
     gain_factor *= 1.4;   
   } else if (abs_slope > 0.2) {
     // 중간 정도 곡선
-    gain_factor *= 1.1;
+    gain_factor *= 1.0;
   } else {
     // 거의 직선
     gain_factor *= 1.0;
