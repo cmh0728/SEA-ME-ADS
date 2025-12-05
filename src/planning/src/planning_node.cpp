@@ -304,8 +304,8 @@ bool PlanningNode::build_centerline(
     {
       // ===== 1) 양쪽 차선이 모두 있는 구간: 진짜 중앙선 =====
       double center_x = (*left_x + *right_x) * 0.5;
-      pt.x = center_x;
-      // pt.x = center_x + centerline_offset_;
+      // pt.x = center_x;
+      pt.x = center_x + centerline_offset_;
 
       centerline.push_back(pt);
       prev_center_x = center_x;
@@ -342,8 +342,8 @@ bool PlanningNode::build_centerline(
       }
 
       double center_x = base_x + single_lane_offset;
-      pt.x = center_x;
-      // pt.x = center_x + centerline_offset_;
+      // pt.x = center_x;
+      pt.x = center_x + centerline_offset_;
 
       centerline.push_back(pt);
       prev_center_x = center_x;
@@ -527,6 +527,9 @@ void PlanningNode::LoadParam()
 
     if (node["path_debug"])
       path_debug_         = node["path_debug"].as<bool>();
+
+    if (node["centerline_offset"])
+      centerline_offset_ = node["centerline_offset"].as<double>();
 
 
     std::cout << "Success to Load Planning Parameter!" << std::endl;

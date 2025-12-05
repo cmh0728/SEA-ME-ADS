@@ -99,7 +99,7 @@ private:
   double origin_offset_x_m_  = 0.09;
   double origin_offset_y_m_  = -0.01;
 
-  double centerline_offset_  = 0.0;  // 아직 안 쓰고 있으니 0으로
+  double centerline_offset_ = 0.0; // +면 왼쪽, -면 오른쪽으로 path를 보정
 
   bool path_debug_  = false;
   bool vis_marker_  = false;

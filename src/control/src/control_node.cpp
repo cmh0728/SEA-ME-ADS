@@ -100,7 +100,7 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
 
   // 곡선구간 steer 보정 (민감도 up)
   const double abs_slope = std::abs(slope);
-  std::cout << "abs_slope : " << abs_slope << std::endl; 
+  // std::cout << "abs_slope : " << abs_slope << std::endl; //0.1정도는 직선구간에서도 쉽게 넘김 
   double gain_factor = g_steergain;
 
   // 곡선 정도에 따라 추가 게인
