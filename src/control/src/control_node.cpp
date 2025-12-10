@@ -70,7 +70,9 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   // std::cout << "estimated slope: " << slope << std::endl;
 
   // 속도 명령 계산 
-  const double speed_cmd = update_speed_command(slope, dt);
+  const double raw_speed_cmd = update_speed_command(slope, dt);
+  const double filtered_speed_cmd = filter_speed(raw_speed_cmd, dt);
+
 
   // ====== Ld: 경로 내에서 차량 중심(0,0)으로부터 가장 먼 점 사용 ======
   Point2D target{0.0, 0.0};
@@ -98,15 +100,15 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
 
   // 곡선구간 steer 보정 (민감도 up)
   const double abs_slope = std::abs(slope);
-  // std::cout << "abs_slope : " << abs_slope << std::endl; 
+  // std::cout << "abs_slope : " << abs_slope << std::endl; //0.1정도는 직선구간에서도 쉽게 넘김 
   double gain_factor = g_steergain;
 
   // 곡선 정도에 따라 추가 게인
   // slope 대략 값: 직선 ~0.01, 완만 곡선 ~0.1~0.3, 강한 곡선 ~0.4 이상이라고 했으니까 그 기준으로.
   if (abs_slope > 0.30) {
     // 많이 꺾인 곡선 → 게인 크게
-    gain_factor *= 2;   // 필요하면 1.8, 2.0 등으로 더 키워도 됨
-  } else if (abs_slope > 0.1) {
+    gain_factor *= 1.4;   
+  } else if (abs_slope > 0.15) {
     // 중간 정도 곡선
     gain_factor *= 1.2;
   } else {
@@ -129,7 +131,7 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
 
   // 최종 Twist 구성
   geometry_msgs::msg::Twist cmd;
-  cmd.linear.x  = std::clamp(speed_cmd, -max_speed_, max_speed_);
+  cmd.linear.x  = std::clamp(filtered_speed_cmd, -max_speed_, max_speed_);
   cmd.angular.z = steer_cmd;
 
   cmd_pub_->publish(cmd);
@@ -340,6 +342,42 @@ double ControlNode::filter_steering(double raw_steer, double dt)
   prev_steer_cmd_ = filtered;
   return filtered;
 }
+
+//================================================== filter_speed func ==================================================//
+
+double ControlNode::filter_speed(double raw_speed, double dt)
+{
+  if (!has_prev_speed_) {
+    prev_speed_cmd_ = raw_speed;
+    has_prev_speed_ = true;
+    return raw_speed;
+  }
+
+  double delta = raw_speed - prev_speed_cmd_;
+
+  // 완전 미친 점프 한 번 컷할 때 (선택)
+  if (std::abs(delta) > max_speed_jump_) {
+    RCLCPP_WARN(
+      get_logger(),
+      "Reject speed outlier: raw=%.3f, prev=%.3f (Δ=%.3f > %.3f)",
+      raw_speed, prev_speed_cmd_, delta, max_speed_jump_);
+    return prev_speed_cmd_;
+  }
+
+  // 정상 구간에서는 변화율 제한
+  const double max_delta = max_speed_rate_ * dt;  // 이번 프레임에서 허용되는 최대 변화량
+  double limited_delta = delta;
+
+  if (std::abs(limited_delta) > max_delta) {
+    limited_delta = (limited_delta > 0.0 ? 1.0 : -1.0) * max_delta;
+  }
+
+  const double filtered = prev_speed_cmd_ + limited_delta;
+  prev_speed_cmd_ = filtered;
+  return filtered;
+}
+
+//================================================== param loader func ==================================================//
 
 void ControlNode::LoadParam()
 {

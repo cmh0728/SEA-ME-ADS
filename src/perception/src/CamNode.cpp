@@ -590,7 +590,7 @@ void Lane_detector(const cv::Mat& img_frame, CAMERA_DATA* camera_data)
     // =======================  (H) Debug GUI ================================
     if (visualize)
     {
-        // cv::imshow("IPM", g_IpmImg);          // 탑뷰
+        cv::imshow("IPM", g_IpmImg);          // 탑뷰
         cv::imshow("Temp_Img", g_TempImg);    // 현재는 sliding window 결과
 
         // =======================  RANSAC 디버그 창 ===========================

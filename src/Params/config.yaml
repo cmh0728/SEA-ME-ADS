@@ -105,6 +105,8 @@ marker_z: 0.0 # rviz상의 marker z 값
 lane_timeout_sec: 0.2 # 차선 메시지 타임아웃 
 path_debug: false
 
+centerline_offset: 0.008  #(m)
+
 ################################################ control params ##############################################################
 # pure pursuit param
 lookahead_distance: 0.45 # 기본 lookahead (m)
@@ -119,9 +121,9 @@ max_speed: 50.0 # 하드웨어 속도 상한값
 max_angular_z: 1.0  # steer max val
 
 # speed Pid params
-slope_speed_kp: 10.0
+slope_speed_kp: 15.0
 slope_speed_ki: 0.001
-slope_speed_kd: 0.7
+slope_speed_kd: 1.0
 slope_integral_limit: 5.0 # 적분 항 클램프 한계
 
 # steer filter 조향 신뢰도 
