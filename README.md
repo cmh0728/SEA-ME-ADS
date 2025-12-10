@@ -40,11 +40,11 @@ Each package is a standard `ament_cmake` ROS 2 package with isolated responsibil
    ```
 3. Source the workspace overlay:
    ```bash
-   source install/setup.zsh
+   source install/setup.bash
    ```
 4. Launch the full pipeline:
    ```bash
-   ros2 launch [launchfile name]
+   ros2 launch main.launch
    ```
 
 The demo publishes synthetic perception measurements, turns them into planning outputs, and finally generates normalized throttle/brake/steering commands.
