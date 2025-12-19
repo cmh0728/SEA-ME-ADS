@@ -107,7 +107,7 @@ void ControlNode::on_path(const nav_msgs::msg::Path::SharedPtr msg)
   // slope 대략 값: 직선 ~0.01, 완만 곡선 ~0.1~0.3, 강한 곡선 ~0.4 이상이라고 했으니까 그 기준으로.
   if (abs_slope > 0.30) {
     // 많이 꺾인 곡선 → 게인 크게
-    gain_factor *= 1.4;   
+    gain_factor *= 1.3;   
   } else if (abs_slope > 0.15) {
     // 중간 정도 곡선
     gain_factor *= 1.2;
