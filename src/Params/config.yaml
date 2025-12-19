@@ -85,7 +85,7 @@ ipm_height: 320.0
 
 # 중심 offset --> 카메라가 차량 중심에서 9cm정도 뒤에 있음
 origin_offset_x_m: 0.09  # 차량 좌표계 x offset
-origin_offset_y_m: -0.01 # 차량 좌표계 y offset , 1cm(오른쪽이 -값)
+origin_offset_y_m: 0.0 # 차량 좌표계 y offset , 1cm(오른쪽이 -값)
 
 lane_half_width: 0.175 # 실제 차폭의 절반 (m)
 resample_step: 0.02 # 2cm 간격으로 centerline 샘플링
@@ -115,7 +115,7 @@ max_lookahead: 0.70 # 최대 lookahead
 car_L: 0.26 # 차량 축간 거리 (m)
 
 # speed: cmd_vel.linear.x = 0 ~ 50 근처 사용
-base_speed: 30.0 # 직선 기준 속도
+base_speed: 25.0 # 직선 기준 속도
 min_speed: 10.0 # 너무 느리면 제어 불안정하니 10 이상 사용하기 
 max_speed: 50.0 # 하드웨어 속도 상한값
 max_angular_z: 1.0  # steer max val
