@@ -85,7 +85,7 @@ ipm_height: 320.0
 
 # 중심 offset --> 카메라가 차량 중심에서 9cm정도 뒤에 있음
 origin_offset_x_m: 0.09  # 차량 좌표계 x offset
-origin_offset_y_m: 0.02 # 차량 좌표계 y offset , 1cm(오른쪽이 -값)
+origin_offset_y_m: 0.022 # 차량 좌표계 y offset , 1cm(오른쪽이 -값)
 
 lane_half_width: 0.175 # 실제 차폭의 절반 (m)
 resample_step: 0.02 # 2cm 간격으로 centerline 샘플링
